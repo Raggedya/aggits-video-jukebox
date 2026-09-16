@@ -1,0 +1,13 @@
+.venv/
+.venv-build/
+build/
+desktop-dist/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+.DS_Store
+.wrangler/
+.dev.vars
+tmp/
+

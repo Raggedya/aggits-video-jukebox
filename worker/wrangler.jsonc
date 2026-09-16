@@ -1,0 +1,20 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "aggits-video-jukebox",
+  "main": "src/index.js",
+  "compatibility_date": "2026-09-01",
+  "workers_dev": true,
+  "vars": {
+    "PUBLIC_BASE_URL": "https://raggedya.github.io/aggits-video-jukebox",
+    "OWNER_EMAIL": "andrewharris501@gmail.com",
+    "REPORT_FROM_EMAIL": "AGGITS Video Jukebox <reports@aggits.com>"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "aggits-video-jukebox-production",
+      "database_id": "REPLACE_WITH_D1_DATABASE_ID",
+      "migrations_dir": "migrations"
+    }
+  ]
+}
