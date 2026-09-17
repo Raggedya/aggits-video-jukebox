@@ -8,7 +8,7 @@ from unittest.mock import Mock, patch
 
 from aggits_video_factory.models import Project, Video
 from aggits_video_factory.publisher import _library_path, _valid_public_machine_path
-from aggits_video_factory.site_builder import build_project_site
+from aggits_video_factory.site_builder import _reel_short_title, build_project_site
 from aggits_video_factory.store import ProjectStore, slugify
 from aggits_video_factory.youtube_api import YouTubeClient, clean_display_title, merge_video_selections, parse_duration
 
@@ -84,7 +84,7 @@ class FactoryTests(unittest.TestCase):
             self.assertEqual(payload["customerConfig"]["customerStory"], "A short ticker")
             self.assertEqual(payload["customerConfig"]["customerTagline"], "MORE STORIES • MORE TO DISCOVER")
             self.assertTrue(payload["customerConfig"]["customerStorySections"])
-            self.assertEqual(payload["videos"][0]["shortTitle"], "A Long Song Title Number 1")
+            self.assertEqual(payload["videos"][0]["shortTitle"], "LONG SONG TITLE NUMBER")
             self.assertEqual(payload["videos"][0]["description"], "A closer look at A Long Song Title Number 1 from Example Channel.")
             self.assertIn("Press Play Video", payload["videos"][0]["storyText"])
             script = (destination / "assets" / "video-machine.js").read_text(encoding="utf-8")
@@ -106,8 +106,10 @@ class FactoryTests(unittest.TestCase):
             self.assertIn('@keyframes storyCrawl', video_css)
             self.assertIn('.story-window{', video_css)
             self.assertIn('[data-machine-state="READY_TO_PLAY"] .reel-card:nth-child(3)', video_css)
-            self.assertIn('animation:crispyReelFocus .38s cubic-bezier(.2,.72,.22,1) .7s both', video_css)
-            self.assertIn('@keyframes crispyReelFocus', video_css)
+            self.assertIn('animation:crispyReelSeat .38s cubic-bezier(.16,.84,.28,1) both', video_css)
+            self.assertIn('@keyframes crispyReelSeat', video_css)
+            self.assertIn('.centre-viewing-gate', video_css)
+            self.assertIn('.reel-glass', video_css)
             self.assertIn('.music-machine[data-video-open="true"] .video-stage', video_css)
             page = (destination / "index.html").read_text(encoding="utf-8")
             self.assertNotIn("VIDEO MUSIC MACHINE", page)
@@ -147,6 +149,14 @@ class FactoryTests(unittest.TestCase):
             catalogue = client.fetch_catalogue("https://youtube.com/@example")
         self.assertEqual(len(catalogue.videos), 30)
         self.assertTrue(all("autoplay=0" in item.embed_url for item in catalogue.videos))
+
+    def test_reel_short_titles_are_compact_and_editorial(self):
+        self.assertEqual(_reel_short_title("2024 - Build 20.6 FT Two Person"), "20.6 FT COUPLES")
+        self.assertEqual(_reel_short_title("Meet the Great Alpine 19.6 FT Tripple Bunk Van"), "19.6 FT TRIPLE BUNK")
+        self.assertEqual(_reel_short_title("Toy hauler with CRUISEMASTER ATX 4.5 T"), "TOY HAULER")
+        self.assertEqual(_reel_short_title("20 6 ft two person"), "20.6 FT COUPLES")
+        self.assertEqual(_reel_short_title("17.10 Family double bunk"), "17.10 FT DOUBLE BUNK")
+        self.assertEqual(_reel_short_title("Check out the 2024 Build 23ft Club Lounge Caravan"), "23 FT CLUB LOUNGE")
 
     def test_individual_video_catalogue(self):
         client = YouTubeClient("test-key")

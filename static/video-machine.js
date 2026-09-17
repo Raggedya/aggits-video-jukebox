@@ -3,6 +3,7 @@ const machine = document.querySelector('.music-machine[data-machine-platform="yo
 if (machine) {
   const reel = machine.querySelector('[data-reel]');
   const rows = [...reel.querySelectorAll('.reel-strip > *')];
+  const viewingGate = machine.querySelector('[data-viewing-gate]');
   const lever = machine.querySelector('.lever');
   const titleNode = machine.querySelector('[data-machine-title]');
   const storyWindow = machine.querySelector('[data-story-window]');
@@ -58,6 +59,7 @@ if (machine) {
   let meterFrame = 0;
   let meterStartedAt = performance.now();
   let meterLastAt = meterStartedAt;
+  let lastIndexTickAt = 0;
   const meterChannels = [{x: 0, v: 0}, {x: 0, v: 0}];
 
   const sleep = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds));
@@ -75,7 +77,7 @@ if (machine) {
   }
 
   function titleOnly(video) {
-    let label = String(video?.displayTitle || video?.title || 'VIDEO').replace(/\s+/g, ' ').trim();
+    let label = String(video?.title || video?.displayTitle || 'VIDEO').replace(/\s+/g, ' ').trim();
     const identities = [machineIdentity, video?.channelTitle]
       .map(value => String(value || '').trim())
       .filter((value, index, values) => value && values.findIndex(other => other.toLowerCase() === value.toLowerCase()) === index);
@@ -93,24 +95,62 @@ if (machine) {
     return label || String(video?.title || 'VIDEO').trim();
   }
 
+  function reelTitle(video) {
+    const curated = String(video?.shortTitle || '').replace(/\s+/g, ' ').trim();
+    if (curated && curated.length <= 24) return curated;
+    const words = titleOnly(video)
+      .replace(/[^A-Za-z0-9.&+\- ]+/g, ' ')
+      .replace(/\b(?:OFFICIAL|VIDEO|BUILD|AVAILABLE|STOCK)\b/gi, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .split(' ')
+      .filter(Boolean);
+    const compact = [];
+    for (const word of words) {
+      if (compact.length >= 4 || [...compact, word].join(' ').length > 24) break;
+      compact.push(word);
+    }
+    return compact.join(' ') || curated.slice(0, 24) || 'VIDEO DISCOVERY';
+  }
+
+  function alignViewingGate() {
+    const centre = rows[Math.floor(rows.length / 2)];
+    const bank = viewingGate?.parentElement;
+    if (!centre || !bank || !viewingGate) return;
+    const bankRect = bank.getBoundingClientRect();
+    const centreRect = centre.getBoundingClientRect();
+    viewingGate.style.setProperty('--gate-left', `${(centreRect.left - bankRect.left - bank.clientLeft).toFixed(2)}px`);
+    viewingGate.style.setProperty('--gate-top', `${(centreRect.top - bankRect.top - bank.clientTop).toFixed(2)}px`);
+    viewingGate.style.setProperty('--gate-width', `${centreRect.width.toFixed(2)}px`);
+    viewingGate.style.setProperty('--gate-height', `${centreRect.height.toFixed(2)}px`);
+  }
+
+  function playIndexTick() {
+    const now = performance.now();
+    if (!spinning || now - lastIndexTickAt < 115) return;
+    lastIndexTickAt = now;
+    ensureMachineSamples();
+    playSample(reelRatchetAudio, {volume: .16, rate: 1.12});
+  }
+
   function renderRows(items) {
     rows.forEach((node, index) => {
       const video = items[index] || items[0];
-      const label = titleOnly(video);
+      const label = reelTitle(video);
       const artwork = document.createElement('img');
       artwork.src = video?.thumbnailUrl || '';
       artwork.alt = '';
-      artwork.loading = 'eager';
+      artwork.loading = index === Math.floor(rows.length / 2) ? 'eager' : 'lazy';
       const title = document.createElement('b');
       title.textContent = label;
-      const category = document.createElement('small');
-      category.textContent = video?.channelTitle || machineIdentity || 'VIDEO';
-      node.replaceChildren(artwork, title, category);
+      node.replaceChildren(artwork, title);
+      node.dataset.videoId = video?.videoId || '';
       node.title = label;
       if (index === Math.floor(rows.length / 2)) node.setAttribute('aria-current', 'true');
       else node.removeAttribute('aria-current');
       sizeClass(node, label);
     });
+    playIndexTick();
   }
 
   function startStoryTicker() {
@@ -272,6 +312,7 @@ if (machine) {
   function startReelSound() {
     if (!soundEnabled) return;
     ensureMachineSamples();
+    lastIndexTickAt = performance.now();
     clearInterval(motorFadeTimer);
     playSample(reelRatchetAudio, {volume: .66, rate: .96});
     reelMotorAudio.loop = false;
@@ -553,6 +594,7 @@ if (machine) {
       window.setTimeout(startStoryTicker, 350);
       document.fonts?.ready?.then(startStoryTicker).catch(() => {});
       renderRows(fiveAround(catalogue[0]));
+      requestAnimationFrame(() => requestAnimationFrame(alignViewingGate));
       setState('IDLE', 'Pull the lever or press Re-Spin to select a video.');
       respinButton.disabled = false;
     } catch (error) {
@@ -562,5 +604,8 @@ if (machine) {
   }
 
   load();
-  window.addEventListener('resize', startStoryTicker);
+  window.addEventListener('resize', () => {
+    startStoryTicker();
+    alignViewingGate();
+  });
 }

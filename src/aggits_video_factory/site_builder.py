@@ -56,6 +56,60 @@ def _story_sections(source: str, customer_name: str) -> list[dict[str, str]]:
     return sections
 
 
+def _reel_short_title(source: str) -> str:
+    """Derive a compact reel nameplate without changing the source video title."""
+    cleaned = re.sub(r"[^A-Za-z0-9.&+\- ]+", " ", source or "")
+    cleaned = re.sub(r"\bTRIPPLE\b", "TRIPLE", cleaned, flags=re.IGNORECASE)
+    cleaned = re.sub(
+        r"\b(1[5-9]|2[0-4])\s+([0-9])\s*(?=FT\b|FAMILY\b|TWO\b|TRIPLE\b|DOUBLE\b|CLUB\b|OFF[ -]?ROAD\b)",
+        r"\1.\2 ",
+        cleaned,
+        flags=re.IGNORECASE,
+    )
+    cleaned = re.sub(r"\s+", " ", cleaned).strip()
+    upper = cleaned.upper()
+    size_match = re.search(
+        r"\b(\d{2}(?:\.\d{1,2})?)\s*(?:FT|FOOT\b|(?=(?:FAMILY|TWO|TRIPLE|DOUBLE|CLUB|OFF[ -]?ROAD)\b))",
+        upper,
+    )
+    size = f"{size_match.group(1)} FT" if size_match else ""
+    if "TRIPLE BUNK" in upper:
+        subject = "TRIPLE BUNK"
+    elif "DOUBLE BUNK" in upper:
+        subject = "DOUBLE BUNK"
+    elif "TWO PERSON" in upper or "TWO BIRTH" in upper or "COUPLE" in upper:
+        subject = "COUPLES"
+    elif "FAMILY" in upper:
+        subject = "FAMILY"
+    elif "TOY HAULER" in upper:
+        subject = "TOY HAULER"
+    elif "CLUB LOUNGE" in upper:
+        subject = "CLUB LOUNGE"
+    elif "ONSITE CARAVAN" in upper:
+        subject = "ONSITE CARAVAN"
+    elif "SLIDE-OUT KITCHEN" in upper or "SLIDE OUT KITCHEN" in upper:
+        subject = "SLIDE-OUT KITCHEN"
+    elif "TOURING" in upper or "TOURER" in upper:
+        subject = "TOURER"
+    elif "OFF-ROAD" in upper or "OFF ROAD" in upper or "OUTBACK" in upper:
+        subject = "OFF-ROAD"
+    elif "NEWEST MODEL" in upper:
+        subject = "NEWEST MODELS"
+    else:
+        subject = ""
+    candidate = " ".join(part for part in (size, subject) if part)
+    if not candidate:
+        noise = {"THE", "A", "AN", "AND", "OUR", "WITH", "MEET", "BUILD", "VIDEO", "GREAT", "ALPINE", "CARAVANS", "CARAVAN", "AVAILABLE", "STOCK"}
+        words = [word for word in re.findall(r"[A-Z0-9.&+\-]+", upper) if word not in noise and not re.fullmatch(r"20\d{2}", word)]
+        candidate = " ".join(words[:4]) or "VIDEO DISCOVERY"
+    if len(candidate) <= 24:
+        return candidate
+    words = candidate.split()
+    while len(" ".join(words)) > 24 and len(words) > 1:
+        words.pop()
+    return " ".join(words)[:24].rstrip()
+
+
 def _font(size: int, bold: bool = False, serif: bool = False) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
     candidates: list[Path] = []
     if serif:
@@ -195,7 +249,7 @@ def build_project_site(project: Project, destination: Path) -> Path:
                 "id": item.video_id,
                 "videoId": item.video_id,
                 "title": item.title,
-                "shortTitle": item.display_title,
+                "shortTitle": _reel_short_title(item.title),
                 "displayTitle": item.display_title,
                 "category": item.channel_title,
                 "reelImage": item.thumbnail_url,
