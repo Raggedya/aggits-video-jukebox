@@ -45,5 +45,5 @@ body{overflow-x:hidden}
 .music-machine[data-machine-platform="youtube"] .buy-button{font-size:clamp(7px,1.9vw,10px)}
 .music-machine[data-machine-platform="youtube"] .speaker-label{color:#b38b52}
 .music-machine[data-machine-platform="youtube"] .lever img{filter:grayscale(.35) sepia(.25) saturate(.82) brightness(.88) drop-shadow(0 6px 5px #000)}
-.music-machine[data-machine-platform="youtube"][data-machine-state="VIDEO_READY"] .lever{pointer-events:auto}
+.music-machine[data-machine-platform="youtube"][data-machine-state="VIDEO_READY"] .lever{pointer-events:auto!important}
 @media (prefers-reduced-motion:reduce){.video-shutter{transition-duration:.25s}.music-machine[data-machine-platform="youtube"] .reel.is-spinning .reel-strip{animation:none}}
