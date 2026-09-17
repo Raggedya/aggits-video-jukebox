@@ -4,6 +4,8 @@ if (machine) {
   const reel = machine.querySelector('[data-reel]');
   const rows = [...reel.querySelectorAll('.reel-strip > *')];
   const viewingGate = machine.querySelector('[data-viewing-gate]');
+  const apertureMedia = machine.querySelector('[data-aperture-media]');
+  const destinationTitle = machine.querySelector('[data-destination-title]');
   const lever = machine.querySelector('.lever');
   const titleNode = machine.querySelector('[data-machine-title]');
   const storyWindow = machine.querySelector('[data-story-window]');
@@ -69,6 +71,10 @@ if (machine) {
   function setState(value, message) {
     machine.dataset.machineState = value;
     if (message) status.textContent = message;
+    if (!destinationTitle) return;
+    if (value === 'SPINNING') destinationTitle.textContent = 'DISCOVERING…';
+    else if (value === 'IDLE') destinationTitle.textContent = 'PULL TO DISCOVER';
+    else if (value === 'READY_TO_PLAY' && current) destinationTitle.textContent = reelTitle(current);
   }
 
   function sizeClass(node, text) {
@@ -119,10 +125,13 @@ if (machine) {
     if (!centre || !bank || !viewingGate) return;
     const bankRect = bank.getBoundingClientRect();
     const centreRect = centre.getBoundingClientRect();
-    viewingGate.style.setProperty('--gate-left', `${(centreRect.left - bankRect.left - bank.clientLeft).toFixed(2)}px`);
-    viewingGate.style.setProperty('--gate-top', `${(centreRect.top - bankRect.top - bank.clientTop).toFixed(2)}px`);
-    viewingGate.style.setProperty('--gate-width', `${centreRect.width.toFixed(2)}px`);
-    viewingGate.style.setProperty('--gate-height', `${centreRect.height.toFixed(2)}px`);
+    const reelRect = reel.getBoundingClientRect();
+    const gateWidth = reelRect.width * (window.innerWidth <= 430 ? .54 : .5);
+    const centreX = centreRect.left + centreRect.width / 2;
+    viewingGate.style.setProperty('--gate-left', `${(centreX - gateWidth / 2 - bankRect.left - bank.clientLeft).toFixed(2)}px`);
+    viewingGate.style.setProperty('--gate-top', `${(reelRect.top - bankRect.top - bank.clientTop).toFixed(2)}px`);
+    viewingGate.style.setProperty('--gate-width', `${gateWidth.toFixed(2)}px`);
+    viewingGate.style.setProperty('--gate-height', `${reelRect.height.toFixed(2)}px`);
   }
 
   function playIndexTick() {
@@ -141,15 +150,20 @@ if (machine) {
       artwork.src = video?.thumbnailUrl || '';
       artwork.alt = '';
       artwork.loading = index === Math.floor(rows.length / 2) ? 'eager' : 'lazy';
-      const title = document.createElement('b');
-      title.textContent = label;
-      node.replaceChildren(artwork, title);
+      node.replaceChildren(artwork);
       node.dataset.videoId = video?.videoId || '';
       node.title = label;
+      node.setAttribute('aria-label', label);
       if (index === Math.floor(rows.length / 2)) node.setAttribute('aria-current', 'true');
       else node.removeAttribute('aria-current');
       sizeClass(node, label);
     });
+    const centreVideo = items[Math.floor(rows.length / 2)] || items[0];
+    if (apertureMedia && centreVideo) {
+      const source = centreVideo.thumbnailUrl || '';
+      if (apertureMedia.getAttribute('src') !== source) apertureMedia.src = source;
+      apertureMedia.dataset.videoId = centreVideo.videoId || '';
+    }
     playIndexTick();
   }
 
@@ -571,7 +585,7 @@ if (machine) {
       titleNode.textContent = config.title || 'VIDEO JUKEBOX';
       sizeClass(titleNode, titleNode.textContent);
       document.title = `${config.title || 'Video Jukebox'} — CRISPY BITS`;
-      if (customerTagline) customerTagline.textContent = machineTagline.replace(/\s*[•|]\s*/g, '\n');
+      if (customerTagline) customerTagline.textContent = 'VIDEO DISCOVERY';
       setCustomerBackdrop(catalogue[0]);
       if (channelThumbnail) {
         contentLogo.src = channelThumbnail;
