@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import html
 import json
+import re
 import shutil
 from pathlib import Path
 
@@ -17,6 +18,42 @@ BRASS = "#b88a4f"
 DEEP_BRASS = "#4c3219"
 CREAM = "#f2e4bf"
 INK = "#070605"
+
+
+def _story_sections(source: str, customer_name: str) -> list[dict[str, str]]:
+    """Turn approved customer copy into readable story beats without adding facts."""
+    cleaned = re.sub(r"\*{2,}[^*]+\*{2,}", " ", source or "")
+    cleaned = re.sub(r"(\b(?:19|20)\d{2})\s+where\s+", r"\1. ", cleaned, flags=re.IGNORECASE)
+    cleaned = re.sub(r"\s+I was promoted\b", ". I was promoted", cleaned, flags=re.IGNORECASE)
+    cleaned = cleaned.replace("; ", ". ")
+    sentences = [
+        sentence.strip()
+        for sentence in re.split(r"(?<=[.!?])\s+|\n+", re.sub(r"\s+", " ", cleaned).strip())
+        if sentence.strip()
+    ]
+    fallback_headings = ["THE BEGINNING", "THE JOURNEY", "THE EXPERIENCE", "THE IDEA", "THE WORK", "THE APPROACH"]
+    sections: list[dict[str, str]] = []
+    for index, sentence in enumerate(sentences[:10]):
+        years = re.findall(r"\b(?:19|20)\d{2}\b", sentence)
+        lowered = sentence.casefold()
+        if years:
+            heading = years[-1]
+        elif "promoted" in lowered:
+            heading = "TEAM LEADERSHIP"
+        elif "main aim" in lowered:
+            heading = "THE AIM"
+        elif "custom build" in lowered:
+            heading = "CUSTOM BUILDS"
+        elif "technology" in lowered:
+            heading = "THE APPROACH"
+        elif "customer" in lowered:
+            heading = "CUSTOMER FIRST"
+        else:
+            heading = fallback_headings[min(index, len(fallback_headings) - 1)]
+        sections.append({"heading": heading, "text": sentence})
+    if not sections:
+        sections.append({"heading": customer_name.upper(), "text": "Pull the lever and discover the story."})
+    return sections
 
 
 def _font(size: int, bold: bool = False, serif: bool = False) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
@@ -116,6 +153,7 @@ def build_project_site(project: Project, destination: Path) -> Path:
     canonical = project.published_url or f"{PUBLIC_BASE_URL}/{project.slug}/"
     social_url = f"{canonical.rstrip('/')}/social-card.jpg"
     description = f"Pull the CRISPY BITS reel and discover one of {len(project.videos)} videos from {project.title}."
+    story_sections = _story_sections(project.ticker_text, project.title)
     replacements = {
         "{{META_DESCRIPTION}}": html.escape(description, quote=True),
         "{{CANONICAL_URL}}": html.escape(canonical, quote=True),
@@ -147,6 +185,7 @@ def build_project_site(project: Project, destination: Path) -> Path:
             "tagline": project.ticker_text,
             "customerTagline": "MORE STORIES • MORE TO DISCOVER",
             "customerStory": project.ticker_text,
+            "customerStorySections": story_sections,
             "youtubeChannel": project.channel_url,
             "subscribeURL": f"https://www.youtube.com/channel/{project.channel_id}?sub_confirmation=1" if project.channel_id else project.channel_url,
             "primaryCTA": "VIEW ON YOUTUBE",
@@ -164,7 +203,7 @@ def build_project_site(project: Project, destination: Path) -> Path:
                 "videoURL": item.url,
                 "embedUrl": item.embed_url,
                 "thumbnailUrl": item.thumbnail_url,
-                "description": project.ticker_text,
+                "description": f"A closer look at {item.display_title} from {item.channel_title or project.title}.",
                 "storyText": f"{item.display_title}. Selected from {item.channel_title or project.title}. Press Play Video to watch the complete video on YouTube.",
                 "metadata": f"{item.channel_title} • Video Discovery • YouTube",
                 "shareText": f"{item.display_title} — {project.title}",

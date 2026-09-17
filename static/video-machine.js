@@ -45,6 +45,7 @@ if (machine) {
   let machineIdentity = '';
   let machineDescription = '';
   let machineTagline = 'MORE STORIES • MORE TO DISCOVER';
+  let masterStorySections = [];
   let channelThumbnail = '';
   let revealTimer = 0;
   let selectionEpoch = 0;
@@ -146,7 +147,12 @@ if (machine) {
     if (!storyTrack) return;
     const section = document.createElement('section');
     appendStoryText(section, 'h3', machineIdentity || 'CRISPY BITS');
-    appendStoryText(section, 'p', machineDescription || 'Spin, discover and watch something worth sharing.');
+    if (masterStorySections.length) {
+      masterStorySections.forEach(beat => {
+        appendStoryText(section, 'h4', beat.heading);
+        appendStoryText(section, 'p', beat.text);
+      });
+    } else appendStoryText(section, 'p', machineDescription || 'Spin, discover and watch something worth sharing.');
     if (video) {
       section.append(document.createElement('hr'));
       appendStoryText(section, 'h4', titleOnly(video));
@@ -205,7 +211,7 @@ if (machine) {
     winnerTitle.textContent = label;
     winnerChannel.textContent = video.channelTitle || machineIdentity;
     contentMeta.textContent = `${video.channelTitle || machineIdentity} • VIDEO DISCOVERY • YOUTUBE`;
-    contentDescription.textContent = machineDescription || `Discover ${label} from ${video.channelTitle || machineIdentity}.`;
+    contentDescription.textContent = video.description || `A closer look at ${label} from ${video.channelTitle || machineIdentity}.`;
     const logoSource = channelThumbnail || video.thumbnailUrl;
     if (logoSource) {
       contentLogo.src = logoSource;
@@ -515,6 +521,9 @@ if (machine) {
       machineIdentity = String(config.title || config.channelTitle || '').trim();
       machineDescription = String(config.customerConfig?.customerStory || config.tickerText || '').trim();
       machineTagline = String(config.customerConfig?.customerTagline || machineTagline).trim();
+      masterStorySections = Array.isArray(config.customerConfig?.customerStorySections)
+        ? config.customerConfig.customerStorySections.filter(beat => beat?.heading && beat?.text)
+        : [];
       channelThumbnail = String(config.channelThumbnail || '').trim();
       catalogue = Array.isArray(config.videos) ? config.videos.filter(video => video?.videoId) : [];
       if (!catalogue.length) throw new Error('No videos');
@@ -539,7 +548,7 @@ if (machine) {
         contentMonogram.textContent = initials;
         if (customerMonogram) customerMonogram.textContent = initials;
       }
-      contentDescription.textContent = machineDescription || 'Pull the lever and discover something worth watching.';
+      contentDescription.textContent = 'Pull the lever and discover something worth watching.';
       updateStory();
       window.setTimeout(startStoryTicker, 350);
       document.fonts?.ready?.then(startStoryTicker).catch(() => {});
