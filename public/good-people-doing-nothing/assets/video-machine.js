@@ -6,6 +6,7 @@ if (machine) {
   const lever = machine.querySelector('.lever');
   const titleNode = machine.querySelector('[data-machine-title]');
   const ticker = machine.querySelector('[data-ticker-copy]');
+  const tickerWindow = ticker?.parentElement;
   const status = machine.querySelector('.machine-status');
   const playButton = machine.querySelector('[data-action="play"]');
   const shareButton = machine.querySelector('[data-action="share"]');
@@ -79,6 +80,23 @@ if (machine) {
       node.textContent = label;
       node.title = label;
       sizeClass(node, label);
+    });
+  }
+
+  function startTicker() {
+    if (!ticker || !tickerWindow) return;
+    ticker.classList.remove('is-scrolling');
+    ticker.style.removeProperty('--ticker-start');
+    ticker.style.removeProperty('--ticker-end');
+    ticker.style.removeProperty('--ticker-duration');
+    requestAnimationFrame(() => {
+      const copyWidth = ticker.scrollWidth;
+      const windowWidth = tickerWindow.clientWidth;
+      const travel = (copyWidth + windowWidth) / 2;
+      ticker.style.setProperty('--ticker-start', `${-travel}px`);
+      ticker.style.setProperty('--ticker-end', `${travel}px`);
+      ticker.style.setProperty('--ticker-duration', `${Math.max(12, (copyWidth + windowWidth) / 48).toFixed(1)}s`);
+      ticker.classList.add('is-scrolling');
     });
   }
 
@@ -361,6 +379,7 @@ if (machine) {
       sizeClass(titleNode, titleNode.textContent);
       document.title = `${config.title || 'Video Jukebox'} — AGGITS`;
       ticker.textContent = config.tickerText || 'PULL FOR A VIDEO';
+      startTicker();
       renderRows(threeAround(catalogue[0]));
       setState('IDLE', 'Pull the lever or press Re-Spin to select a video.');
       respinButton.disabled = false;
@@ -371,4 +390,5 @@ if (machine) {
   }
 
   load();
+  window.addEventListener('resize', startTicker);
 }
