@@ -89,6 +89,8 @@ class FactoryTests(unittest.TestCase):
             self.assertNotIn("VIDEO MUSIC MACHINE", page)
             self.assertIn("SUBSCRIBE", page)
             self.assertNotIn("OPEN<br>YOUTUBE", page)
+            self.assertIn("aggits-cabinet-emerald-v1.png", page)
+            self.assertTrue((destination / "assets" / "music-machine" / "aggits-cabinet-emerald-v1.png").is_file())
             self.assertTrue((destination / "assets" / "audio" / "machine" / "reel-stop-lock-mixkit-2857.mp3").is_file())
             self.assertTrue((destination / "qr-card.png").is_file())
             self.assertTrue((destination / "social-card.jpg").is_file())
