@@ -7,13 +7,13 @@
   "vars": {
     "PUBLIC_BASE_URL": "https://raggedya.github.io/aggits-video-jukebox",
     "OWNER_EMAIL": "andrewharris501@gmail.com",
-    "REPORT_FROM_EMAIL": "AGGITS Video Jukebox <reports@aggits.com>"
+    "REPORT_FROM_EMAIL": "AGGITS Video Jukebox <onboarding@resend.dev>"
   },
   "d1_databases": [
     {
       "binding": "DB",
       "database_name": "aggits-video-jukebox-production",
-      "database_id": "REPLACE_WITH_D1_DATABASE_ID",
+      "database_id": "2f1538ca-c1a2-491b-b6b6-dd7b8d90a952",
       "migrations_dir": "migrations"
     }
   ]

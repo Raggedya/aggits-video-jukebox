@@ -1,6 +1,8 @@
 .venv/
 .venv-build/
 build/
+dist/
+_qa/
 desktop-dist/
 __pycache__/
 *.py[cod]
@@ -10,4 +12,3 @@ __pycache__/
 .wrangler/
 .dev.vars
 tmp/
-

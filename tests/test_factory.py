@@ -53,7 +53,7 @@ class FactoryTests(unittest.TestCase):
             payload = json.loads((destination / "machine.json").read_text(encoding="utf-8"))
             self.assertEqual(payload["videoCount"], 3)
             script = (destination / "assets" / "video-machine.js").read_text(encoding="utf-8")
-            self.assertIn("iframe.src = winner.embedUrl", script)
+            self.assertIn("player.src = current.embedUrl", script)
             self.assertIn("machine.dataset.videoOpen = 'true'", script)
             self.assertTrue((destination / "qr-card.png").is_file())
             self.assertTrue((destination / "social-card.jpg").is_file())

@@ -34,8 +34,8 @@ if (machine) {
   }
 
   function sizeClass(node, text) {
-    node.classList.toggle('is-long', text.length > 24 && text.length <= 34);
-    node.classList.toggle('is-very-long', text.length > 34);
+    node.classList.toggle('is-long', text.length > 16 && text.length <= 26);
+    node.classList.toggle('is-very-long', text.length > 26);
   }
 
   function renderRows(items) {
@@ -243,4 +243,3 @@ if (machine) {
 
   load();
 }
-

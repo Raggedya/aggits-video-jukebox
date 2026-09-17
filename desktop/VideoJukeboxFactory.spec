@@ -1,7 +1,7 @@
 # -*- mode: python ; coding: utf-8 -*-
 from pathlib import Path
 
-root = Path(SPECPATH).parent.parent
+root = Path(SPECPATH).parent
 
 a = Analysis(
     [str(root / "desktop" / "video_jukebox_factory.py")],
