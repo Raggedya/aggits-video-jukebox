@@ -6,14 +6,14 @@ from pathlib import Path
 
 
 APP_NAME = "AGGITS Video Jukebox Factory"
-APP_VERSION = "1.2.1"
+APP_VERSION = "1.2.2"
 GITHUB_OWNER = "Raggedya"
 GITHUB_REPOSITORY = "aggits-video-jukebox"
 GITHUB_REMOTE = f"https://github.com/{GITHUB_OWNER}/{GITHUB_REPOSITORY}.git"
 PUBLIC_BASE_URL = f"https://{GITHUB_OWNER.lower()}.github.io/{GITHUB_REPOSITORY}"
 DELIVERY_ENDPOINT = "https://aggits-video-jukebox.andrewharris501.workers.dev/api/deliveries"
 MAX_VIDEOS = 30
-MAX_TICKER_LENGTH = 500
+MAX_TICKER_LENGTH = 1000
 
 
 def bundled_root() -> Path:
