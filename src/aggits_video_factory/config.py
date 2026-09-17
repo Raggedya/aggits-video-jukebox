@@ -6,7 +6,7 @@ from pathlib import Path
 
 
 APP_NAME = "AGGITS Video Jukebox Factory"
-APP_VERSION = "1.3.0"
+APP_VERSION = "1.3.1"
 GITHUB_OWNER = "Raggedya"
 GITHUB_REPOSITORY = "aggits-video-jukebox"
 GITHUB_REMOTE = f"https://github.com/{GITHUB_OWNER}/{GITHUB_REPOSITORY}.git"
