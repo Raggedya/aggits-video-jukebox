@@ -20,6 +20,7 @@ class Video:
     published_at: str
     duration_seconds: int
     channel_title: str
+    channel_id: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -36,6 +37,7 @@ class Video:
             published_at=str(value.get("published_at") or value.get("publishedAt") or ""),
             duration_seconds=int(value.get("duration_seconds") or value.get("durationSeconds") or 0),
             channel_title=str(value.get("channel_title") or value.get("channelTitle") or ""),
+            channel_id=str(value.get("channel_id") or value.get("channelId") or ""),
         )
 
 
@@ -48,6 +50,9 @@ class Project:
     channel_id: str
     channel_title: str
     channel_thumbnail: str
+    source_channel_url: str = ""
+    manual_video_urls: list[str] = field(default_factory=list)
+    excluded_video_ids: list[str] = field(default_factory=list)
     videos: list[Video] = field(default_factory=list)
     status: str = "draft"
     created_at: str = field(default_factory=utc_now)
@@ -60,7 +65,7 @@ class Project:
     def to_dict(self) -> dict[str, Any]:
         value = asdict(self)
         value["videos"] = [video.to_dict() for video in self.videos]
-        value["schemaVersion"] = 1
+        value["schemaVersion"] = 2
         return value
 
     @classmethod
@@ -73,6 +78,9 @@ class Project:
             channel_id=str(value.get("channel_id") or value.get("channelId") or ""),
             channel_title=str(value.get("channel_title") or value.get("channelTitle") or ""),
             channel_thumbnail=str(value.get("channel_thumbnail") or value.get("channelThumbnail") or ""),
+            source_channel_url=str(value.get("source_channel_url") or value.get("sourceChannelUrl") or value.get("channel_url") or value.get("channelUrl") or ""),
+            manual_video_urls=[str(item) for item in (value.get("manual_video_urls", value.get("manualVideoUrls", [])) or []) if str(item).strip()],
+            excluded_video_ids=[str(item) for item in (value.get("excluded_video_ids", value.get("excludedVideoIds", [])) or []) if str(item).strip()],
             videos=[Video.from_dict(item) for item in value.get("videos", []) if isinstance(item, dict)],
             status=str(value.get("status") or "draft"),
             created_at=str(value.get("created_at") or value.get("createdAt") or utc_now()),
@@ -82,4 +90,3 @@ class Project:
             delivery_status=str(value.get("delivery_status") or value.get("deliveryStatus") or "not_requested"),
             publication_revision=value.get("publication_revision") or value.get("publicationRevision"),
         )
-

@@ -151,6 +151,7 @@ def build_project_site(project: Project, destination: Path) -> Path:
                 "publishedAt": item.published_at,
                 "durationSeconds": item.duration_seconds,
                 "channelTitle": item.channel_title,
+                "channelId": item.channel_id,
             }
             for item in project.videos
         ],
@@ -159,4 +160,3 @@ def build_project_site(project: Project, destination: Path) -> Path:
     create_qr_card(project, destination / "qr-card.png")
     create_social_card(project, destination / "social-card.jpg")
     return destination / "index.html"
-

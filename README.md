@@ -11,6 +11,8 @@ A standalone Windows desktop application that turns a public YouTube channel, up
 5. Preview privately, then publish or unpublish from the Library.
 6. After a successful publication, the separate delivery Worker emails the live link and titled QR card.
 
+Published jukeboxes can be reopened with **Edit Videos**. Reviewed changes remain private and the existing live version stays untouched until **Update + Republish** is pressed.
+
 The public machine uses YouTube's official embedded player. Landing on a reel winner does not autoplay video. **Play Video** mechanically opens the shutters; the visitor then presses YouTube's own play control.
 
 ## Local development

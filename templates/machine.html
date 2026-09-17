@@ -26,7 +26,6 @@
   <main class="music-machine" data-machine-state="BOOT" data-machine-mode="artist" data-machine-platform="youtube" aria-label="{{MACHINE_LABEL}}">
     <div class="cabinet" aria-describedby="machine-instructions">
       <img class="cabinet-skin" src="assets/music-machine/aggits-cabinet.webp" alt="" width="1024" height="1536" fetchpriority="high">
-      <div class="video-machine-kicker" aria-hidden="true">VIDEO MUSIC MACHINE</div>
       <header class="aggits-marquee"><h1 class="visually-hidden">AGGITS</h1><img src="assets/music-machine/aggits-marquee-v2.webp" alt="" width="2172" height="724"></header>
       <section class="machine-title" aria-label="Jukebox title" data-title-mode="identity">
         <div class="machine-title-identity"><strong data-machine-title>{{MACHINE_TITLE}}</strong></div>
@@ -60,7 +59,7 @@
       <section class="machine-controls" aria-label="Current video controls">
         <button type="button" class="secondary-button" data-action="share" disabled>SHARE</button>
         <button type="button" class="play-button video-play-button" data-action="play" disabled>PLAY<br>VIDEO</button>
-        <button type="button" class="buy-button" data-action="open-youtube" disabled><span>OPEN<br>YOUTUBE</span></button>
+        <button type="button" class="buy-button" data-action="subscribe" disabled><span>SUBSCRIBE</span></button>
         <button type="button" class="secondary-button re-spin-button" data-action="spin-again" disabled>RE-SPIN</button>
       </section>
       <div class="speaker-label" aria-hidden="true"><span>{{MACHINE_TITLE}}<br>ON YOUTUBE</span></div>

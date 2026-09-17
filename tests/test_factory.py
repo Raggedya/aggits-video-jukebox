@@ -23,6 +23,7 @@ def sample_video(index: int = 1) -> Video:
         published_at="2026-01-01T00:00:00Z",
         duration_seconds=213,
         channel_title="Example Channel",
+        channel_id="UCexample",
     )
 
 
@@ -56,10 +57,17 @@ class FactoryTests(unittest.TestCase):
                 channel_id="UCexample",
                 channel_title="Example Channel",
                 channel_thumbnail="",
+                source_channel_url="https://youtube.com/@example",
+                manual_video_urls=["https://youtu.be/video000001"],
+                excluded_video_ids=["video000099"],
                 videos=[sample_video(1), sample_video(2), sample_video(3)],
             )
             store.save_project(project)
-            self.assertEqual(store.load_project("example").videos[1].video_id, "video000002")
+            restored = store.load_project("example")
+            self.assertEqual(restored.videos[1].video_id, "video000002")
+            self.assertEqual(restored.source_channel_url, "https://youtube.com/@example")
+            self.assertEqual(restored.manual_video_urls, ["https://youtu.be/video000001"])
+            self.assertEqual(restored.excluded_video_ids, ["video000099"])
             destination = root / "site"
             build_project_site(project, destination)
             payload = json.loads((destination / "machine.json").read_text(encoding="utf-8"))
@@ -68,11 +76,19 @@ class FactoryTests(unittest.TestCase):
             self.assertIn("player.src = playerUrl(current)", script)
             self.assertIn("reel-actual-slotmachine-freesound-261346.mp3", script)
             self.assertIn("machine.dataset.videoOpen = 'true'", script)
+            self.assertIn("await closeVideo()", script)
+            self.assertIn("sub_confirmation=1", script)
             self.assertIn("function startTicker()", script)
-            self.assertIn("ticker.style.setProperty('--ticker-start', `${-travel}px`)", script)
+            self.assertIn("ticker.style.setProperty('--ticker-start', `${travel}px`)", script)
+            self.assertIn("ticker.style.setProperty('--ticker-end', `${-travel}px`)", script)
             video_css = (destination / "assets" / "video-machine.css").read_text(encoding="utf-8")
             self.assertIn("opacity:1!important", video_css)
             self.assertIn('font-family:Consolas,"Courier New",monospace', video_css)
+            self.assertIn('[data-machine-state="VIDEO_READY"] .lever{pointer-events:auto}', video_css)
+            page = (destination / "index.html").read_text(encoding="utf-8")
+            self.assertNotIn("VIDEO MUSIC MACHINE", page)
+            self.assertIn("SUBSCRIBE", page)
+            self.assertNotIn("OPEN<br>YOUTUBE", page)
             self.assertTrue((destination / "assets" / "audio" / "machine" / "reel-stop-lock-mixkit-2857.mp3").is_file())
             self.assertTrue((destination / "qr-card.png").is_file())
             self.assertTrue((destination / "social-card.jpg").is_file())

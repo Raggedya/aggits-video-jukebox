@@ -206,6 +206,7 @@ class YouTubeClient:
             published_at=str(snippet.get("publishedAt") or ""),
             duration_seconds=duration,
             channel_title=actual_channel_title,
+            channel_id=str(snippet.get("channelId") or ""),
         )
 
     def fetch_videos(self, video_urls: list[str]) -> ChannelCatalogue:
