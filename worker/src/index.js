@@ -29,8 +29,10 @@ async function handleDelivery(request, env) {
   try { body = await request.json(); } catch { return json({ ok: false, error: "invalid_json" }, 400, cors); }
   const slug = safeSlug(body.slug);
   const revision = String(body.revision || "").trim();
+  const brand = String(body.brand || "AGGITS").trim().toUpperCase() === "CRISPY BITS" ? "CRISPY BITS" : "AGGITS";
+  const brandPath = brand === "CRISPY BITS" ? "/crispy-bits" : "";
   const requestedUrl = String(body.publicUrl || "").replace(/\/+$/, "") + "/";
-  const expectedUrl = `${String(env.PUBLIC_BASE_URL).replace(/\/+$/, "")}/${slug}/`;
+  const expectedUrl = `${String(env.PUBLIC_BASE_URL).replace(/\/+$/, "")}${brandPath}/${slug}/`;
   if (!slug || !/^[0-9a-f]{40}$/i.test(revision) || requestedUrl !== expectedUrl) {
     return json({ ok: false, error: "invalid_publication" }, 400, cors);
   }
@@ -58,9 +60,9 @@ async function handleDelivery(request, env) {
     body: JSON.stringify({
       from: env.REPORT_FROM_EMAIL,
       to: [recipient],
-      subject: `${title} — AGGITS video jukebox is live`,
-      html: `<div style="background:#080706;color:#f2e4bf;padding:32px;font-family:Arial,sans-serif"><div style="color:#b88a4f;font-family:Georgia,serif;font-size:28px;font-weight:bold">AGGITS VIDEO JUKEBOX</div><h1>${title.replace(/[<>&]/g, "")}</h1><p>Your video discovery machine is live.</p><p><a href="${expectedUrl}" style="display:inline-block;background:#b88a4f;color:#080706;padding:14px 22px;text-decoration:none;font-weight:bold">OPEN JUKEBOX</a></p><p>The titled QR card is attached.</p></div>`,
-      attachments: [{ filename: `${slug}-aggits-qr.png`, content: qr }],
+      subject: `${title} — ${brand} video jukebox is live`,
+      html: `<div style="background:#080706;color:#f2e4bf;padding:32px;font-family:Arial,sans-serif"><div style="color:#b88a4f;font-family:Georgia,serif;font-size:28px;font-weight:bold">${brand} VIDEO JUKEBOX</div><h1>${title.replace(/[<>&]/g, "")}</h1><p>Your video discovery machine is live.</p><p><a href="${expectedUrl}" style="display:inline-block;background:#b88a4f;color:#080706;padding:14px 22px;text-decoration:none;font-weight:bold">OPEN JUKEBOX</a></p><p>The titled QR card is attached.</p></div>`,
+      attachments: [{ filename: `${slug}-${brand === "CRISPY BITS" ? "crispy-bits" : "aggits"}-qr.png`, content: qr }],
     }),
   });
   const result = await response.json().catch(() => ({}));
