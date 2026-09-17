@@ -145,9 +145,9 @@ class Factory(tk.Tk):
         tk.Label(info, text="AUTOMATIC BUILD", bg="#0d0a07", fg=BRASS, font=("Segoe UI Semibold", 8)).pack(anchor="w", padx=13, pady=(11, 4))
         tk.Label(info, text=f"Manual links are included first. Duplicate videos are removed, then the channel fills the remaining spaces up to {MAX_VIDEOS}.", bg="#0d0a07", fg=MUTED, wraplength=420, justify="left", font=("Segoe UI", 8)).pack(anchor="w", padx=13, pady=(0, 12))
 
-        self.create_button = self._button(inner, "CREATE JUKEBOX", self._create_jukebox, primary=True)
+        self.create_button = self._button(inner, "ANALYSE + REVIEW VIDEOS", self._create_jukebox, primary=True)
         self.create_button.pack(fill="x", pady=(6, 8), ipady=8)
-        tk.Label(inner, text="The jukebox is created privately first. Use the Library to preview, publish or unpublish it.", bg=PANEL, fg=MUTED, wraplength=430, justify="left", font=("Segoe UI", 8)).pack(anchor="w", pady=(4, 0))
+        tk.Label(inner, text="Next: review all resolved videos with thumbnails and inclusion controls. The jukebox is built only after you approve that list.", bg=PANEL, fg=MUTED, wraplength=430, justify="left", font=("Segoe UI", 8)).pack(anchor="w", pady=(4, 0))
 
     def _build_library(self, panel: tk.Frame) -> None:
         heading = tk.Frame(panel, bg=PANEL)
@@ -352,7 +352,6 @@ class Factory(tk.Tk):
         dialog.minsize(760, 560)
         dialog.configure(bg=INK)
         dialog.transient(self)
-        dialog.grab_set()
 
         heading = tk.Frame(dialog, bg=PANEL, highlightbackground=DEEP_BRASS, highlightthickness=1)
         heading.pack(fill="x", padx=18, pady=(18, 10))
@@ -372,6 +371,7 @@ class Factory(tk.Tk):
         canvas.bind("<Configure>", lambda event: canvas.itemconfigure(canvas_window, width=event.width))
 
         variables: list[tk.BooleanVar] = []
+        inclusion_buttons: list[tk.Checkbutton] = []
         thumbnail_images: list[ImageTk.PhotoImage] = []
         for index, video in enumerate(videos, start=1):
             row = tk.Frame(rows_frame, bg="#11100d" if index % 2 else "#0b0a08", height=84)
@@ -379,15 +379,34 @@ class Factory(tk.Tk):
             row.pack_propagate(False)
             included = tk.BooleanVar(dialog, True)
             variables.append(included)
-            check = tk.Checkbutton(row, variable=included, bg=row["bg"], activebackground=row["bg"], selectcolor="#2f2417", fg=CREAM, activeforeground=PAPER, bd=0, highlightthickness=0)
-            check.pack(side="left", padx=(10, 6))
+            check = tk.Checkbutton(
+                row,
+                text="INCLUDED ✓",
+                variable=included,
+                indicatoron=False,
+                width=12,
+                bg="#5a4328",
+                activebackground="#7a5b34",
+                selectcolor="#5a4328",
+                fg=PAPER,
+                activeforeground=PAPER,
+                relief="flat",
+                bd=0,
+                highlightthickness=1,
+                highlightbackground=BRASS,
+                font=("Segoe UI Semibold", 8),
+                padx=5,
+                pady=7,
+            )
+            check.pack(side="left", padx=(10, 10))
+            inclusion_buttons.append(check)
 
             image_data = thumbnail_bytes.get(video.video_id)
             if image_data:
                 try:
                     image = Image.open(BytesIO(image_data)).convert("RGB")
                     image = ImageOps.fit(image, (112, 63), method=Image.Resampling.LANCZOS)
-                    thumbnail = ImageTk.PhotoImage(image)
+                    thumbnail = ImageTk.PhotoImage(image, master=dialog)
                     thumbnail_images.append(thumbnail)
                     tk.Label(row, image=thumbnail, bg="#050403", bd=0).pack(side="left", padx=(0, 12))
                 except OSError:
@@ -412,6 +431,11 @@ class Factory(tk.Tk):
         def update_count() -> None:
             total = sum(variable.get() for variable in variables)
             count_label.configure(text=f"{total} OF {len(videos)} VIDEOS INCLUDED")
+            for variable, button in zip(variables, inclusion_buttons):
+                if variable.get():
+                    button.configure(text="INCLUDED ✓", bg="#5a4328", activebackground="#7a5b34", fg=PAPER)
+                else:
+                    button.configure(text="EXCLUDED", bg="#241b13", activebackground="#34271b", fg=MUTED)
 
         def set_all(value: bool) -> None:
             for variable in variables:
@@ -442,6 +466,13 @@ class Factory(tk.Tk):
         canvas.bind("<Leave>", lambda _event: canvas.unbind_all("<MouseWheel>"))
         dialog.protocol("WM_DELETE_WINDOW", cancel_review)
         update_count()
+        dialog.update_idletasks()
+        x = max(0, self.winfo_rootx() + (self.winfo_width() - dialog.winfo_width()) // 2)
+        y = max(0, self.winfo_rooty() + (self.winfo_height() - dialog.winfo_height()) // 2)
+        dialog.geometry(f"+{x}+{y}")
+        dialog.lift()
+        dialog.focus_force()
+        dialog.grab_set()
 
     def _finish_jukebox(self, candidate: dict[str, object], videos: list) -> None:
         catalogue = candidate["catalogue"]
