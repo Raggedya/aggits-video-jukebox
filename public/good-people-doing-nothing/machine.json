@@ -6,41 +6,8 @@
   "channelId": "UC1QGnaYKvr891SOi6PC-7tg",
   "channelTitle": "GOOD PEOPLE DOING NOTHING",
   "channelUrl": "https://www.youtube.com/channel/UC1QGnaYKvr891SOi6PC-7tg",
-  "videoCount": 9,
+  "videoCount": 7,
   "videos": [
-    {
-      "videoId": "fc17FSx2zBw",
-      "title": "Stooges vs Captain Beefheart",
-      "displayTitle": "Stooges vs Captain Beefheart",
-      "url": "https://www.youtube.com/watch?v=fc17FSx2zBw",
-      "embedUrl": "https://www.youtube.com/embed/fc17FSx2zBw?enablejsapi=1&autoplay=0&playsinline=1&rel=0",
-      "thumbnailUrl": "https://i.ytimg.com/vi/fc17FSx2zBw/hqdefault.jpg",
-      "publishedAt": "2010-07-09T01:57:34Z",
-      "durationSeconds": 155,
-      "channelTitle": "Martyslartibartfast"
-    },
-    {
-      "videoId": "msEcBIC0UAs",
-      "title": "You write it",
-      "displayTitle": "You write it",
-      "url": "https://www.youtube.com/watch?v=msEcBIC0UAs",
-      "embedUrl": "https://www.youtube.com/embed/msEcBIC0UAs?enablejsapi=1&autoplay=0&playsinline=1&rel=0",
-      "thumbnailUrl": "https://i.ytimg.com/vi/msEcBIC0UAs/sddefault.jpg",
-      "publishedAt": "2017-06-04T19:56:35Z",
-      "durationSeconds": 118,
-      "channelTitle": "Moorabbin Ovals"
-    },
-    {
-      "videoId": "uMWnftsCEcY",
-      "title": "Busted out with a Sex File",
-      "displayTitle": "Busted out with a Sex File",
-      "url": "https://www.youtube.com/watch?v=uMWnftsCEcY",
-      "embedUrl": "https://www.youtube.com/embed/uMWnftsCEcY?enablejsapi=1&autoplay=0&playsinline=1&rel=0",
-      "thumbnailUrl": "https://i.ytimg.com/vi/uMWnftsCEcY/maxresdefault.jpg",
-      "publishedAt": "2017-07-26T20:40:18Z",
-      "durationSeconds": 144,
-      "channelTitle": "Moorabbin Ovals"
-    },
     {
       "videoId": "TFOdTcjzMWg",
       "title": "What would be lost - by Good People Doing Nothing",
@@ -50,7 +17,8 @@
       "thumbnailUrl": "https://i.ytimg.com/vi/TFOdTcjzMWg/hqdefault.jpg",
       "publishedAt": "2013-11-21T11:42:03Z",
       "durationSeconds": 326,
-      "channelTitle": "Old Mate Aggits"
+      "channelTitle": "Old Mate Aggits",
+      "channelId": "UCBqILv6Ve1HSz6iZFMGlB1g"
     },
     {
       "videoId": "BCX-tx_dZws",
@@ -61,7 +29,20 @@
       "thumbnailUrl": "https://i.ytimg.com/vi/BCX-tx_dZws/hqdefault.jpg",
       "publishedAt": "2013-11-21T09:50:49Z",
       "durationSeconds": 129,
-      "channelTitle": "Old Mate Aggits"
+      "channelTitle": "Old Mate Aggits",
+      "channelId": "UCBqILv6Ve1HSz6iZFMGlB1g"
+    },
+    {
+      "videoId": "msEcBIC0UAs",
+      "title": "You write it",
+      "displayTitle": "You write it",
+      "url": "https://www.youtube.com/watch?v=msEcBIC0UAs",
+      "embedUrl": "https://www.youtube.com/embed/msEcBIC0UAs?enablejsapi=1&autoplay=0&playsinline=1&rel=0",
+      "thumbnailUrl": "https://i.ytimg.com/vi/msEcBIC0UAs/sddefault.jpg",
+      "publishedAt": "2017-06-04T19:56:35Z",
+      "durationSeconds": 118,
+      "channelTitle": "Moorabbin Ovals",
+      "channelId": "UCIWHSavJbLw70wPvHSdbwuQ"
     },
     {
       "videoId": "vOhBBRrlAMM",
@@ -72,7 +53,8 @@
       "thumbnailUrl": "https://i.ytimg.com/vi/vOhBBRrlAMM/maxresdefault.jpg",
       "publishedAt": "2024-08-20T03:04:58Z",
       "durationSeconds": 247,
-      "channelTitle": "GOOD PEOPLE DOING NOTHING"
+      "channelTitle": "GOOD PEOPLE DOING NOTHING",
+      "channelId": "UC1QGnaYKvr891SOi6PC-7tg"
     },
     {
       "videoId": "d6v2OwBIaLM",
@@ -83,7 +65,8 @@
       "thumbnailUrl": "https://i.ytimg.com/vi/d6v2OwBIaLM/maxresdefault.jpg",
       "publishedAt": "2024-08-20T02:43:35Z",
       "durationSeconds": 247,
-      "channelTitle": "GOOD PEOPLE DOING NOTHING"
+      "channelTitle": "GOOD PEOPLE DOING NOTHING",
+      "channelId": "UC1QGnaYKvr891SOi6PC-7tg"
     },
     {
       "videoId": "12xLKbLQMXA",
@@ -94,7 +77,8 @@
       "thumbnailUrl": "https://i.ytimg.com/vi/12xLKbLQMXA/maxresdefault.jpg",
       "publishedAt": "2024-08-20T02:41:37Z",
       "durationSeconds": 223,
-      "channelTitle": "GOOD PEOPLE DOING NOTHING"
+      "channelTitle": "GOOD PEOPLE DOING NOTHING",
+      "channelId": "UC1QGnaYKvr891SOi6PC-7tg"
     },
     {
       "videoId": "pjq-oL9TVWo",
@@ -105,7 +89,8 @@
       "thumbnailUrl": "https://i.ytimg.com/vi/pjq-oL9TVWo/maxresdefault.jpg",
       "publishedAt": "2024-08-20T02:39:06Z",
       "durationSeconds": 176,
-      "channelTitle": "GOOD PEOPLE DOING NOTHING"
+      "channelTitle": "GOOD PEOPLE DOING NOTHING",
+      "channelId": "UC1QGnaYKvr891SOi6PC-7tg"
     }
   ]
 }

@@ -10,7 +10,7 @@ if (machine) {
   const status = machine.querySelector('.machine-status');
   const playButton = machine.querySelector('[data-action="play"]');
   const shareButton = machine.querySelector('[data-action="share"]');
-  const openButton = machine.querySelector('[data-action="open-youtube"]');
+  const subscribeButton = machine.querySelector('[data-action="subscribe"]');
   const respinButton = machine.querySelector('[data-action="spin-again"]');
   const soundButton = machine.querySelector('[data-action="sound"]');
   const homeButton = machine.querySelector('[data-action="home"]');
@@ -89,15 +89,19 @@ if (machine) {
     ticker.style.removeProperty('--ticker-start');
     ticker.style.removeProperty('--ticker-end');
     ticker.style.removeProperty('--ticker-duration');
-    requestAnimationFrame(() => {
+    requestAnimationFrame(() => requestAnimationFrame(() => {
       const copyWidth = ticker.scrollWidth;
       const windowWidth = tickerWindow.clientWidth;
+      if (!copyWidth || !windowWidth) {
+        window.setTimeout(startTicker, 200);
+        return;
+      }
       const travel = (copyWidth + windowWidth) / 2;
-      ticker.style.setProperty('--ticker-start', `${-travel}px`);
-      ticker.style.setProperty('--ticker-end', `${travel}px`);
+      ticker.style.setProperty('--ticker-start', `${travel}px`);
+      ticker.style.setProperty('--ticker-end', `${-travel}px`);
       ticker.style.setProperty('--ticker-duration', `${Math.max(12, (copyWidth + windowWidth) / 48).toFixed(1)}s`);
       ticker.classList.add('is-scrolling');
-    });
+    }));
   }
 
   function refillBag() {
@@ -266,7 +270,7 @@ if (machine) {
     reel.classList.add('is-spinning');
     playButton.disabled = true;
     shareButton.disabled = true;
-    openButton.disabled = true;
+    subscribeButton.disabled = true;
     respinButton.disabled = true;
     machine.dataset.hasWinner = 'false';
     playSample(reelStopAudio, {volume: .54, rate: .88});
@@ -287,7 +291,7 @@ if (machine) {
     meterMode = 'idle';
     playButton.disabled = false;
     shareButton.disabled = false;
-    openButton.disabled = false;
+    subscribeButton.disabled = false;
     respinButton.disabled = false;
     stopReelSound();
     spinning = false;
@@ -340,12 +344,21 @@ if (machine) {
     }
   }
 
+  function subscribe() {
+    if (!current) return;
+    const channelId = String(current.channelId || '').trim();
+    const destination = channelId
+      ? `https://www.youtube.com/channel/${encodeURIComponent(channelId)}?sub_confirmation=1`
+      : current.url;
+    window.open(destination, '_blank', 'noopener,noreferrer');
+  }
+
   function bind() {
     lever.addEventListener('click', spin);
     respinButton.addEventListener('click', spin);
     playButton.addEventListener('click', openVideo);
     shareButton.addEventListener('click', share);
-    openButton.addEventListener('click', () => current && window.open(current.url, '_blank', 'noopener,noreferrer'));
+    subscribeButton.addEventListener('click', subscribe);
     soundButton.addEventListener('click', () => {
       soundEnabled = !soundEnabled;
       soundButton.textContent = soundEnabled ? 'SOUND ON' : 'SOUND OFF';
@@ -380,6 +393,8 @@ if (machine) {
       document.title = `${config.title || 'Video Jukebox'} — AGGITS`;
       ticker.textContent = config.tickerText || 'PULL FOR A VIDEO';
       startTicker();
+      window.setTimeout(startTicker, 350);
+      document.fonts?.ready?.then(startTicker).catch(() => {});
       renderRows(threeAround(catalogue[0]));
       setState('IDLE', 'Pull the lever or press Re-Spin to select a video.');
       respinButton.disabled = false;
