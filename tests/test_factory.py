@@ -84,7 +84,7 @@ class FactoryTests(unittest.TestCase):
             video_css = (destination / "assets" / "video-machine.css").read_text(encoding="utf-8")
             self.assertIn("opacity:1!important", video_css)
             self.assertIn('font-family:Consolas,"Courier New",monospace', video_css)
-            self.assertIn('[data-machine-state="VIDEO_READY"] .lever{pointer-events:auto}', video_css)
+            self.assertIn('[data-machine-state="VIDEO_READY"] .lever{pointer-events:auto!important}', video_css)
             page = (destination / "index.html").read_text(encoding="utf-8")
             self.assertNotIn("VIDEO MUSIC MACHINE", page)
             self.assertIn("SUBSCRIBE", page)
