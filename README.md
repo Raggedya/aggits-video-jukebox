@@ -1,6 +1,6 @@
 # CRISPY BITS Video Jukebox Factory
 
-A standalone Windows desktop application that turns a public YouTube channel, up to 15 individually chosen videos, or both into a CRISPY BITS video-first discovery experience. Its compact five-card presentation, cinematic 16:9 YouTube stage, customer information and customer-themed environment are driven by the existing proven single-reel selection engine and publishing workflow.
+A standalone Windows desktop application that turns a public YouTube channel, up to 15 individually chosen videos, or both into a CRISPY BITS video-first discovery experience. Its text-based cylindrical selector reuses the proven Music Machine single-reel engine, followed by a cinematic 16:9 YouTube stage, customer information and customer-themed environment.
 
 ## Factory workflow
 

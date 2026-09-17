@@ -1,11 +1,11 @@
+import {ARTIST_SINGLE_REEL_PROFILE,populateSingleReel,spinSingleReel} from './single-reel-engine.js';
+import {MUSIC_MACHINE_REEL_PROFILE,leverResistance} from './machine-mechanics-core.js';
+
 const machine = document.querySelector('.music-machine[data-machine-platform="youtube"]');
 
 if (machine) {
   const reel = machine.querySelector('[data-reel]');
   const rows = [...reel.querySelectorAll('.reel-strip > *')];
-  const viewingGate = machine.querySelector('[data-viewing-gate]');
-  const apertureMedia = machine.querySelector('[data-aperture-media]');
-  const destinationTitle = machine.querySelector('[data-destination-title]');
   const lever = machine.querySelector('.lever');
   const titleNode = machine.querySelector('[data-machine-title]');
   const storyWindow = machine.querySelector('[data-story-window]');
@@ -31,7 +31,6 @@ if (machine) {
   const viewYouTube = machine.querySelector('[data-view-youtube]');
   const customerLogo = machine.querySelector('[data-customer-logo]');
   const customerMonogram = machine.querySelector('[data-customer-monogram]');
-  const customerTagline = machine.querySelector('[data-customer-tagline]');
   const needles = [...machine.querySelectorAll('[data-meter-needle]')];
   const needleShadows = [...machine.querySelectorAll('[data-meter-shadow]')];
   const scales = [...machine.querySelectorAll('[data-meter-scale]')];
@@ -47,7 +46,6 @@ if (machine) {
   let bag = [];
   let machineIdentity = '';
   let machineDescription = '';
-  let machineTagline = 'MORE STORIES • MORE TO DISCOVER';
   let masterStorySections = [];
   let channelThumbnail = '';
   let revealTimer = 0;
@@ -61,7 +59,11 @@ if (machine) {
   let meterFrame = 0;
   let meterStartedAt = performance.now();
   let meterLastAt = meterStartedAt;
-  let lastIndexTickAt = 0;
+  let leverProgress = 0;
+  let leverPointer = null;
+  let leverStartY = 0;
+  let leverMoved = false;
+  let leverTriggered = false;
   const meterChannels = [{x: 0, v: 0}, {x: 0, v: 0}];
 
   const sleep = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds));
@@ -71,10 +73,6 @@ if (machine) {
   function setState(value, message) {
     machine.dataset.machineState = value;
     if (message) status.textContent = message;
-    if (!destinationTitle) return;
-    if (value === 'SPINNING') destinationTitle.textContent = 'DISCOVERING…';
-    else if (value === 'IDLE') destinationTitle.textContent = 'PULL TO DISCOVER';
-    else if (value === 'READY_TO_PLAY' && current) destinationTitle.textContent = reelTitle(current);
   }
 
   function sizeClass(node, text) {
@@ -119,52 +117,31 @@ if (machine) {
     return compact.join(' ') || curated.slice(0, 24) || 'VIDEO DISCOVERY';
   }
 
-  function alignViewingGate() {
-    const centre = rows[Math.floor(rows.length / 2)];
-    const bank = viewingGate?.parentElement;
-    if (!centre || !bank || !viewingGate) return;
-    const bankRect = bank.getBoundingClientRect();
-    const centreRect = centre.getBoundingClientRect();
-    const reelRect = reel.getBoundingClientRect();
-    const gateWidth = reelRect.width * (window.innerWidth <= 430 ? .54 : .5);
-    const centreX = centreRect.left + centreRect.width / 2;
-    viewingGate.style.setProperty('--gate-left', `${(centreX - gateWidth / 2 - bankRect.left - bank.clientLeft).toFixed(2)}px`);
-    viewingGate.style.setProperty('--gate-top', `${(reelRect.top - bankRect.top - bank.clientTop).toFixed(2)}px`);
-    viewingGate.style.setProperty('--gate-width', `${gateWidth.toFixed(2)}px`);
-    viewingGate.style.setProperty('--gate-height', `${reelRect.height.toFixed(2)}px`);
+  function reelIdentity(video) {
+    return String(video?.videoId || video?.id || '').toLowerCase();
   }
 
-  function playIndexTick() {
-    const now = performance.now();
-    if (!spinning || now - lastIndexTickAt < 115) return;
-    lastIndexTickAt = now;
-    ensureMachineSamples();
-    playSample(reelRatchetAudio, {volume: .16, rate: 1.12});
+  function randomVideo(excluded = new Set()) {
+    const pool = catalogue.filter(video => !excluded.has(reelIdentity(video)));
+    return randomItem(pool.length ? pool : catalogue) || null;
   }
 
-  function renderRows(items) {
-    rows.forEach((node, index) => {
-      const video = items[index] || items[0];
-      const label = reelTitle(video);
-      const artwork = document.createElement('img');
-      artwork.src = video?.thumbnailUrl || '';
-      artwork.alt = '';
-      artwork.loading = index === Math.floor(rows.length / 2) ? 'eager' : 'lazy';
-      node.replaceChildren(artwork);
-      node.dataset.videoId = video?.videoId || '';
-      node.title = label;
-      node.setAttribute('aria-label', label);
-      if (index === Math.floor(rows.length / 2)) node.setAttribute('aria-current', 'true');
-      else node.removeAttribute('aria-current');
-      sizeClass(node, label);
+  function setReelLabel(node, label) {
+    const text = String(label || 'VIDEO DISCOVERY').replace(/\s+/g, ' ').trim();
+    node.textContent = text;
+    sizeClass(node, text);
+  }
+
+  function renderRows(video, neighbours = true) {
+    populateSingleReel({
+      reel,
+      entry: video,
+      pickRandom: randomVideo,
+      labelFor: reelTitle,
+      identityFor: reelIdentity,
+      setLabel: setReelLabel,
+      neighbours,
     });
-    const centreVideo = items[Math.floor(rows.length / 2)] || items[0];
-    if (apertureMedia && centreVideo) {
-      const source = centreVideo.thumbnailUrl || '';
-      if (apertureMedia.getAttribute('src') !== source) apertureMedia.src = source;
-      apertureMedia.dataset.videoId = centreVideo.videoId || '';
-    }
-    playIndexTick();
   }
 
   function startStoryTicker() {
@@ -237,16 +214,6 @@ if (machine) {
   function nextWinner() {
     if (!bag.length) refillBag();
     return catalogue[bag.shift()];
-  }
-
-  function fiveAround(winner) {
-    const others = catalogue.filter(video => video.videoId !== winner.videoId);
-    for (let index = others.length - 1; index > 0; index -= 1) {
-      const swap = Math.floor(Math.random() * (index + 1));
-      [others[index], others[swap]] = [others[swap], others[index]];
-    }
-    const picks = [others[0], others[1], others[2], others[3]].map(video => video || winner);
-    return [picks[0], picks[1], winner, picks[2], picks[3]];
   }
 
   function safeBackdrop(value) {
@@ -326,7 +293,6 @@ if (machine) {
   function startReelSound() {
     if (!soundEnabled) return;
     ensureMachineSamples();
-    lastIndexTickAt = performance.now();
     clearInterval(motorFadeTimer);
     playSample(reelRatchetAudio, {volume: .66, rate: .96});
     reelMotorAudio.loop = false;
@@ -355,7 +321,13 @@ if (machine) {
         }, 32);
       }
     }
-    if (!immediate) playSample(reelStopAudio, {volume: .72, rate: 1.02});
+  }
+
+  function reelThunk() {
+    ensureMachineSamples();
+    playSample(reelStopAudio, {volume: .72, rate: 1.04});
+    if (reelMotorAudio && !reelMotorAudio.paused) reelMotorAudio.volume = Math.max(.08, .255);
+    navigator.vibrate?.(12);
   }
 
   const SVG = 'http://www.w3.org/2000/svg';
@@ -434,23 +406,25 @@ if (machine) {
     await closeVideo();
     setState('SPINNING', 'The reel is selecting a video.');
     meterMode = 'spin';
-    reel.classList.add('is-spinning');
     playButton.disabled = true;
     shareButton.disabled = true;
     subscribeButton.disabled = true;
     respinButton.disabled = true;
     machine.dataset.hasWinner = 'false';
-    playSample(reelStopAudio, {volume: .54, rate: .88});
+    playSample(reelStopAudio, {volume: .58, rate: .9});
     startReelSound();
     const winner = nextWinner();
-    const started = performance.now();
-    while (performance.now() - started < 2250) {
-      renderRows(rows.map(() => randomItem(catalogue)));
-      await sleep(95 + Math.min(135, (performance.now() - started) / 18));
-    }
-    renderRows(fiveAround(winner));
+    await spinSingleReel({
+      reel,
+      finalEntry: winner,
+      stopAfter: reducedMotion.matches ? ARTIST_SINGLE_REEL_PROFILE.reducedMotionDuration : ARTIST_SINGLE_REEL_PROFILE.duration,
+      pickRandom: randomVideo,
+      renderRows: video => renderRows(video),
+      reelIndex: 0,
+      onStop: reelThunk,
+    });
+    stopReelSound();
     current = winner;
-    reel.classList.remove('is-spinning');
     machine.dataset.hasWinner = 'true';
     updateSelectedContent(winner);
     setState('READY_TO_PLAY', `${titleOnly(winner)} selected. Press Play Video to open YouTube.`);
@@ -459,9 +433,64 @@ if (machine) {
     shareButton.disabled = false;
     subscribeButton.disabled = false;
     respinButton.disabled = false;
-    stopReelSound();
     spinning = false;
     scheduleVideoReveal(winner);
+  }
+
+  function resetLever(animated = true) {
+    leverProgress = 0;
+    lever.style.transition = animated ? 'transform .48s cubic-bezier(.18,.72,.23,1)' : 'none';
+    lever.style.transform = 'translateY(-50%) translateY(0) rotate(0)';
+    window.setTimeout(() => { lever.style.transition = ''; }, 500);
+  }
+
+  function pullVisual(progress) {
+    leverProgress = Math.max(0, Math.min(1, progress));
+    const resisted = leverResistance(leverProgress);
+    lever.style.transform = `translateY(-50%) translateY(${resisted * 19}%) rotate(${resisted * MUSIC_MACHINE_REEL_PROFILE.leverAngle}deg)`;
+  }
+
+  function animateLeverAndSpin() {
+    if (spinning) return;
+    ensureMachineSamples();
+    lever.style.transition = 'transform .34s cubic-bezier(.2,.7,.25,1)';
+    pullVisual(1);
+    window.setTimeout(() => { void spin(); resetLever(true); }, 250);
+  }
+
+  function onLeverDown(event) {
+    if (spinning) return;
+    ensureMachineSamples();
+    leverPointer = event.pointerId;
+    leverStartY = event.clientY;
+    leverMoved = false;
+    leverTriggered = false;
+    lever.setPointerCapture?.(event.pointerId);
+    setState('LEVER_PULL', 'Pull the lever down past the resistance point.');
+    lever.style.transition = 'none';
+  }
+
+  function onLeverMove(event) {
+    if (event.pointerId !== leverPointer) return;
+    const travel = Math.max(0, event.clientY - leverStartY);
+    leverMoved = leverMoved || travel > 7;
+    pullVisual(travel / 115);
+    if (leverProgress >= MUSIC_MACHINE_REEL_PROFILE.leverTrigger && !leverTriggered) {
+      leverTriggered = true;
+      navigator.vibrate?.(8);
+    }
+  }
+
+  function onLeverUp(event) {
+    if (event.pointerId !== leverPointer) return;
+    lever.releasePointerCapture?.(event.pointerId);
+    leverPointer = null;
+    if (leverTriggered) { void spin(); resetLever(true); }
+    else if (!leverMoved) animateLeverAndSpin();
+    else {
+      setState(current ? 'READY_TO_PLAY' : 'IDLE', 'The lever returned without starting the reel.');
+      resetLever(true);
+    }
   }
 
   function playerUrl(video) {
@@ -529,7 +558,16 @@ if (machine) {
   }
 
   function bind() {
-    lever.addEventListener('click', spin);
+    lever.addEventListener('pointerdown', onLeverDown);
+    lever.addEventListener('pointermove', onLeverMove);
+    lever.addEventListener('pointerup', onLeverUp);
+    lever.addEventListener('pointercancel', onLeverUp);
+    lever.addEventListener('keydown', event => {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        animateLeverAndSpin();
+      }
+    });
     respinButton.addEventListener('click', spin);
     playButton.addEventListener('click', () => { void openVideo(true); });
     shareButton.addEventListener('click', share);
@@ -541,7 +579,12 @@ if (machine) {
       if (soundEnabled) {
         ensureMachineSamples();
         playSample(reelStopAudio, {volume: .48, rate: 1});
-      } else stopReelSound(true);
+      } else {
+        stopReelSound(true);
+        stopSample(reelRatchetAudio);
+        stopSample(reelStopAudio);
+        stopSample(shutterGearAudio);
+      }
     });
     const toggleStory = () => {
       const paused = storyTrack.classList.toggle('is-paused');
@@ -575,7 +618,6 @@ if (machine) {
       const config = await response.json();
       machineIdentity = String(config.title || config.channelTitle || '').trim();
       machineDescription = String(config.customerConfig?.customerStory || config.tickerText || '').trim();
-      machineTagline = String(config.customerConfig?.customerTagline || machineTagline).trim();
       masterStorySections = Array.isArray(config.customerConfig?.customerStorySections)
         ? config.customerConfig.customerStorySections.filter(beat => beat?.heading && beat?.text)
         : [];
@@ -585,7 +627,6 @@ if (machine) {
       titleNode.textContent = config.title || 'VIDEO JUKEBOX';
       sizeClass(titleNode, titleNode.textContent);
       document.title = `${config.title || 'Video Jukebox'} — CRISPY BITS`;
-      if (customerTagline) customerTagline.textContent = 'VIDEO DISCOVERY';
       setCustomerBackdrop(catalogue[0]);
       if (channelThumbnail) {
         contentLogo.src = channelThumbnail;
@@ -607,8 +648,7 @@ if (machine) {
       updateStory();
       window.setTimeout(startStoryTicker, 350);
       document.fonts?.ready?.then(startStoryTicker).catch(() => {});
-      renderRows(fiveAround(catalogue[0]));
-      requestAnimationFrame(() => requestAnimationFrame(alignViewingGate));
+      renderRows({videoId: '__pull_to_discover__', shortTitle: 'PULL TO DISCOVER'});
       setState('IDLE', 'Pull the lever or press Re-Spin to select a video.');
       respinButton.disabled = false;
     } catch (error) {
@@ -620,6 +660,18 @@ if (machine) {
   load();
   window.addEventListener('resize', () => {
     startStoryTicker();
-    alignViewingGate();
+  });
+
+  window.CrispyBitsMachine = Object.freeze({
+    spin,
+    getState: () => ({
+      state: machine.dataset.machineState,
+      spinning,
+      selectedId: current?.videoId || null,
+      selectedShortTitle: current ? reelTitle(current) : null,
+      reelEngine: 'music-machine-single-reel',
+      reelDuration: ARTIST_SINGLE_REEL_PROFILE.duration,
+      leverTrigger: MUSIC_MACHINE_REEL_PROFILE.leverTrigger,
+    }),
   });
 }
