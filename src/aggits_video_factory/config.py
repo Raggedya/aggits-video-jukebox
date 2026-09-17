@@ -6,7 +6,7 @@ from pathlib import Path
 
 
 APP_NAME = "AGGITS Video Jukebox Factory"
-APP_VERSION = "1.0.0"
+APP_VERSION = "1.1.0"
 GITHUB_OWNER = "Raggedya"
 GITHUB_REPOSITORY = "aggits-video-jukebox"
 GITHUB_REMOTE = f"https://github.com/{GITHUB_OWNER}/{GITHUB_REPOSITORY}.git"
@@ -29,4 +29,3 @@ def application_data_root() -> Path:
 
 def resource_path(relative: str) -> Path:
     return bundled_root() / relative
-

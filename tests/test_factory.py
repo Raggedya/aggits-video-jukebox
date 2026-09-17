@@ -9,7 +9,7 @@ from unittest.mock import Mock, patch
 from aggits_video_factory.models import Project, Video
 from aggits_video_factory.site_builder import build_project_site
 from aggits_video_factory.store import ProjectStore, slugify
-from aggits_video_factory.youtube_api import YouTubeClient, clean_display_title, parse_duration
+from aggits_video_factory.youtube_api import YouTubeClient, clean_display_title, merge_video_selections, parse_duration
 
 
 def sample_video(index: int = 1) -> Video:
@@ -33,6 +33,16 @@ class FactoryTests(unittest.TestCase):
         self.assertEqual(clean_display_title("GOOD PEOPLE DOING NOTHING - THE BROWN CLOUD", "Good People Doing Nothing"), "THE BROWN CLOUD")
         self.assertEqual(clean_display_title("The Brown Cloud — Good People Doing Nothing", "Good People Doing Nothing"), "The Brown Cloud")
         self.assertEqual(parse_duration("PT3M33S"), 213)
+        self.assertEqual(YouTubeClient.video_id_from_url("https://youtu.be/dQw4w9WgXcQ?t=5"), "dQw4w9WgXcQ")
+        self.assertEqual(YouTubeClient.video_id_from_url("https://www.youtube.com/shorts/dQw4w9WgXcQ"), "dQw4w9WgXcQ")
+        self.assertEqual(YouTubeClient.video_id_from_url("https://www.youtube.com/watch?v=dQw4w9WgXcQ"), "dQw4w9WgXcQ")
+        self.assertEqual(YouTubeClient.video_id_from_url("https://example.com/watch?v=dQw4w9WgXcQ"), "")
+
+    def test_manual_videos_take_priority_and_duplicates_are_removed(self):
+        manual = [sample_video(2), sample_video(1)]
+        channel = [sample_video(1), sample_video(3), sample_video(4)]
+        selected = merge_video_selections(manual, channel, 3)
+        self.assertEqual([video.video_id for video in selected], ["video000002", "video000001", "video000003"])
 
     def test_project_roundtrip_and_site_generation(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -58,6 +68,11 @@ class FactoryTests(unittest.TestCase):
             self.assertIn("player.src = playerUrl(current)", script)
             self.assertIn("reel-actual-slotmachine-freesound-261346.mp3", script)
             self.assertIn("machine.dataset.videoOpen = 'true'", script)
+            self.assertIn("function startTicker()", script)
+            self.assertIn("ticker.style.setProperty('--ticker-start', `${-travel}px`)", script)
+            video_css = (destination / "assets" / "video-machine.css").read_text(encoding="utf-8")
+            self.assertIn("opacity:1!important", video_css)
+            self.assertIn('font-family:Consolas,"Courier New",monospace', video_css)
             self.assertTrue((destination / "assets" / "audio" / "machine" / "reel-stop-lock-mixkit-2857.mp3").is_file())
             self.assertTrue((destination / "qr-card.png").is_file())
             self.assertTrue((destination / "social-card.jpg").is_file())
@@ -83,6 +98,20 @@ class FactoryTests(unittest.TestCase):
             catalogue = client.fetch_catalogue("https://youtube.com/@example")
         self.assertEqual(len(catalogue.videos), 30)
         self.assertTrue(all("autoplay=0" in item.embed_url for item in catalogue.videos))
+
+    def test_individual_video_catalogue(self):
+        client = YouTubeClient("test-key")
+        details = {"items": [{
+            "id": "dQw4w9WgXcQ",
+            "status": {"privacyStatus": "public", "embeddable": True},
+            "snippet": {"title": "Example Clip", "channelTitle": "Example Channel", "channelId": "UCexample", "liveBroadcastContent": "none", "thumbnails": {}},
+            "contentDetails": {"duration": "PT4M"},
+        }]}
+        with patch.object(client, "_get", return_value=details):
+            catalogue = client.fetch_videos(["https://youtu.be/dQw4w9WgXcQ"])
+        self.assertEqual(catalogue.channel_title, "Example Channel")
+        self.assertEqual(catalogue.channel_url, "https://www.youtube.com/channel/UCexample")
+        self.assertEqual(catalogue.videos[0].video_id, "dQw4w9WgXcQ")
 
 
 if __name__ == "__main__":

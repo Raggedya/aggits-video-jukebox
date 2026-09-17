@@ -4,9 +4,14 @@ import re
 import sys
 import threading
 import webbrowser
+from concurrent.futures import ThreadPoolExecutor
+from io import BytesIO
 from pathlib import Path
 import tkinter as tk
 from tkinter import messagebox, ttk
+
+import requests
+from PIL import Image, ImageOps, ImageTk
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -21,7 +26,7 @@ from aggits_video_factory.preview import PreviewServer
 from aggits_video_factory.publisher import PublishError, Publisher
 from aggits_video_factory.site_builder import build_project_site
 from aggits_video_factory.store import ProjectStore, slugify
-from aggits_video_factory.youtube_api import YouTubeClient, YouTubeError
+from aggits_video_factory.youtube_api import YouTubeClient, YouTubeError, merge_video_selections
 
 
 INK = "#070605"
@@ -70,7 +75,7 @@ class Factory(tk.Tk):
         title = tk.Frame(header, bg=INK)
         title.pack(side="left", pady=12)
         tk.Label(title, text="VIDEO JUKEBOX FACTORY", bg=INK, fg=PAPER, font=("Segoe UI Semibold", 15)).pack(anchor="w")
-        tk.Label(title, text="YOUTUBE CHANNEL → 30-VIDEO SINGLE-REEL JUKEBOX", bg=INK, fg=MUTED, font=("Segoe UI Semibold", 8)).pack(anchor="w", pady=(4, 0))
+        tk.Label(title, text="YOUTUBE CHANNEL + VIDEO LINKS → 30-VIDEO SINGLE-REEL JUKEBOX", bg=INK, fg=MUTED, font=("Segoe UI Semibold", 8)).pack(anchor="w", pady=(4, 0))
         self.settings_button = self._button(header, "SETTINGS", self._open_settings, compact=True)
         self.settings_button.pack(side="right", padx=24, pady=18)
 
@@ -92,26 +97,53 @@ class Factory(tk.Tk):
         inner = tk.Frame(panel, bg=PANEL)
         inner.pack(fill="both", expand=True, padx=24, pady=22)
         tk.Label(inner, text="CREATE A VIDEO JUKEBOX", bg=PANEL, fg=BRASS, font=("Georgia", 18, "bold")).pack(anchor="w")
-        tk.Label(inner, text="Three fields. One channel. One finished machine.", bg=PANEL, fg=MUTED, font=("Segoe UI", 9)).pack(anchor="w", pady=(5, 22))
+        tk.Label(inner, text="Use a channel, individual videos, or both.", bg=PANEL, fg=MUTED, font=("Segoe UI", 9)).pack(anchor="w", pady=(5, 12))
 
         self.title_entry = self._entry(inner, "JUKEBOX TITLE")
-        self.channel_entry = self._entry(inner, "YOUTUBE CHANNEL / MAIN PAGE LINK")
+        self.channel_entry = self._entry(inner, "YOUTUBE CHANNEL / MAIN PAGE LINK · OPTIONAL")
+
+        video_heading = tk.Frame(inner, bg=PANEL)
+        video_heading.pack(fill="x", pady=(14, 5))
+        tk.Label(video_heading, text="INDIVIDUAL VIDEO LINKS · OPTIONAL", bg=PANEL, fg=BRASS, font=("Segoe UI Semibold", 8)).pack(side="left")
+        tk.Label(video_heading, text="UP TO 15", bg=PANEL, fg=MUTED, font=("Segoe UI", 8)).pack(side="right")
+        links_shell = tk.Frame(inner, bg="#080706", highlightbackground="#332719", highlightthickness=1, height=174)
+        links_shell.pack(fill="x")
+        links_shell.pack_propagate(False)
+        links_canvas = tk.Canvas(links_shell, bg="#080706", bd=0, highlightthickness=0)
+        links_scroll = ttk.Scrollbar(links_shell, orient="vertical", command=links_canvas.yview, style="Factory.Vertical.TScrollbar")
+        links_canvas.configure(yscrollcommand=links_scroll.set)
+        links_scroll.pack(side="right", fill="y")
+        links_canvas.pack(side="left", fill="both", expand=True)
+        links_frame = tk.Frame(links_canvas, bg="#080706")
+        links_window = links_canvas.create_window((0, 0), window=links_frame, anchor="nw")
+        links_frame.bind("<Configure>", lambda _event: links_canvas.configure(scrollregion=links_canvas.bbox("all")))
+        links_canvas.bind("<Configure>", lambda event: links_canvas.itemconfigure(links_window, width=event.width))
+        self.video_url_entries: list[tk.Entry] = []
+        for index in range(15):
+            row = tk.Frame(links_frame, bg="#080706")
+            row.pack(fill="x", padx=9, pady=(8 if index == 0 else 2, 2))
+            tk.Label(row, text=f"{index + 1:02d}", width=3, anchor="w", bg="#080706", fg=MUTED, font=("Segoe UI Semibold", 8)).pack(side="left")
+            entry = tk.Entry(row, bg="#100d09", fg=PAPER, insertbackground=CREAM, relief="flat", bd=0, highlightbackground="#332719", highlightthickness=1, font=("Segoe UI", 9))
+            entry.pack(side="left", fill="x", expand=True, ipady=5)
+            self.video_url_entries.append(entry)
+        links_canvas.bind("<Enter>", lambda _event: links_canvas.bind_all("<MouseWheel>", lambda event: links_canvas.yview_scroll(int(-event.delta / 120), "units")))
+        links_canvas.bind("<Leave>", lambda _event: links_canvas.unbind_all("<MouseWheel>"))
 
         ticker_heading = tk.Frame(inner, bg=PANEL)
         ticker_heading.pack(fill="x", pady=(18, 6))
         tk.Label(ticker_heading, text="TICKER TEXT", bg=PANEL, fg=BRASS, font=("Segoe UI Semibold", 8)).pack(side="left")
         self.ticker_count = tk.Label(ticker_heading, text=f"0 / {MAX_TICKER_LENGTH}", bg=PANEL, fg=MUTED, font=("Segoe UI", 8))
         self.ticker_count.pack(side="right")
-        self.ticker_text = tk.Text(inner, height=8, wrap="word", bg="#080706", fg=PAPER, insertbackground=CREAM, relief="flat", bd=0, highlightbackground="#332719", highlightthickness=1, font=("Segoe UI", 10), padx=12, pady=10)
+        self.ticker_text = tk.Text(inner, height=4, wrap="word", bg="#080706", fg=PAPER, insertbackground=CREAM, relief="flat", bd=0, highlightbackground="#332719", highlightthickness=1, font=("Segoe UI", 10), padx=12, pady=10)
         self.ticker_text.pack(fill="x")
         self.ticker_text.bind("<KeyRelease>", self._ticker_changed)
         self.ticker_text.insert("1.0", "PULL THE LEVER. LET THE MACHINE CHOOSE WHAT YOU WATCH NEXT.")
         self._ticker_changed()
 
         info = tk.Frame(inner, bg="#0d0a07", highlightbackground="#3a2a19", highlightthickness=1)
-        info.pack(fill="x", pady=(20, 16))
+        info.pack(fill="x", pady=(12, 10))
         tk.Label(info, text="AUTOMATIC BUILD", bg="#0d0a07", fg=BRASS, font=("Segoe UI Semibold", 8)).pack(anchor="w", padx=13, pady=(11, 4))
-        tk.Label(info, text=f"The Factory resolves the official channel, filters public embeddable uploads, prioritises standard landscape videos, and selects up to {MAX_VIDEOS}. Shorts are used only when needed.", bg="#0d0a07", fg=MUTED, wraplength=420, justify="left", font=("Segoe UI", 8)).pack(anchor="w", padx=13, pady=(0, 12))
+        tk.Label(info, text=f"Manual links are included first. Duplicate videos are removed, then the channel fills the remaining spaces up to {MAX_VIDEOS}.", bg="#0d0a07", fg=MUTED, wraplength=420, justify="left", font=("Segoe UI", 8)).pack(anchor="w", padx=13, pady=(0, 12))
 
         self.create_button = self._button(inner, "CREATE JUKEBOX", self._create_jukebox, primary=True)
         self.create_button.pack(fill="x", pady=(6, 8), ipady=8)
@@ -251,12 +283,13 @@ class Factory(tk.Tk):
     def _create_jukebox(self) -> None:
         title = re.sub(r"\s+", " ", self.title_entry.get()).strip()
         channel_url = self.channel_entry.get().strip()
+        video_urls = [entry.get().strip() for entry in self.video_url_entries if entry.get().strip()]
         ticker = self.ticker_text.get("1.0", "end-1c").strip()
         if not title or len(title) > 120:
             messagebox.showerror(APP_NAME, "Enter a jukebox title of no more than 120 characters.")
             return
-        if not channel_url:
-            messagebox.showerror(APP_NAME, "Paste the YouTube channel’s main page link.")
+        if not channel_url and not video_urls:
+            messagebox.showerror(APP_NAME, "Paste a YouTube channel link, at least one individual video link, or both.")
             return
         if len(ticker) > MAX_TICKER_LENGTH:
             messagebox.showerror(APP_NAME, f"Ticker text cannot exceed {MAX_TICKER_LENGTH} characters.")
@@ -269,18 +302,162 @@ class Factory(tk.Tk):
 
         slug = slugify(title)
 
+        def worker() -> dict[str, object]:
+            client = YouTubeClient(api_key)
+            manual_catalogue = client.fetch_videos(video_urls) if video_urls else None
+            channel_catalogue = client.fetch_catalogue(channel_url, MAX_VIDEOS) if channel_url else None
+            videos = merge_video_selections(
+                manual_catalogue.videos if manual_catalogue else [],
+                channel_catalogue.videos if channel_catalogue else [],
+                MAX_VIDEOS,
+            )
+            catalogue = channel_catalogue or manual_catalogue
+            if catalogue is None or not videos:
+                raise YouTubeError("No public, embeddable YouTube videos were found.")
+            thumbnail_bytes: dict[str, bytes] = {}
+
+            def fetch_thumbnail(video) -> tuple[str, bytes]:
+                if not video.thumbnail_url:
+                    return video.video_id, b""
+                try:
+                    response = requests.get(video.thumbnail_url, timeout=10)
+                    response.raise_for_status()
+                    return video.video_id, response.content
+                except requests.RequestException:
+                    return video.video_id, b""
+
+            with ThreadPoolExecutor(max_workers=8) as pool:
+                for video_id, content in pool.map(fetch_thumbnail, videos):
+                    if content:
+                        thumbnail_bytes[video_id] = content
+            return {
+                "slug": slug,
+                "title": title,
+                "ticker": ticker,
+                "catalogue": catalogue,
+                "videos": videos,
+                "manual_ids": {video.video_id for video in (manual_catalogue.videos if manual_catalogue else [])},
+                "thumbnails": thumbnail_bytes,
+            }
+
+        self._run_async("READING YOUTUBE + PREPARING VIDEO REVIEW…", worker, self._review_video_selection)
+
+    def _review_video_selection(self, candidate: dict[str, object]) -> None:
+        videos = list(candidate["videos"])
+        manual_ids = set(candidate["manual_ids"])
+        thumbnail_bytes = dict(candidate["thumbnails"])
+        dialog = tk.Toplevel(self)
+        dialog.title("Review Jukebox Videos")
+        dialog.geometry("980x720")
+        dialog.minsize(760, 560)
+        dialog.configure(bg=INK)
+        dialog.transient(self)
+        dialog.grab_set()
+
+        heading = tk.Frame(dialog, bg=PANEL, highlightbackground=DEEP_BRASS, highlightthickness=1)
+        heading.pack(fill="x", padx=18, pady=(18, 10))
+        tk.Label(heading, text="REVIEW INCLUDED VIDEOS", bg=PANEL, fg=BRASS, font=("Georgia", 18, "bold")).pack(anchor="w", padx=20, pady=(15, 3))
+        tk.Label(heading, text="Every video is included by default. Untick anything you do not want in this jukebox.", bg=PANEL, fg=MUTED, font=("Segoe UI", 9)).pack(anchor="w", padx=20, pady=(0, 14))
+
+        list_shell = tk.Frame(dialog, bg="#080706", highlightbackground=DEEP_BRASS, highlightthickness=1)
+        list_shell.pack(fill="both", expand=True, padx=18)
+        canvas = tk.Canvas(list_shell, bg="#080706", bd=0, highlightthickness=0)
+        scrollbar = ttk.Scrollbar(list_shell, orient="vertical", command=canvas.yview, style="Factory.Vertical.TScrollbar")
+        canvas.configure(yscrollcommand=scrollbar.set)
+        scrollbar.pack(side="right", fill="y")
+        canvas.pack(side="left", fill="both", expand=True)
+        rows_frame = tk.Frame(canvas, bg="#080706")
+        canvas_window = canvas.create_window((0, 0), window=rows_frame, anchor="nw")
+        rows_frame.bind("<Configure>", lambda _event: canvas.configure(scrollregion=canvas.bbox("all")))
+        canvas.bind("<Configure>", lambda event: canvas.itemconfigure(canvas_window, width=event.width))
+
+        variables: list[tk.BooleanVar] = []
+        thumbnail_images: list[ImageTk.PhotoImage] = []
+        for index, video in enumerate(videos, start=1):
+            row = tk.Frame(rows_frame, bg="#11100d" if index % 2 else "#0b0a08", height=84)
+            row.pack(fill="x", padx=4, pady=(4 if index == 1 else 0, 2))
+            row.pack_propagate(False)
+            included = tk.BooleanVar(dialog, True)
+            variables.append(included)
+            check = tk.Checkbutton(row, variable=included, bg=row["bg"], activebackground=row["bg"], selectcolor="#2f2417", fg=CREAM, activeforeground=PAPER, bd=0, highlightthickness=0)
+            check.pack(side="left", padx=(10, 6))
+
+            image_data = thumbnail_bytes.get(video.video_id)
+            if image_data:
+                try:
+                    image = Image.open(BytesIO(image_data)).convert("RGB")
+                    image = ImageOps.fit(image, (112, 63), method=Image.Resampling.LANCZOS)
+                    thumbnail = ImageTk.PhotoImage(image)
+                    thumbnail_images.append(thumbnail)
+                    tk.Label(row, image=thumbnail, bg="#050403", bd=0).pack(side="left", padx=(0, 12))
+                except OSError:
+                    tk.Label(row, text="NO\nIMAGE", width=14, height=3, bg="#050403", fg=MUTED, font=("Segoe UI", 8)).pack(side="left", padx=(0, 12))
+            else:
+                tk.Label(row, text="NO\nIMAGE", width=14, height=3, bg="#050403", fg=MUTED, font=("Segoe UI", 8)).pack(side="left", padx=(0, 12))
+
+            detail = tk.Frame(row, bg=row["bg"])
+            detail.pack(side="left", fill="both", expand=True, pady=9)
+            source = "MANUALLY ADDED" if video.video_id in manual_ids else "CHANNEL SELECTION"
+            tk.Label(detail, text=video.title, bg=row["bg"], fg=PAPER, anchor="w", font=("Segoe UI Semibold", 10)).pack(fill="x")
+            tk.Label(detail, text=f"{source}  ·  {video.channel_title}", bg=row["bg"], fg=BRASS, anchor="w", font=("Segoe UI Semibold", 8)).pack(fill="x", pady=(3, 1))
+            tk.Label(detail, text=video.url, bg=row["bg"], fg=MUTED, anchor="w", font=("Segoe UI", 8)).pack(fill="x")
+            tk.Label(row, text=f"{index:02d}", bg=row["bg"], fg=MUTED, font=("Georgia", 11, "bold")).pack(side="right", padx=14)
+
+        dialog._thumbnail_images = thumbnail_images
+        footer = tk.Frame(dialog, bg=INK)
+        footer.pack(fill="x", padx=18, pady=(10, 18))
+        count_label = tk.Label(footer, bg=INK, fg=CREAM, font=("Segoe UI Semibold", 9))
+        count_label.pack(side="left", padx=(3, 14))
+
+        def update_count() -> None:
+            total = sum(variable.get() for variable in variables)
+            count_label.configure(text=f"{total} OF {len(videos)} VIDEOS INCLUDED")
+
+        def set_all(value: bool) -> None:
+            for variable in variables:
+                variable.set(value)
+            update_count()
+
+        for variable in variables:
+            variable.trace_add("write", lambda *_args: update_count())
+
+        def build_selected() -> None:
+            selected = [video for video, variable in zip(videos, variables) if variable.get()]
+            if not selected:
+                messagebox.showerror(APP_NAME, "Include at least one video before building the jukebox.", parent=dialog)
+                return
+            canvas.unbind_all("<MouseWheel>")
+            dialog.destroy()
+            self._finish_jukebox(candidate, selected)
+
+        def cancel_review() -> None:
+            canvas.unbind_all("<MouseWheel>")
+            dialog.destroy()
+
+        self._button(footer, "SELECT ALL", lambda: set_all(True), compact=True).pack(side="left", padx=(0, 6))
+        self._button(footer, "CLEAR ALL", lambda: set_all(False), compact=True).pack(side="left")
+        self._button(footer, "BUILD JUKEBOX", build_selected, primary=True, compact=True).pack(side="right")
+        self._button(footer, "CANCEL", cancel_review, compact=True).pack(side="right", padx=8)
+        canvas.bind("<Enter>", lambda _event: canvas.bind_all("<MouseWheel>", lambda event: canvas.yview_scroll(int(-event.delta / 120), "units")))
+        canvas.bind("<Leave>", lambda _event: canvas.unbind_all("<MouseWheel>"))
+        dialog.protocol("WM_DELETE_WINDOW", cancel_review)
+        update_count()
+
+    def _finish_jukebox(self, candidate: dict[str, object], videos: list) -> None:
+        catalogue = candidate["catalogue"]
+        slug = str(candidate["slug"])
+
         def worker() -> Project:
-            catalogue = YouTubeClient(api_key).fetch_catalogue(channel_url, MAX_VIDEOS)
             existing = self.projects.get(slug)
             project = Project(
                 slug=slug,
-                title=title,
-                ticker_text=ticker,
+                title=str(candidate["title"]),
+                ticker_text=str(candidate["ticker"]),
                 channel_url=catalogue.channel_url,
                 channel_id=catalogue.channel_id,
                 channel_title=catalogue.channel_title,
                 channel_thumbnail=catalogue.channel_thumbnail,
-                videos=catalogue.videos,
+                videos=videos,
                 status="draft",
                 created_at=existing.created_at if existing else utc_now(),
                 published_at=existing.published_at if existing else None,
@@ -293,7 +470,7 @@ class Factory(tk.Tk):
             self.store.save_project(project)
             return project
 
-        self._run_async("READING THE YOUTUBE CHANNEL + BUILDING THE JUKEBOX…", worker, self._create_complete)
+        self._run_async("BUILDING THE REVIEWED JUKEBOX…", worker, self._create_complete)
 
     def _create_complete(self, project: Project) -> None:
         self._refresh_library(project.slug)
@@ -455,4 +632,3 @@ if __name__ == "__main__":
         smoke_test()
     else:
         Factory().mainloop()
-

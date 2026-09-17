@@ -1,14 +1,15 @@
 # AGGITS Video Jukebox Factory
 
-A standalone Windows desktop application that turns a public YouTube channel into an AGGITS single-reel video discovery jukebox. This repository and deployment are deliberately independent of the existing Cosmic Aquarium applications.
+A standalone Windows desktop application that turns a public YouTube channel, up to 15 individually chosen videos, or both into an AGGITS single-reel video discovery jukebox. This repository and deployment are deliberately independent of the existing Cosmic Aquarium applications.
 
 ## Factory workflow
 
 1. Open **Settings** once and save a YouTube Data API v3 key.
-2. Enter a jukebox title, ticker text (up to 500 characters), and the channel's main YouTube URL.
-3. Press **Create Jukebox**. The Factory selects up to 30 public, embeddable uploads.
-4. Preview privately, then publish or unpublish from the Library.
-5. After a successful publication, the separate delivery Worker emails the live link and titled QR card.
+2. Enter a jukebox title and ticker text (up to 500 characters), then supply a channel URL, up to 15 individual video URLs, or both.
+3. Press **Create Jukebox**. Explicit videos are included first; duplicates are removed and the channel fills the remaining places up to 30 public, embeddable videos.
+4. Review the resolved list with thumbnails and default-on inclusion checkboxes, then build using only the videos you keep checked.
+5. Preview privately, then publish or unpublish from the Library.
+6. After a successful publication, the separate delivery Worker emails the live link and titled QR card.
 
 The public machine uses YouTube's official embedded player. Landing on a reel winner does not autoplay video. **Play Video** mechanically opens the shutters; the visitor then presses YouTube's own play control.
 

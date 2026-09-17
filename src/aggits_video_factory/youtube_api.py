@@ -30,6 +30,20 @@ class ChannelCatalogue:
     videos: list[Video]
 
 
+def merge_video_selections(manual: list[Video], channel: list[Video], maximum: int = MAX_VIDEOS) -> list[Video]:
+    """Keep every explicit choice first, then fill unused slots from the channel."""
+    selected: list[Video] = []
+    seen: set[str] = set()
+    for video in [*manual, *channel]:
+        if not video.video_id or video.video_id in seen:
+            continue
+        selected.append(video)
+        seen.add(video.video_id)
+        if len(selected) >= max(1, min(MAX_VIDEOS, int(maximum))):
+            break
+    return selected
+
+
 def parse_duration(value: str) -> int:
     match = ISO_DURATION.fullmatch(value or "")
     if not match:
@@ -148,6 +162,105 @@ class YouTubeClient:
             raise YouTubeError("A unique public YouTube channel could not be identified from that link.")
         return dict(items[0])
 
+    @staticmethod
+    def video_id_from_url(video_url: str) -> str:
+        raw = video_url.strip()
+        if not raw:
+            return ""
+        if not re.match(r"^https?://", raw, flags=re.I):
+            raw = f"https://{raw.lstrip('/')}"
+        parsed = urlparse(raw)
+        host = (parsed.hostname or "").lower().removeprefix("www.")
+        segments = [segment for segment in parsed.path.split("/") if segment]
+        video_id = ""
+        if host == "youtu.be" and segments:
+            video_id = segments[0]
+        elif host in {"youtube.com", "m.youtube.com", "music.youtube.com", "youtube-nocookie.com"}:
+            if parsed.path == "/watch":
+                video_id = parse_qs(parsed.query).get("v", [""])[0]
+            elif len(segments) >= 2 and segments[0] in {"shorts", "embed", "live"}:
+                video_id = segments[1]
+        return video_id if re.fullmatch(r"[A-Za-z0-9_-]{6,20}", video_id) else ""
+
+    def _video_record(self, item: dict[str, Any], channel_title: str = "") -> Video | None:
+        video_id = str(item.get("id") or "")
+        status = item.get("status") if isinstance(item.get("status"), dict) else {}
+        snippet = item.get("snippet") if isinstance(item.get("snippet"), dict) else {}
+        if not video_id or status.get("privacyStatus") != "public" or status.get("embeddable") is not True:
+            return None
+        if str(snippet.get("liveBroadcastContent") or "none") != "none":
+            return None
+        title = html.unescape(str(snippet.get("title") or "")).strip()
+        if not title:
+            return None
+        actual_channel_title = html.unescape(str(snippet.get("channelTitle") or channel_title or "YouTube"))
+        duration = parse_duration(str(item.get("contentDetails", {}).get("duration") or ""))
+        thumbnail_url, _ = best_thumbnail(snippet)
+        return Video(
+            video_id=video_id,
+            title=title,
+            display_title=clean_display_title(title, actual_channel_title),
+            url=f"https://www.youtube.com/watch?v={video_id}",
+            embed_url=f"https://www.youtube.com/embed/{video_id}?enablejsapi=1&autoplay=0&playsinline=1&rel=0",
+            thumbnail_url=thumbnail_url,
+            published_at=str(snippet.get("publishedAt") or ""),
+            duration_seconds=duration,
+            channel_title=actual_channel_title,
+        )
+
+    def fetch_videos(self, video_urls: list[str]) -> ChannelCatalogue:
+        indexed: list[tuple[int, str, str]] = []
+        invalid: list[str] = []
+        seen: set[str] = set()
+        for index, url in enumerate(video_urls, start=1):
+            video_id = self.video_id_from_url(url)
+            if not video_id:
+                invalid.append(f"#{index}: {url}")
+            elif video_id not in seen:
+                indexed.append((index, url, video_id))
+                seen.add(video_id)
+        if invalid:
+            raise YouTubeError("These individual links are not recognizable YouTube video URLs:\n" + "\n".join(invalid))
+        if not indexed:
+            raise YouTubeError("Paste at least one individual YouTube video URL.")
+
+        items_by_id: dict[str, dict[str, Any]] = {}
+        for group in chunks([item[2] for item in indexed], 50):
+            page = self._get("videos", part="snippet,contentDetails,status", id=",".join(group), maxResults=50)
+            for item in page.get("items", []):
+                if isinstance(item, dict) and item.get("id"):
+                    items_by_id[str(item["id"])] = item
+
+        videos: list[Video] = []
+        unavailable: list[str] = []
+        channel_ids: list[str] = []
+        for index, url, video_id in indexed:
+            item = items_by_id.get(video_id)
+            record = self._video_record(item) if item else None
+            if not record:
+                unavailable.append(f"#{index}: {url}")
+                continue
+            videos.append(record)
+            channel_id = str(item.get("snippet", {}).get("channelId") or "")
+            if channel_id and channel_id not in channel_ids:
+                channel_ids.append(channel_id)
+        if unavailable:
+            raise YouTubeError(
+                "These individual videos are private, unavailable, live, or do not permit embedding:\n"
+                + "\n".join(unavailable)
+            )
+
+        channel_title = videos[0].channel_title if len({video.channel_title for video in videos}) == 1 else "Custom video selection"
+        channel_id = channel_ids[0] if len(channel_ids) == 1 else ""
+        channel_url = f"https://www.youtube.com/channel/{channel_id}" if channel_id else ""
+        return ChannelCatalogue(
+            channel_id=channel_id,
+            channel_title=channel_title,
+            channel_url=channel_url,
+            channel_thumbnail=videos[0].thumbnail_url if videos else "",
+            videos=videos,
+        )
+
     def fetch_catalogue(self, channel_url: str, maximum: int = MAX_VIDEOS) -> ChannelCatalogue:
         maximum = max(1, min(MAX_VIDEOS, int(maximum)))
         channel = self.resolve_channel(channel_url)
@@ -192,28 +305,13 @@ class YouTubeClient:
             item = videos_by_id.get(video_id)
             if not item:
                 continue
-            status = item.get("status") if isinstance(item.get("status"), dict) else {}
             video_snippet = item.get("snippet") if isinstance(item.get("snippet"), dict) else {}
-            if status.get("privacyStatus") != "public" or status.get("embeddable") is not True:
+            record = self._video_record(item, str(snippet.get("title") or ""))
+            if not record:
                 continue
-            if str(video_snippet.get("liveBroadcastContent") or "none") != "none":
-                continue
-            title = html.unescape(str(video_snippet.get("title") or "")).strip()
-            if not title:
-                continue
-            duration = parse_duration(str(item.get("contentDetails", {}).get("duration") or ""))
-            thumbnail_url, ratio = best_thumbnail(video_snippet)
-            record = Video(
-                video_id=video_id,
-                title=title,
-                display_title=clean_display_title(title, str(snippet.get("title") or "")),
-                url=f"https://www.youtube.com/watch?v={video_id}",
-                embed_url=f"https://www.youtube.com/embed/{video_id}?enablejsapi=1&autoplay=0&playsinline=1&rel=0",
-                thumbnail_url=thumbnail_url,
-                published_at=str(video_snippet.get("publishedAt") or ""),
-                duration_seconds=duration,
-                channel_title=str(video_snippet.get("channelTitle") or snippet.get("title") or ""),
-            )
+            _, ratio = best_thumbnail(video_snippet)
+            title = record.title
+            duration = record.duration_seconds
             looks_like_short = duration and duration <= 60 or "#shorts" in title.lower() or (ratio and ratio < 0.9)
             (fallback if looks_like_short else primary).append(record)
 
