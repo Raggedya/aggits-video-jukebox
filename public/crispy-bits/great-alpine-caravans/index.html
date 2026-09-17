@@ -26,8 +26,8 @@
     <div class="customer-backdrop" aria-hidden="true"></div>
     <div class="experience-frame">
       <nav class="utility-controls" aria-label="Machine controls">
-        <button type="button" data-action="home">HOME</button>
-        <button type="button" data-action="sound" aria-pressed="true">SOUND ON</button>
+        <button type="button" data-action="home"><span aria-hidden="true">⌂</span><b>HOME</b></button>
+        <button type="button" data-action="sound" aria-pressed="true"><span data-sound-icon aria-hidden="true">♪</span><b data-sound-label>SOUND ON</b></button>
       </nav>
 
       <header class="brand-masthead">
@@ -37,7 +37,12 @@
       </header>
 
       <section class="discovery-zone" aria-label="Video discovery reel">
-        <div class="customer-title"><strong data-machine-title>Great Alpine Caravans</strong></div>
+        <div class="customer-identity">
+          <div class="customer-identity-logo"><img data-customer-logo alt="" hidden><span data-customer-monogram>CB</span></div>
+          <strong data-machine-title>Great Alpine Caravans</strong>
+          <i aria-hidden="true"></i>
+          <span data-customer-tagline>MORE STORIES<br>MORE TO DISCOVER</span>
+        </div>
         <div class="reel-and-lever">
           <i class="payline-arrow payline-arrow--left" aria-hidden="true"></i>
           <div class="reel-bank" aria-label="Five video choices with the selected video in the centre" aria-live="polite">
@@ -80,14 +85,17 @@ Whether the caravan build is big or small, we use state-of-the-art modern techno
         <button type="button" class="control-button" data-action="spin-again" disabled><span class="control-icon" aria-hidden="true">↻</span><b>RE-SPIN</b></button>
       </section>
 
-      <section class="customer-story" aria-label="Customer story">
-        <div class="ticker-window"><span class="ticker-copy" data-ticker-copy>*** GREAT ALPINE CARAVANS ***   I started my career as a caravan builder back in 2012 where I quickly adapted to the caravan industry by learning technical knowledge with the experiences I gained working with other companies I was promoted to a team leader by gaining relevant knowledge and understanding about caravans. Gradually, I started Great Alpine caravans in 2016 because I wanted to share my perspectives and newer van build designs. Fast track to 2020 Great Alpine caravans grew to one of the leading caravan companies in Victoria.
+      <section class="customer-story" aria-label="The story so far">
+        <header>THE STORY SO FAR</header>
+        <div class="story-window" data-story-window role="button" tabindex="0" aria-label="Customer story. Tap to pause or resume.">
+          <div class="story-track" data-story-track>
+            <section><h3>Great Alpine Caravans</h3><p data-ticker-copy>*** GREAT ALPINE CARAVANS ***   I started my career as a caravan builder back in 2012 where I quickly adapted to the caravan industry by learning technical knowledge with the experiences I gained working with other companies I was promoted to a team leader by gaining relevant knowledge and understanding about caravans. Gradually, I started Great Alpine caravans in 2016 because I wanted to share my perspectives and newer van build designs. Fast track to 2020 Great Alpine caravans grew to one of the leading caravan companies in Victoria.
 
-Whether the caravan build is big or small, we use state-of-the-art modern technology; Great Alpine Caravans will custom build a van as per our client’s requirements. Our main aim is to custom build a van according to your needs. We want our customers to always be satisfied with customer service and good quality RVs at affordable prices.</span></div>
-        <div class="story-message"><em>MORE STORIES</em><strong>MORE TO DISCOVER</strong></div>
+Whether the caravan build is big or small, we use state-of-the-art modern technology; Great Alpine Caravans will custom build a van as per our client’s requirements. Our main aim is to custom build a van according to your needs. We want our customers to always be satisfied with customer service and good quality RVs at affordable prices.</p></section>
+          </div>
+        </div>
+        <p class="story-pause-status" data-story-status>Tap the story to pause</p>
       </section>
-
-      <footer class="experience-footer"><span>VIDEO</span><span>DISCOVERY</span><span>ADVENTURE</span><span>STORIES</span><span>YOUTUBE</span></footer>
     </div>
     <p id="machine-instructions" class="visually-hidden">Pull the lever or press Re-Spin. The reel lands on a video, then reveals its official YouTube player.</p>
     <p class="machine-status visually-hidden" role="status" aria-live="assertive">Loading the Crispy Bits video discovery machine.</p>

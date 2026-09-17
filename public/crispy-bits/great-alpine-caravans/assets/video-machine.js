@@ -5,14 +5,17 @@ if (machine) {
   const rows = [...reel.querySelectorAll('.reel-strip > *')];
   const lever = machine.querySelector('.lever');
   const titleNode = machine.querySelector('[data-machine-title]');
-  const ticker = machine.querySelector('[data-ticker-copy]');
-  const tickerWindow = ticker?.parentElement;
+  const storyWindow = machine.querySelector('[data-story-window]');
+  const storyTrack = machine.querySelector('[data-story-track]');
+  const storyStatus = machine.querySelector('[data-story-status]');
   const status = machine.querySelector('.machine-status');
   const playButton = machine.querySelector('[data-action="play"]');
   const shareButton = machine.querySelector('[data-action="share"]');
   const subscribeButton = machine.querySelector('[data-action="subscribe"]');
   const respinButton = machine.querySelector('[data-action="spin-again"]');
   const soundButton = machine.querySelector('[data-action="sound"]');
+  const soundIcon = machine.querySelector('[data-sound-icon]');
+  const soundLabel = machine.querySelector('[data-sound-label]');
   const homeButton = machine.querySelector('[data-action="home"]');
   const player = machine.querySelector('[data-youtube-player]');
   const stage = machine.querySelector('[data-video-stage]');
@@ -23,6 +26,9 @@ if (machine) {
   const contentMeta = machine.querySelector('[data-content-meta]');
   const contentDescription = machine.querySelector('[data-content-description]');
   const viewYouTube = machine.querySelector('[data-view-youtube]');
+  const customerLogo = machine.querySelector('[data-customer-logo]');
+  const customerMonogram = machine.querySelector('[data-customer-monogram]');
+  const customerTagline = machine.querySelector('[data-customer-tagline]');
   const needles = [...machine.querySelectorAll('[data-meter-needle]')];
   const needleShadows = [...machine.querySelectorAll('[data-meter-shadow]')];
   const scales = [...machine.querySelectorAll('[data-meter-scale]')];
@@ -31,10 +37,14 @@ if (machine) {
   let catalogue = [];
   let current = null;
   let spinning = false;
-  let soundEnabled = true;
+  let soundEnabled = (() => {
+    try { return sessionStorage.getItem('crispyBitsSound') !== 'off'; }
+    catch { return true; }
+  })();
   let bag = [];
   let machineIdentity = '';
   let machineDescription = '';
+  let machineTagline = 'MORE STORIES • MORE TO DISCOVER';
   let channelThumbnail = '';
   let revealTimer = 0;
   let selectionEpoch = 0;
@@ -102,25 +112,54 @@ if (machine) {
     });
   }
 
-  function startTicker() {
-    if (!ticker || !tickerWindow) return;
-    ticker.classList.remove('is-scrolling');
-    ticker.style.removeProperty('--ticker-start');
-    ticker.style.removeProperty('--ticker-end');
-    ticker.style.removeProperty('--ticker-duration');
+  function startStoryTicker() {
+    if (!storyTrack || !storyWindow) return;
+    storyTrack.classList.remove('is-scrolling');
+    storyTrack.style.removeProperty('--story-start');
+    storyTrack.style.removeProperty('--story-end');
+    storyTrack.style.removeProperty('--story-duration');
     requestAnimationFrame(() => requestAnimationFrame(() => {
-      const copyWidth = ticker.scrollWidth;
-      const windowWidth = tickerWindow.clientWidth;
-      if (!copyWidth || !windowWidth) {
-        window.setTimeout(startTicker, 200);
+      const contentHeight = storyTrack.scrollHeight;
+      const windowHeight = storyWindow.clientHeight;
+      if (!contentHeight || !windowHeight) {
+        window.setTimeout(startStoryTicker, 200);
         return;
       }
-      const travel = (copyWidth + windowWidth) / 2;
-      ticker.style.setProperty('--ticker-start', `${travel}px`);
-      ticker.style.setProperty('--ticker-end', `${-travel}px`);
-      ticker.style.setProperty('--ticker-duration', `${Math.max(12, (copyWidth + windowWidth) / 48).toFixed(1)}s`);
-      ticker.classList.add('is-scrolling');
+      const start = Math.round(windowHeight * .88);
+      const end = -Math.round(contentHeight + windowHeight * .18);
+      const travel = start - end;
+      storyTrack.style.setProperty('--story-start', `${start}px`);
+      storyTrack.style.setProperty('--story-end', `${end}px`);
+      storyTrack.style.setProperty('--story-duration', `${Math.max(34, travel / 12).toFixed(1)}s`);
+      storyTrack.classList.add('is-scrolling');
     }));
+  }
+
+  function appendStoryText(section, tag, text) {
+    if (!text) return;
+    const node = document.createElement(tag);
+    node.textContent = text;
+    section.append(node);
+  }
+
+  function updateStory(video = null) {
+    if (!storyTrack) return;
+    const section = document.createElement('section');
+    appendStoryText(section, 'h3', machineIdentity || 'CRISPY BITS');
+    appendStoryText(section, 'p', machineDescription || 'Spin, discover and watch something worth sharing.');
+    if (video) {
+      section.append(document.createElement('hr'));
+      appendStoryText(section, 'h4', titleOnly(video));
+      appendStoryText(section, 'p', video.storyText || `Selected from ${video.channelTitle || machineIdentity}. Press Play Video to watch on YouTube.`);
+    }
+    storyTrack.replaceChildren(section);
+    window.setTimeout(startStoryTicker, 0);
+  }
+
+  function updateSoundControl() {
+    if (soundLabel) soundLabel.textContent = soundEnabled ? 'SOUND ON' : 'SOUND OFF';
+    if (soundIcon) soundIcon.textContent = soundEnabled ? '♪' : '×';
+    soundButton.setAttribute('aria-pressed', String(soundEnabled));
   }
 
   function refillBag() {
@@ -176,6 +215,7 @@ if (machine) {
     }
     viewYouTube.href = video.url;
     viewYouTube.setAttribute('aria-disabled', 'false');
+    updateStory(video);
   }
 
   function cancelPendingReveal() {
@@ -435,12 +475,24 @@ if (machine) {
     subscribeButton.addEventListener('click', subscribe);
     soundButton.addEventListener('click', () => {
       soundEnabled = !soundEnabled;
-      soundButton.textContent = soundEnabled ? 'SOUND ON' : 'SOUND OFF';
-      soundButton.setAttribute('aria-pressed', String(soundEnabled));
+      try { sessionStorage.setItem('crispyBitsSound', soundEnabled ? 'on' : 'off'); } catch {}
+      updateSoundControl();
       if (soundEnabled) {
         ensureMachineSamples();
         playSample(reelStopAudio, {volume: .48, rate: 1});
       } else stopReelSound(true);
+    });
+    const toggleStory = () => {
+      const paused = storyTrack.classList.toggle('is-paused');
+      storyWindow.setAttribute('aria-pressed', String(paused));
+      if (storyStatus) storyStatus.textContent = paused ? 'Story paused — tap to resume' : 'Tap the story to pause';
+    };
+    storyWindow?.addEventListener('click', toggleStory);
+    storyWindow?.addEventListener('keydown', event => {
+      if (event.key === ' ' || event.key === 'Enter') {
+        event.preventDefault();
+        toggleStory();
+      }
     });
     homeButton.addEventListener('click', () => { location.href = '../'; });
     document.addEventListener('keydown', event => {
@@ -453,6 +505,7 @@ if (machine) {
 
   async function load() {
     bind();
+    updateSoundControl();
     buildMeters();
     startMeters();
     try {
@@ -460,27 +513,36 @@ if (machine) {
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const config = await response.json();
       machineIdentity = String(config.title || config.channelTitle || '').trim();
-      machineDescription = String(config.tickerText || '').trim();
+      machineDescription = String(config.customerConfig?.customerStory || config.tickerText || '').trim();
+      machineTagline = String(config.customerConfig?.customerTagline || machineTagline).trim();
       channelThumbnail = String(config.channelThumbnail || '').trim();
       catalogue = Array.isArray(config.videos) ? config.videos.filter(video => video?.videoId) : [];
       if (!catalogue.length) throw new Error('No videos');
       titleNode.textContent = config.title || 'VIDEO JUKEBOX';
       sizeClass(titleNode, titleNode.textContent);
       document.title = `${config.title || 'Video Jukebox'} — CRISPY BITS`;
-      ticker.textContent = config.tickerText || 'PULL FOR A VIDEO';
-      startTicker();
-      window.setTimeout(startTicker, 350);
-      document.fonts?.ready?.then(startTicker).catch(() => {});
+      if (customerTagline) customerTagline.textContent = machineTagline.replace(/\s*[•|]\s*/g, '\n');
       setCustomerBackdrop(catalogue[0]);
       if (channelThumbnail) {
         contentLogo.src = channelThumbnail;
         contentLogo.alt = `${config.channelTitle || config.title} logo`;
         contentLogo.hidden = false;
         contentMonogram.hidden = true;
+        if (customerLogo) {
+          customerLogo.src = channelThumbnail;
+          customerLogo.alt = `${config.channelTitle || config.title} logo`;
+          customerLogo.hidden = false;
+          customerMonogram.hidden = true;
+        }
       } else {
-        contentMonogram.textContent = String(config.title || 'CB').split(/\s+/).slice(0, 2).map(part => part[0]).join('').toUpperCase();
+        const initials = String(config.title || 'CB').split(/\s+/).slice(0, 2).map(part => part[0]).join('').toUpperCase();
+        contentMonogram.textContent = initials;
+        if (customerMonogram) customerMonogram.textContent = initials;
       }
       contentDescription.textContent = machineDescription || 'Pull the lever and discover something worth watching.';
+      updateStory();
+      window.setTimeout(startStoryTicker, 350);
+      document.fonts?.ready?.then(startStoryTicker).catch(() => {});
       renderRows(fiveAround(catalogue[0]));
       setState('IDLE', 'Pull the lever or press Re-Spin to select a video.');
       respinButton.disabled = false;
@@ -491,5 +553,5 @@ if (machine) {
   }
 
   load();
-  window.addEventListener('resize', startTicker);
+  window.addEventListener('resize', startStoryTicker);
 }
