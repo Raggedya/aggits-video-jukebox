@@ -44,7 +44,9 @@ def clean_display_title(title: str, channel_title: str, limit: int = 42) -> str:
     value = re.sub(r"\s*[\[(]official\s+audio[\])]\s*$", "", value, flags=re.I)
     escaped = re.escape(channel_title.strip())
     if escaped:
-        value = re.sub(rf"\s*[-|•]\s*{escaped}\s*$", "", value, flags=re.I)
+        separator = r"(?:\s*[-–—|:•]\s*)+"
+        value = re.sub(rf"^{escaped}{separator}", "", value, flags=re.I)
+        value = re.sub(rf"{separator}{escaped}\s*$", "", value, flags=re.I)
     value = value.strip(" -|•") or html.unescape(title).strip()
     if len(value) <= limit:
         return value
@@ -226,4 +228,3 @@ class YouTubeClient:
             channel_thumbnail=channel_thumbnail,
             videos=selected,
         )
-

@@ -30,6 +30,8 @@ class FactoryTests(unittest.TestCase):
     def test_slug_and_title_cleaning(self):
         self.assertEqual(slugify("  Piano Black & Brass! "), "piano-black-brass")
         self.assertEqual(clean_display_title("Lost in the Static (Official Music Video)", "Band"), "Lost in the Static")
+        self.assertEqual(clean_display_title("GOOD PEOPLE DOING NOTHING - THE BROWN CLOUD", "Good People Doing Nothing"), "THE BROWN CLOUD")
+        self.assertEqual(clean_display_title("The Brown Cloud — Good People Doing Nothing", "Good People Doing Nothing"), "The Brown Cloud")
         self.assertEqual(parse_duration("PT3M33S"), 213)
 
     def test_project_roundtrip_and_site_generation(self):
@@ -53,8 +55,10 @@ class FactoryTests(unittest.TestCase):
             payload = json.loads((destination / "machine.json").read_text(encoding="utf-8"))
             self.assertEqual(payload["videoCount"], 3)
             script = (destination / "assets" / "video-machine.js").read_text(encoding="utf-8")
-            self.assertIn("player.src = current.embedUrl", script)
+            self.assertIn("player.src = playerUrl(current)", script)
+            self.assertIn("reel-actual-slotmachine-freesound-261346.mp3", script)
             self.assertIn("machine.dataset.videoOpen = 'true'", script)
+            self.assertTrue((destination / "assets" / "audio" / "machine" / "reel-stop-lock-mixkit-2857.mp3").is_file())
             self.assertTrue((destination / "qr-card.png").is_file())
             self.assertTrue((destination / "social-card.jpg").is_file())
 
