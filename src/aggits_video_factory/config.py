@@ -6,7 +6,7 @@ from pathlib import Path
 
 
 APP_NAME = "CRISPY BITS Video Jukebox Factory"
-APP_VERSION = "1.0.2"
+APP_VERSION = "2.0.0"
 BRAND_NAME = "CRISPY BITS"
 GITHUB_OWNER = "Raggedya"
 GITHUB_REPOSITORY = "aggits-video-jukebox"

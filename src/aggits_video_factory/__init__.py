@@ -1,3 +1,3 @@
 """Standalone CRISPY BITS Video Jukebox Factory."""
 
-__version__ = "1.0.2"
+__version__ = "2.0.0"

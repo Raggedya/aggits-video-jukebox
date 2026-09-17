@@ -1,6 +1,6 @@
 # CRISPY BITS Video Jukebox Factory
 
-A standalone Windows desktop application that turns a public YouTube channel, up to 15 individually chosen videos, or both into a CRISPY BITS single-reel video discovery jukebox. It uses the supplied CRISPY BITS marquee and QR-card identity while preserving the proven single-reel machine, player and publishing workflow.
+A standalone Windows desktop application that turns a public YouTube channel, up to 15 individually chosen videos, or both into a CRISPY BITS video-first discovery experience. Its compact five-card presentation, cinematic 16:9 YouTube stage, customer information and customer-themed environment are driven by the existing proven single-reel selection engine and publishing workflow.
 
 ## Factory workflow
 
@@ -13,7 +13,7 @@ A standalone Windows desktop application that turns a public YouTube channel, up
 
 Published jukeboxes can be reopened with **Edit Videos**. Reviewed changes remain private and the existing live version stays untouched until **Update + Republish** is pressed.
 
-The public machine uses YouTube's official embedded player. Landing on a reel winner does not autoplay video. **Play Video** mechanically opens the shutters; the visitor then presses YouTube's own play control.
+The public machine uses YouTube's official embedded player. After the reel confirms a winner, the machine pauses briefly and reveals the matched video without autoplaying it. **Play Video** activates the selected official player, while **Re-spin** closes the stage before the existing reel sequence begins again.
 
 ## Local development
 
