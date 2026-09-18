@@ -50,6 +50,41 @@ class DeliveryCredentialRefreshTests(unittest.TestCase):
         self.assertEqual(source.count("secret=delivery_secret"), 3)
         self.assertNotIn('secret=str(self.settings.get("deliverySecret") or "")', source)
 
+        for method_name in ("_publish_selected", "_retry_email", "_check_live_status"):
+            method_source = source.split(f"    def {method_name}", 1)[1].split("\n    def ", 1)[0]
+            self.assertLess(
+                method_source.index("recipient, delivery_secret = self._current_delivery_credentials()"),
+                method_source.index("        def worker"),
+                f"{method_name} must decrypt protected credentials on the UI thread before starting background work",
+            )
+
+    def test_transient_refresh_failure_retains_decrypted_session_secret(self):
+        module = load_desktop_module()
+
+        class Store:
+            def load_settings(self):
+                return {"deliveryEmail": "current@example.com", "deliverySecret": ""}
+
+        class Logger:
+            warnings = 0
+
+            def warning(self, _message):
+                self.warnings += 1
+
+        factory = object.__new__(module.Factory)
+        factory.store = Store()
+        factory.logger = Logger()
+        factory.settings = {
+            "deliveryEmail": "old@example.com",
+            "deliverySecret": "already-decrypted-secret",
+        }
+
+        recipient, secret = module.Factory._current_delivery_credentials(factory)
+
+        self.assertEqual(recipient, "current@example.com")
+        self.assertEqual(secret, "already-decrypted-secret")
+        self.assertEqual(factory.logger.warnings, 1)
+
 
 if __name__ == "__main__":
     unittest.main()

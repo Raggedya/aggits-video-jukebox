@@ -872,7 +872,17 @@ class Factory(tk.Tk):
 
     def _current_delivery_credentials(self) -> tuple[str, str]:
         """Reload externally provisioned delivery settings immediately before use."""
-        self.settings = self.store.load_settings()
+        previous_secret = str(self.settings.get("deliverySecret") or "")
+        refreshed = self.store.load_settings()
+        if not refreshed.get("deliverySecret") and previous_secret:
+            # A protected credential that was already decrypted successfully for
+            # this session must not be discarded by a transient settings/DPAPI
+            # read failure. Never log the credential itself.
+            refreshed["deliverySecret"] = previous_secret
+            self.logger.warning(
+                "Delivery credential refresh was unavailable; retaining the already-decrypted session credential"
+            )
+        self.settings = refreshed
         return (
             str(self.settings.get("deliveryEmail") or ""),
             str(self.settings.get("deliverySecret") or ""),
@@ -891,6 +901,7 @@ class Factory(tk.Tk):
         question = f"Update and republish {project.title}?" if project.status == "changes_pending" else f"Publish {project.title} to the public CRISPY BITS Video Jukebox library?"
         if not messagebox.askyesno("Publish jukebox", question):
             return
+        recipient, delivery_secret = self._current_delivery_credentials()
 
         def worker() -> tuple[Project, str | None]:
             public_url, revision = Publisher(self.store).publish(project)
@@ -902,7 +913,6 @@ class Factory(tk.Tk):
             self.store.save_project(project)
             build_project_site(project, self.store.project_dir(project.slug) / "site")
             email_error = None
-            recipient, delivery_secret = self._current_delivery_credentials()
             try:
                 mark_delivery_attempt(project, recipient)
                 self.store.save_project(project)
@@ -962,9 +972,9 @@ class Factory(tk.Tk):
         project = self._selected_project()
         if not project:
             return
+        recipient, delivery_secret = self._current_delivery_credentials()
 
         def worker() -> Project:
-            recipient, delivery_secret = self._current_delivery_credentials()
             try:
                 mark_delivery_attempt(project, recipient)
                 self.store.save_project(project)
@@ -989,12 +999,12 @@ class Factory(tk.Tk):
         project = self._selected_project()
         if not project:
             return
+        recipient, delivery_secret = self._current_delivery_credentials()
 
         def worker() -> tuple[Project, str | None]:
             state = Publisher(self.store).reconcile(project)
             delivery_error = None
             if state == "published":
-                recipient, delivery_secret = self._current_delivery_credentials()
                 try:
                     if not delivery_intent_matches(project, recipient):
                         mark_delivery_attempt(project, recipient)

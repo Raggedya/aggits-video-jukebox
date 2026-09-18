@@ -116,17 +116,20 @@ class ProjectStore:
             return {"deliveryEmail": "andrewharris501@gmail.com", "youtubeApiKey": "", "deliverySecret": os.environ.get("CRISPY_BITS_DELIVERY_SECRET", "")}
         try:
             value = json.loads(self.settings_path.read_text(encoding="utf-8"))
-        except (OSError, ValueError):
+        except (OSError, ValueError) as error:
+            self.logger.error("Settings could not be read path=%s error_type=%s", self.settings_path, type(error).__name__)
             return {"deliveryEmail": "andrewharris501@gmail.com", "youtubeApiKey": "", "deliverySecret": os.environ.get("CRISPY_BITS_DELIVERY_SECRET", "")}
         encrypted = str(value.get("youtubeApiKeyProtected") or "")
         delivery_encrypted = str(value.get("deliverySecretProtected") or "")
         try:
             key = unprotect(encrypted) if encrypted else ""
-        except (OSError, ValueError, RuntimeError):
+        except (OSError, ValueError, RuntimeError) as error:
+            self.logger.warning("YouTube credential could not be decrypted error_type=%s", type(error).__name__)
             key = ""
         try:
             delivery_secret = unprotect(delivery_encrypted) if delivery_encrypted else ""
-        except (OSError, ValueError, RuntimeError):
+        except (OSError, ValueError, RuntimeError) as error:
+            self.logger.error("Delivery credential could not be decrypted error_type=%s", type(error).__name__)
             delivery_secret = ""
         return {
             "deliveryEmail": str(value.get("deliveryEmail") or "andrewharris501@gmail.com"),
