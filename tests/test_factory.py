@@ -1,15 +1,27 @@
 from __future__ import annotations
 
 import json
+import os
 import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import Mock, patch
+from uuid import UUID
 
-from aggits_video_factory.models import Project, Video
+from aggits_video_factory.migrations import CURRENT_PROJECT_SCHEMA_VERSION, ProjectMigrationError, migrate_project_dict
+from aggits_video_factory.models import (
+    BusinessConfig,
+    MusicConfig,
+    PrimaryCta,
+    PrimaryCtaType,
+    Project,
+    ProjectType,
+    ProjectValidationError,
+    Video,
+)
 from aggits_video_factory.publisher import _library_path, _valid_public_machine_path
 from aggits_video_factory.site_builder import _reel_short_title, build_project_site
-from aggits_video_factory.store import ProjectStore, slugify
+from aggits_video_factory.store import ProjectIdentityError, ProjectStore, slugify
 from aggits_video_factory.youtube_api import YouTubeClient, clean_display_title, merge_video_selections, parse_duration
 
 
@@ -29,6 +41,33 @@ def sample_video(index: int = 1) -> Video:
 
 
 class FactoryTests(unittest.TestCase):
+    @staticmethod
+    def legacy_project_value(**overrides) -> dict:
+        value = {
+            "schemaVersion": 2,
+            "slug": "legacy-business",
+            "title": "Legacy Business",
+            "ticker_text": "A legacy story remains unchanged.",
+            "channel_url": "https://www.youtube.com/channel/UClegacy",
+            "channel_id": "UClegacy",
+            "channel_title": "Legacy Channel",
+            "channel_thumbnail": "https://example.test/channel.jpg",
+            "source_channel_url": "https://youtube.com/@legacy",
+            "manual_video_urls": ["https://youtu.be/video000001"],
+            "excluded_video_ids": ["video000099"],
+            "videos": [sample_video(1).to_dict()],
+            "status": "published",
+            "created_at": "2026-01-02T03:04:05Z",
+            "updated_at": "2026-02-03T04:05:06Z",
+            "published_at": "2026-02-03T04:05:06Z",
+            "published_url": "https://raggedya.github.io/aggits-video-jukebox/crispy-bits/legacy-business/",
+            "delivery_status": "sent",
+            "publication_revision": "a" * 40,
+            "future_legacy_field": {"must": "survive"},
+        }
+        value.update(overrides)
+        return value
+
     def test_crispy_bits_publish_namespace_is_isolated(self):
         workspace = Path("C:/temporary/workspace")
         public_root = workspace / "public" / "crispy-bits"
@@ -147,6 +186,253 @@ class FactoryTests(unittest.TestCase):
             self.assertTrue((destination / "assets" / "audio" / "machine" / "reel-stop-lock-mixkit-2857.mp3").is_file())
             self.assertTrue((destination / "qr-card.png").is_file())
             self.assertTrue((destination / "social-card.jpg").is_file())
+
+    def test_legacy_v2_migration_is_deterministic_and_does_not_invent_cta_data(self):
+        legacy = self.legacy_project_value()
+        legacy["videos"][0]["legacy_video_flag"] = "keep"
+        first = Project.from_dict(legacy)
+        second = Project.from_dict(legacy)
+        self.assertEqual(first.id, second.id)
+        UUID(first.id)
+        self.assertEqual(first.project_type, ProjectType.BUSINESS)
+        self.assertEqual(first.additional_urls, [])
+        self.assertIsNotNone(first.business_config)
+        self.assertIsNone(first.business_config.shop_url)
+        self.assertIsNone(first.music_config)
+        self.assertEqual(first.extra_fields["future_legacy_field"], {"must": "survive"})
+        self.assertEqual(first.videos[0].extra_fields["legacy_video_flag"], "keep")
+        self.assertNotIn("shop_url", legacy)
+        self.assertNotIn("id", legacy)
+
+        encoded = first.to_dict()
+        self.assertEqual(encoded["schemaVersion"], CURRENT_PROJECT_SCHEMA_VERSION)
+        self.assertEqual(encoded["project_type"], "business")
+        self.assertEqual(encoded["business_config"], {"shop_url": None})
+        self.assertIsNone(encoded["music_config"])
+        self.assertEqual(encoded["future_legacy_field"], {"must": "survive"})
+        self.assertEqual(encoded["videos"][0]["legacy_video_flag"], "keep")
+        self.assertEqual(migrate_project_dict(encoded).data, encoded)
+
+        explicit_shop = Project.from_dict(self.legacy_project_value(shop_url="https://example.com/real-shop"))
+        self.assertEqual(explicit_shop.business_config.shop_url, "https://example.com/real-shop")
+
+    def test_legacy_load_is_non_destructive_and_first_save_creates_one_backup(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            store = ProjectStore(Path(temporary))
+            directory = store.project_dir("legacy-business")
+            directory.mkdir(parents=True)
+            source = json.dumps(self.legacy_project_value(), indent=2) + "\n"
+            project_path = directory / "project.json"
+            project_path.write_text(source, encoding="utf-8")
+
+            project = store.load_project("legacy-business")
+            self.assertEqual(project_path.read_text(encoding="utf-8"), source)
+            self.assertFalse((directory / "project.json.v2.backup").exists())
+
+            store.save_project(project)
+            backup = directory / "project.json.v2.backup"
+            self.assertEqual(backup.read_text(encoding="utf-8"), source)
+            saved = json.loads(project_path.read_text(encoding="utf-8"))
+            self.assertEqual(saved["schemaVersion"], CURRENT_PROJECT_SCHEMA_VERSION)
+            self.assertEqual(saved["id"], project.id)
+
+            backup_timestamp = backup.stat().st_mtime_ns
+            store.save_project(project)
+            self.assertEqual(backup.stat().st_mtime_ns, backup_timestamp)
+
+    def test_business_and_music_current_schema_round_trip(self):
+        business = Project(
+            slug="shop-business",
+            title="Shop Business",
+            ticker_text="Business story",
+            channel_url="https://youtube.com/channel/UCbusiness",
+            channel_id="UCbusiness",
+            channel_title="Business Channel",
+            channel_thumbnail="",
+            additional_urls=["https://example.com/about", "https://example.com/contact"],
+            business_config=BusinessConfig(shop_url="https://example.com/shop"),
+            videos=[sample_video(1)],
+        )
+        restored_business = Project.from_dict(business.to_dict())
+        self.assertEqual(restored_business.id, business.id)
+        self.assertEqual(restored_business.project_type, ProjectType.BUSINESS)
+        self.assertEqual(restored_business.business_config.shop_url, "https://example.com/shop")
+        self.assertEqual(restored_business.additional_urls, business.additional_urls)
+
+        music = Project(
+            slug="example-band",
+            title="Example Band",
+            ticker_text="Band story",
+            channel_url="https://youtube.com/channel/UCmusic",
+            channel_id="UCmusic",
+            channel_title="Example Band",
+            channel_thumbnail="",
+            project_type=ProjectType.MUSIC,
+            music_config=MusicConfig(primary_cta=PrimaryCta(
+                cta_type=PrimaryCtaType.SPOTIFY,
+                destination_url="https://open.spotify.com/artist/example",
+            )),
+            videos=[sample_video(2)],
+        )
+        restored_music = Project.from_dict(music.to_dict())
+        self.assertEqual(restored_music.id, music.id)
+        self.assertEqual(restored_music.project_type, ProjectType.MUSIC)
+        self.assertIsNone(restored_music.business_config)
+        self.assertEqual(restored_music.music_config.primary_cta.display_label, "LISTEN ON SPOTIFY")
+        self.assertEqual(restored_music.music_config.primary_cta.cta_type, PrimaryCtaType.SPOTIFY)
+
+    def test_project_type_cta_and_additional_url_validation(self):
+        expected_labels = {
+            "spotify": "LISTEN ON SPOTIFY",
+            "bandcamp": "BUY ON BANDCAMP",
+            "buy_music": "BUY MUSIC",
+            "merch": "BUY MERCH",
+            "tickets": "GET TICKETS",
+            "apple_music": "APPLE MUSIC",
+            "official_website": "OFFICIAL WEBSITE",
+        }
+        for cta_type, label in expected_labels.items():
+            with self.subTest(cta_type=cta_type):
+                cta = PrimaryCta(cta_type=cta_type, destination_url="https://example.com/action")
+                self.assertEqual(cta.display_label, label)
+        custom = PrimaryCta(cta_type="custom", destination_url="https://example.com/custom", custom_label="JOIN THE CLUB")
+        self.assertEqual(custom.display_label, "JOIN THE CLUB")
+        with self.assertRaises(ProjectValidationError):
+            Project.from_dict({**self.legacy_project_value(), "schemaVersion": 3, "id": "5bfd106b-90d2-43c3-bb84-d94a7d494826", "project_type": "tourism"})
+        with self.assertRaises(ProjectMigrationError):
+            migrate_project_dict({"schemaVersion": 99})
+        with self.assertRaises(ProjectValidationError):
+            PrimaryCta(cta_type="custom", destination_url="https://example.com", custom_label="")
+        with self.assertRaises(ProjectValidationError):
+            PrimaryCta(cta_type="spotify", destination_url="not-a-url")
+        with self.assertRaises(ProjectValidationError):
+            Project(
+                slug="too-many-urls",
+                title="Too Many URLs",
+                ticker_text="",
+                channel_url="",
+                channel_id="",
+                channel_title="",
+                channel_thumbnail="",
+                additional_urls=["https://one.example", "https://two.example", "https://three.example", "https://four.example"],
+            )
+
+    def test_slug_allocation_is_collision_safe_and_existing_identity_is_stable(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            store = ProjectStore(Path(temporary))
+            first = Project(
+                slug=store.allocate_slug("Great Alpine Caravans"),
+                title="Great Alpine Caravans",
+                ticker_text="",
+                channel_url="",
+                channel_id="",
+                channel_title="",
+                channel_thumbnail="",
+            )
+            store.save_project(first)
+            self.assertEqual(first.slug, "great-alpine-caravans")
+            self.assertEqual(store.allocate_slug("Great Alpine Caravans"), "great-alpine-caravans-2")
+            second_directory = store.project_dir("great-alpine-caravans-2")
+            second_directory.mkdir(parents=True)
+            self.assertEqual(store.allocate_slug("Great Alpine Caravans"), "great-alpine-caravans-3")
+
+            original_id = first.id
+            original_slug = first.slug
+            first.title = "Renamed Great Alpine"
+            first.status = "unpublished"
+            store.save_project(first)
+            restored = store.load_project(original_slug)
+            self.assertEqual(restored.id, original_id)
+            self.assertEqual(restored.slug, original_slug)
+
+            with self.assertRaises(ProjectValidationError):
+                restored.id = "8b566385-c09e-4ab7-899b-caffb853f5a7"
+            self.assertEqual(store.load_project(original_slug).id, original_id)
+
+            replacement = Project.from_dict(restored.to_dict())
+            object.__setattr__(replacement, "id", "8b566385-c09e-4ab7-899b-caffb853f5a7")
+            with self.assertRaises(ProjectIdentityError):
+                store.save_project(replacement)
+            self.assertEqual(store.load_project(original_slug).id, original_id)
+
+    def test_migration_diagnostics_do_not_overwrite_invalid_source(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            store = ProjectStore(Path(temporary))
+            valid = Project(
+                slug="valid",
+                title="Valid",
+                ticker_text="",
+                channel_url="",
+                channel_id="",
+                channel_title="",
+                channel_thumbnail="",
+            )
+            store.save_project(valid)
+            broken_dir = store.project_dir("broken")
+            broken_dir.mkdir(parents=True)
+            broken_path = broken_dir / "project.json"
+            broken_source = json.dumps({"schemaVersion": 99, "slug": "broken"})
+            broken_path.write_text(broken_source, encoding="utf-8")
+
+            projects = store.list_projects()
+            self.assertEqual([project.slug for project in projects], ["valid"])
+            self.assertEqual(len(store.last_load_errors), 1)
+            self.assertIn("Unsupported project schema version", store.last_load_errors[0].message)
+            self.assertEqual(broken_path.read_text(encoding="utf-8"), broken_source)
+
+    def test_legacy_business_site_output_schema_remains_unchanged(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            project = Project.from_dict(self.legacy_project_value())
+            destination = Path(temporary) / "site"
+            build_project_site(project, destination)
+            payload = json.loads((destination / "machine.json").read_text(encoding="utf-8"))
+            self.assertEqual(payload["schemaVersion"], 2)
+            self.assertNotIn("id", payload)
+            self.assertNotIn("project_type", payload)
+            self.assertNotIn("business_config", payload)
+            self.assertEqual(payload["slug"], "legacy-business")
+            self.assertEqual(payload["customerConfig"]["subscribeURL"], "https://www.youtube.com/channel/UClegacy?sub_confirmation=1")
+
+    @unittest.skipUnless(os.environ.get("LOCALAPPDATA"), "Windows LocalAppData is unavailable")
+    def test_real_great_alpine_v2_project_migrates_from_safe_copy(self):
+        source = Path(os.environ["LOCALAPPDATA"]) / "CRISPY BITS" / "Video Jukebox Factory" / "projects" / "great-alpine-caravans" / "project.json"
+        if not source.is_file():
+            self.skipTest("The protected Great Alpine v2.3.0 project is not present on this machine.")
+        original_bytes = source.read_bytes()
+        legacy = json.loads(original_bytes.decode("utf-8"))
+        self.assertEqual(int(legacy.get("schemaVersion", 2)), 2)
+
+        with tempfile.TemporaryDirectory() as temporary:
+            store = ProjectStore(Path(temporary))
+            copied_dir = store.project_dir("great-alpine-caravans")
+            copied_dir.mkdir(parents=True)
+            copied_path = copied_dir / "project.json"
+            copied_path.write_bytes(original_bytes)
+            migrated = store.load_project("great-alpine-caravans")
+
+            self.assertEqual(migrated.title, legacy["title"])
+            self.assertEqual(migrated.slug, "great-alpine-caravans")
+            self.assertEqual(migrated.published_url, legacy.get("published_url"))
+            self.assertEqual(len(migrated.videos), 30)
+            self.assertEqual(migrated.excluded_video_ids, legacy.get("excluded_video_ids", []))
+            self.assertEqual(migrated.channel_id, legacy["channel_id"])
+            self.assertEqual(migrated.ticker_text, legacy["ticker_text"])
+            self.assertEqual(migrated.status, legacy["status"])
+            self.assertEqual(migrated.publication_revision, legacy.get("publication_revision"))
+            self.assertEqual(migrated.delivery_status, legacy["delivery_status"])
+            self.assertEqual(migrated.project_type, ProjectType.BUSINESS)
+            self.assertEqual(migrated.additional_urls, [])
+            self.assertIsNone(migrated.business_config.shop_url)
+            self.assertIsNone(migrated.music_config)
+            UUID(migrated.id)
+            self.assertEqual(source.read_bytes(), original_bytes)
+
+            store.save_project(migrated)
+            self.assertEqual((copied_dir / "project.json.v2.backup").read_bytes(), original_bytes)
+            saved = json.loads(copied_path.read_text(encoding="utf-8"))
+            self.assertEqual(saved["schemaVersion"], CURRENT_PROJECT_SCHEMA_VERSION)
+            self.assertEqual(saved["published_url"], legacy.get("published_url"))
+            self.assertEqual(len(saved["videos"]), 30)
 
     def test_catalogue_filters_and_limits(self):
         client = YouTubeClient("test-key")

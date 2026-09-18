@@ -9,6 +9,7 @@ from io import BytesIO
 from pathlib import Path
 import tkinter as tk
 from tkinter import messagebox, ttk
+from uuid import uuid4
 
 import requests
 from PIL import Image, ImageOps, ImageTk
@@ -25,7 +26,7 @@ from aggits_video_factory.models import Project, utc_now
 from aggits_video_factory.preview import PreviewServer
 from aggits_video_factory.publisher import PublishError, Publisher
 from aggits_video_factory.site_builder import build_project_site
-from aggits_video_factory.store import ProjectStore, slugify
+from aggits_video_factory.store import ProjectStore
 from aggits_video_factory.youtube_api import YouTubeClient, YouTubeError, merge_video_selections
 
 
@@ -55,6 +56,7 @@ class Factory(tk.Tk):
         self.busy = False
         self.editing_project_slug: str | None = None
         self.projects: dict[str, Project] = {}
+        self._reported_project_load_errors: tuple[tuple[str, str], ...] = ()
         self._configure_styles()
         self._build()
         self._refresh_library()
@@ -233,6 +235,14 @@ class Factory(tk.Tk):
 
     def _refresh_library(self, select_slug: str | None = None) -> None:
         projects = self.store.list_projects()
+        errors = tuple((str(issue.path), issue.message) for issue in self.store.last_load_errors)
+        if errors and errors != self._reported_project_load_errors:
+            self._reported_project_load_errors = errors
+            detail = "\n\n".join(f"{path}\n{message}" for path, message in errors)
+            self.after_idle(lambda: messagebox.showwarning(
+                APP_NAME,
+                "One or more saved projects could not be loaded. Their source files were left unchanged.\n\n" + detail,
+            ))
         self.projects = {project.slug: project for project in projects}
         self.library.delete(*self.library.get_children())
         for project in projects:
@@ -348,7 +358,7 @@ class Factory(tk.Tk):
             return
 
         editing_slug = self.editing_project_slug
-        slug = editing_slug or slugify(title)
+        slug = editing_slug or self.store.allocate_slug(title)
 
         def worker() -> dict[str, object]:
             client = YouTubeClient(api_key)
@@ -548,6 +558,11 @@ class Factory(tk.Tk):
                 channel_id=catalogue.channel_id,
                 channel_title=catalogue.channel_title,
                 channel_thumbnail=catalogue.channel_thumbnail,
+                id=existing.id if existing else str(uuid4()),
+                project_type=existing.project_type if existing else "business",
+                additional_urls=list(existing.additional_urls) if existing else [],
+                business_config=existing.business_config if existing else None,
+                music_config=existing.music_config if existing else None,
                 source_channel_url=str(candidate.get("source_channel_url") or ""),
                 manual_video_urls=[str(url) for url in candidate.get("manual_urls", [])],
                 excluded_video_ids=sorted(excluded_ids),
@@ -558,6 +573,7 @@ class Factory(tk.Tk):
                 published_url=existing.published_url if existing else None,
                 delivery_status=existing.delivery_status if changes_pending and existing else "not_requested",
                 publication_revision=existing.publication_revision if existing else None,
+                extra_fields=dict(existing.extra_fields) if existing else {},
             )
             project_dir = self.store.project_dir(slug)
             build_project_site(project, project_dir / "site")

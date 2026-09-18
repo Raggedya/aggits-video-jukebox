@@ -2,11 +2,14 @@ from __future__ import annotations
 
 import json
 import re
+import shutil
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 from .config import application_data_root
 from .credentials import protect, unprotect
+from .migrations import CURRENT_PROJECT_SCHEMA_VERSION, LEGACY_PROJECT_SCHEMA_VERSION
 from .models import Project, utc_now
 
 
@@ -16,6 +19,16 @@ def slugify(value: str) -> str:
     return normalized[:72] or "video-jukebox"
 
 
+@dataclass(frozen=True, slots=True)
+class ProjectLoadDiagnostic:
+    path: Path
+    message: str
+
+
+class ProjectIdentityError(ValueError):
+    pass
+
+
 class ProjectStore:
     def __init__(self, root: Path | None = None) -> None:
         self.root = root or application_data_root()
@@ -23,17 +36,56 @@ class ProjectStore:
         self.workspace_dir = self.root / "publisher-workspace"
         self.archive_dir = self.root / "workspace-archive"
         self.settings_path = self.root / "settings.json"
+        self.last_load_errors: list[ProjectLoadDiagnostic] = []
         self.projects_dir.mkdir(parents=True, exist_ok=True)
 
     def project_dir(self, slug: str) -> Path:
         safe = slugify(slug)
         return self.projects_dir / safe
 
+    def allocate_slug(self, title: str) -> str:
+        """Allocate a readable slug for a new local project without touching existing slugs."""
+        base = slugify(title)
+        candidate = base
+        suffix = 2
+        while self.project_dir(candidate).exists():
+            suffix_text = f"-{suffix}"
+            candidate = f"{base[: 72 - len(suffix_text)].rstrip('-')}{suffix_text}"
+            suffix += 1
+        return candidate
+
+    @staticmethod
+    def _stored_schema_version(path: Path) -> int | None:
+        if not path.is_file():
+            return None
+        try:
+            value = json.loads(path.read_text(encoding="utf-8"))
+            return int(value.get("schemaVersion", LEGACY_PROJECT_SCHEMA_VERSION)) if isinstance(value, dict) else None
+        except (OSError, TypeError, ValueError):
+            return None
+
+    @staticmethod
+    def _backup_legacy_project(path: Path, version: int) -> None:
+        backup = path.with_name(f"project.json.v{version}.backup")
+        if not backup.exists():
+            shutil.copy2(path, backup)
+
     def save_project(self, project: Project) -> None:
-        project.updated_at = utc_now()
         directory = self.project_dir(project.slug)
         directory.mkdir(parents=True, exist_ok=True)
         path = directory / "project.json"
+        stored_version = self._stored_schema_version(path)
+        if path.is_file() and stored_version == CURRENT_PROJECT_SCHEMA_VERSION:
+            try:
+                stored_value = json.loads(path.read_text(encoding="utf-8"))
+                stored_id = str(stored_value.get("id") or "")
+            except (OSError, TypeError, ValueError) as error:
+                raise ProjectIdentityError("The existing project identity could not be verified; its file was not changed.") from error
+            if not stored_id or stored_id != project.id:
+                raise ProjectIdentityError("An existing project's immutable id cannot be changed or replaced.")
+        project.updated_at = utc_now()
+        if stored_version is not None and stored_version < CURRENT_PROJECT_SCHEMA_VERSION:
+            self._backup_legacy_project(path, stored_version)
         temporary = directory / ".project.json.tmp"
         temporary.write_text(json.dumps(project.to_dict(), indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
         temporary.replace(path)
@@ -44,12 +96,13 @@ class ProjectStore:
 
     def list_projects(self) -> list[Project]:
         projects: list[Project] = []
+        self.last_load_errors = []
         for path in self.projects_dir.glob("*/project.json"):
             try:
                 value = json.loads(path.read_text(encoding="utf-8"))
                 projects.append(Project.from_dict(value))
-            except (OSError, ValueError, TypeError):
-                continue
+            except (OSError, ValueError, TypeError) as error:
+                self.last_load_errors.append(ProjectLoadDiagnostic(path=path, message=str(error)))
         return sorted(projects, key=lambda item: item.updated_at, reverse=True)
 
     def load_settings(self) -> dict[str, Any]:
