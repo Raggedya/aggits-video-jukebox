@@ -20,9 +20,19 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from aggits_video_factory.config import APP_NAME, MAX_TICKER_LENGTH, MAX_VIDEOS, PUBLIC_BASE_URL, resource_path
+from aggits_video_factory.config import MAX_TICKER_LENGTH, MAX_VIDEOS, resource_path
 from aggits_video_factory.delivery import DeliveryError, request_delivery
-from aggits_video_factory.models import Project, utc_now
+from aggits_video_factory.desktop_forms import (
+    CTA_CHOICES,
+    DEFAULT_CTA_LABEL,
+    FormValidationError,
+    ProjectFormValues,
+    build_local_music_project,
+    project_is_visible_in_tab,
+    project_to_form_values,
+    validate_project_form,
+)
+from aggits_video_factory.models import Project, ProjectType, utc_now
 from aggits_video_factory.preview import PreviewServer
 from aggits_video_factory.publisher import PublishError, Publisher
 from aggits_video_factory.site_builder import build_project_site
@@ -30,23 +40,301 @@ from aggits_video_factory.store import ProjectStore
 from aggits_video_factory.youtube_api import YouTubeClient, YouTubeError, merge_video_selections
 
 
-INK = "#070605"
-PANEL = "#15120e"
-PANEL_2 = "#201a12"
-CREAM = "#f2e4bf"
-PAPER = "#fff6dc"
-MUTED = "#b8a27b"
-BRASS = "#b88a4f"
-DEEP_BRASS = "#5f4225"
-ACTIVE = "#6a522f"
-SUCCESS = "#a7c58b"
-ERROR = "#e19999"
+INK = "#111318"
+PANEL = "#191c22"
+PANEL_2 = "#22262e"
+CREAM = "#d9dee8"
+PAPER = "#f5f7fb"
+MUTED = "#9199a8"
+BRASS = "#72a1ff"
+DEEP_BRASS = "#343b49"
+ACTIVE = "#315a9c"
+SUCCESS = "#7fc6a4"
+ERROR = "#ef9292"
+DESKTOP_TITLE = "CRISPY BITS DESKTOP"
+
+
+class ProjectForm(tk.Frame):
+    def __init__(self, parent: tk.Misc, project_type: ProjectType, submit, new_project) -> None:
+        super().__init__(parent, bg=PANEL)
+        self.project_type = project_type
+        self.submit_callback = submit
+        self.new_callback = new_project
+        self.editing_project_id: str | None = None
+        self._baseline = ProjectFormValues().comparable()
+        self._manual_open = False
+        self._build()
+        self.clear_new()
+
+    def _build(self) -> None:
+        self.columnconfigure(1, weight=1)
+        heading = tk.Frame(self, bg=PANEL)
+        heading.grid(row=0, column=0, columnspan=2, sticky="ew", padx=22, pady=(18, 14))
+        self.mode_label = tk.Label(heading, text="NEW BUSINESS PROJECT", bg=PANEL, fg=PAPER, font=("Segoe UI Semibold", 15))
+        self.mode_label.pack(side="left")
+        tk.Button(
+            heading, text="NEW PROJECT", command=self.new_callback, bg=PANEL_2, fg=CREAM,
+            activebackground="#303641", activeforeground=PAPER, relief="flat", bd=0,
+            font=("Segoe UI Semibold", 9), padx=12, pady=7, cursor="hand2",
+        ).pack(side="right")
+
+        self.title_var = tk.StringVar()
+        self.channel_var = tk.StringVar()
+        self.additional_vars = [tk.StringVar() for _ in range(3)]
+        self.shop_var = tk.StringVar()
+        self.cta_var = tk.StringVar(value=DEFAULT_CTA_LABEL)
+        self.destination_var = tk.StringVar()
+        self.custom_label_var = tk.StringVar()
+        self.field_widgets: dict[str, tk.Widget] = {}
+        row = 1
+        row = self._entry_row(row, "Title", self.title_var, "title")
+        row = self._entry_row(row, "YouTube Channel URL", self.channel_var, "channel_url")
+        for index, variable in enumerate(self.additional_vars, start=1):
+            row = self._entry_row(row, f"Additional URL {index}", variable, "additional_urls")
+
+        if self.project_type is ProjectType.BUSINESS:
+            row = self._entry_row(row, "Shop URL", self.shop_var, "shop_url")
+        else:
+            tk.Label(self, text="Primary Call to Action", bg=PANEL, fg=CREAM, anchor="e", font=("Segoe UI", 9)).grid(row=row, column=0, sticky="e", padx=(22, 12), pady=5)
+            self.cta_combo = ttk.Combobox(self, textvariable=self.cta_var, values=[label for label, _ in CTA_CHOICES], state="readonly", font=("Segoe UI", 10))
+            self.cta_combo.grid(row=row, column=1, sticky="ew", padx=(0, 22), pady=5, ipady=3)
+            self.cta_combo.bind("<<ComboboxSelected>>", lambda _event: self._update_custom_visibility())
+            self.field_widgets["cta_type"] = self.cta_combo
+            row += 1
+            row = self._entry_row(row, "Destination URL", self.destination_var, "destination_url")
+            self.custom_row = row
+            row = self._entry_row(row, "Button Label", self.custom_label_var, "custom_label")
+
+        tk.Label(self, text="Bio / Story Information", bg=PANEL, fg=CREAM, anchor="ne", font=("Segoe UI", 9)).grid(row=row, column=0, sticky="ne", padx=(22, 12), pady=(8, 5))
+        story_shell = tk.Frame(self, bg=PANEL)
+        story_shell.grid(row=row, column=1, sticky="ew", padx=(0, 22), pady=(5, 3))
+        story_shell.columnconfigure(0, weight=1)
+        self.story_text = tk.Text(story_shell, height=4, wrap="word", bg="#101217", fg=PAPER, insertbackground=PAPER, relief="flat", bd=0, highlightbackground=DEEP_BRASS, highlightthickness=1, font=("Segoe UI", 10), padx=9, pady=7)
+        self.story_text.grid(row=0, column=0, sticky="ew")
+        self.story_text.bind("<KeyRelease>", self._story_changed)
+        self.story_count = tk.Label(story_shell, text=f"0 / {MAX_TICKER_LENGTH}", bg=PANEL, fg=MUTED, font=("Segoe UI", 8))
+        self.story_count.grid(row=1, column=0, sticky="e", pady=(3, 0))
+        self.field_widgets["story_text"] = self.story_text
+        row += 1
+
+        self.manual_toggle = tk.Button(
+            self, text="▸  Individual YouTube Videos (Optional)", command=self._toggle_manual,
+            bg=PANEL_2, fg=CREAM, activebackground="#303641", activeforeground=PAPER,
+            relief="flat", bd=0, anchor="w", font=("Segoe UI Semibold", 9), padx=11, pady=8, cursor="hand2",
+        )
+        self.manual_toggle.grid(row=row, column=0, columnspan=2, sticky="ew", padx=22, pady=(10, 4))
+        row += 1
+        self.manual_shell = tk.Frame(self, bg="#12151a", highlightbackground=DEEP_BRASS, highlightthickness=1, height=132)
+        self.manual_shell.grid(row=row, column=0, columnspan=2, sticky="ew", padx=22, pady=(0, 6))
+        self.manual_shell.pack_propagate(False)
+        canvas = tk.Canvas(self.manual_shell, bg="#12151a", bd=0, highlightthickness=0)
+        scrollbar = ttk.Scrollbar(self.manual_shell, orient="vertical", command=canvas.yview)
+        canvas.configure(yscrollcommand=scrollbar.set)
+        scrollbar.pack(side="right", fill="y")
+        canvas.pack(side="left", fill="both", expand=True)
+        rows = tk.Frame(canvas, bg="#12151a")
+        window = canvas.create_window((0, 0), window=rows, anchor="nw")
+        rows.bind("<Configure>", lambda _event: canvas.configure(scrollregion=canvas.bbox("all")))
+        canvas.bind("<Configure>", lambda event: canvas.itemconfigure(window, width=event.width))
+        self.manual_vars = [tk.StringVar() for _ in range(15)]
+        self.manual_entries: list[tk.Entry] = []
+        for index, variable in enumerate(self.manual_vars, start=1):
+            item = tk.Frame(rows, bg="#12151a")
+            item.pack(fill="x", padx=8, pady=(7 if index == 1 else 2, 2))
+            tk.Label(item, text=f"{index:02d}", width=3, bg="#12151a", fg=MUTED, font=("Segoe UI", 8)).pack(side="left")
+            entry = tk.Entry(item, textvariable=variable, bg="#0d0f13", fg=PAPER, insertbackground=PAPER, relief="flat", bd=0, highlightbackground=DEEP_BRASS, highlightthickness=1, font=("Segoe UI", 9))
+            entry.pack(side="left", fill="x", expand=True, ipady=5)
+            self.manual_entries.append(entry)
+        self.field_widgets["manual_video_urls"] = self.manual_entries[0]
+        row += 1
+
+        self.validation_label = tk.Label(self, text="", bg=PANEL, fg=ERROR, anchor="w", justify="left", font=("Segoe UI Semibold", 8))
+        self.validation_label.grid(row=row, column=0, columnspan=2, sticky="ew", padx=22, pady=(3, 1))
+        row += 1
+        actions = tk.Frame(self, bg=PANEL)
+        actions.grid(row=row, column=0, columnspan=2, sticky="ew", padx=22, pady=(7, 18))
+        self.submit_button = tk.Button(
+            actions, command=self.submit_callback, bg=ACTIVE, fg=PAPER, activebackground="#3e6cb5",
+            activeforeground=PAPER, relief="flat", bd=0, font=("Segoe UI Semibold", 10), padx=18, pady=10, cursor="hand2",
+        )
+        self.submit_button.pack(side="left")
+        self.stage_note = tk.Label(actions, bg=PANEL, fg=MUTED, anchor="w", justify="left", font=("Segoe UI", 8))
+        self.stage_note.pack(side="left", padx=14)
+        self._toggle_manual(force=False)
+        self._update_custom_visibility()
+
+    def _entry_row(self, row: int, label: str, variable: tk.StringVar, field_name: str) -> int:
+        tk.Label(self, text=label, bg=PANEL, fg=CREAM, anchor="e", font=("Segoe UI", 9)).grid(row=row, column=0, sticky="e", padx=(22, 12), pady=5)
+        entry = tk.Entry(self, textvariable=variable, bg="#101217", fg=PAPER, insertbackground=PAPER, relief="flat", bd=0, highlightbackground=DEEP_BRASS, highlightthickness=1, font=("Segoe UI", 10))
+        entry.grid(row=row, column=1, sticky="ew", padx=(0, 22), pady=5, ipady=7)
+        self.field_widgets[field_name] = entry
+        return row + 1
+
+    def _story_changed(self, _event=None) -> None:
+        value = self.story_text.get("1.0", "end-1c")
+        if len(value) > MAX_TICKER_LENGTH:
+            value = value[:MAX_TICKER_LENGTH]
+            self.story_text.delete("1.0", "end")
+            self.story_text.insert("1.0", value)
+        self.story_count.configure(text=f"{len(value)} / {MAX_TICKER_LENGTH}", fg=ERROR if len(value) >= MAX_TICKER_LENGTH else MUTED)
+
+    def _toggle_manual(self, force: bool | None = None) -> None:
+        self._manual_open = (not self._manual_open) if force is None else force
+        if self._manual_open:
+            self.manual_shell.grid()
+            self.manual_toggle.configure(text="▾  Individual YouTube Videos (Optional)")
+        else:
+            self.manual_shell.grid_remove()
+            self.manual_toggle.configure(text="▸  Individual YouTube Videos (Optional)")
+
+    def _update_custom_visibility(self) -> None:
+        if self.project_type is not ProjectType.MUSIC:
+            return
+        label = self.cta_var.get()
+        widget = self.field_widgets["custom_label"]
+        if label == "Custom":
+            widget.grid()
+            for child in self.grid_slaves(row=self.custom_row, column=0):
+                child.grid()
+        else:
+            widget.grid_remove()
+            for child in self.grid_slaves(row=self.custom_row, column=0):
+                child.grid_remove()
+            self.custom_label_var.set("")
+
+    def values(self) -> ProjectFormValues:
+        return ProjectFormValues(
+            title=self.title_var.get(),
+            channel_url=self.channel_var.get(),
+            additional_urls=[variable.get() for variable in self.additional_vars],
+            story_text=self.story_text.get("1.0", "end-1c"),
+            manual_video_urls=[variable.get() for variable in self.manual_vars],
+            shop_url=self.shop_var.get() if self.project_type is ProjectType.BUSINESS else "",
+            cta_label=self.cta_var.get() if self.project_type is ProjectType.MUSIC else DEFAULT_CTA_LABEL,
+            destination_url=self.destination_var.get() if self.project_type is ProjectType.MUSIC else "",
+            custom_label=self.custom_label_var.get() if self.project_type is ProjectType.MUSIC else "",
+        )
+
+    def set_values(self, values: ProjectFormValues) -> None:
+        self.title_var.set(values.title)
+        self.channel_var.set(values.channel_url)
+        for variable, value in zip(self.additional_vars, [*values.additional_urls, "", "", ""][:3]):
+            variable.set(value)
+        self.shop_var.set(values.shop_url)
+        self.cta_var.set(values.cta_label or DEFAULT_CTA_LABEL)
+        self.destination_var.set(values.destination_url)
+        self.custom_label_var.set(values.custom_label)
+        for variable, value in zip(self.manual_vars, [*values.manual_video_urls, *("" for _ in range(15))][:15]):
+            variable.set(value)
+        self.story_text.delete("1.0", "end")
+        self.story_text.insert("1.0", values.story_text)
+        self._story_changed()
+        self._toggle_manual(force=bool([url for url in values.manual_video_urls if url]))
+        self._update_custom_visibility()
+        self.clear_validation()
+
+    def clear_new(self) -> None:
+        self.editing_project_id = None
+        self.set_values(ProjectFormValues())
+        name = "BUSINESS" if self.project_type is ProjectType.BUSINESS else "MUSIC"
+        self.mode_label.configure(text=f"NEW {name} PROJECT")
+        if self.project_type is ProjectType.BUSINESS:
+            self.submit_button.configure(text="CREATE CRISPY BITS")
+            self.stage_note.configure(text="Analyse and review videos, then build locally.")
+        else:
+            self.submit_button.configure(text="SAVE LOCAL MUSIC PROJECT")
+            self.stage_note.configure(text="Local project only · Music publishing is not available yet.")
+        self.mark_clean()
+
+    def load_project(self, project: Project) -> None:
+        self.editing_project_id = project.id
+        self.set_values(project_to_form_values(project))
+        self.mode_label.configure(text=f"EDIT {project.project_type.value.upper()} PROJECT")
+        self.submit_button.configure(text="SAVE CHANGES" if project.project_type is ProjectType.BUSINESS else "SAVE LOCAL CHANGES")
+        if project.project_type is ProjectType.BUSINESS:
+            self.stage_note.configure(text="Reviewed changes remain private until Update + Republish.")
+        else:
+            self.stage_note.configure(text="Local project only · Music publishing is not available yet.")
+        self.mark_clean()
+
+    def mark_clean(self) -> None:
+        self._baseline = self.values().comparable()
+
+    def is_dirty(self) -> bool:
+        return self.values().comparable() != self._baseline
+
+    def restore_baseline(self) -> None:
+        values = ProjectFormValues(
+            title=str(self._baseline[0]), channel_url=str(self._baseline[1]), additional_urls=list(self._baseline[2]),
+            story_text=str(self._baseline[3]), manual_video_urls=list(self._baseline[4]), shop_url=str(self._baseline[5]),
+            cta_label=str(self._baseline[6]), destination_url=str(self._baseline[7]), custom_label=str(self._baseline[8]),
+        )
+        self.set_values(values)
+        self.mark_clean()
+
+    def show_validation(self, error: FormValidationError) -> None:
+        self.validation_label.configure(text=error.args[0])
+        widget = self.field_widgets.get(error.field)
+        if error.field == "manual_video_urls":
+            self._toggle_manual(force=True)
+        if widget:
+            widget.focus_set()
+
+    def clear_validation(self) -> None:
+        self.validation_label.configure(text="")
+
+
+class LibraryPanel(tk.Frame):
+    def __init__(self, parent: tk.Misc, project_type: ProjectType, owner: "Factory") -> None:
+        super().__init__(parent, bg=PANEL)
+        self.project_type = project_type
+        self.owner = owner
+        heading = tk.Frame(self, bg=PANEL)
+        heading.pack(fill="x", padx=18, pady=(18, 10))
+        tk.Label(heading, text="LIBRARY", bg=PANEL, fg=PAPER, font=("Segoe UI Semibold", 15)).pack(side="left")
+        self.count = tk.Label(heading, text="0 PROJECTS", bg=PANEL, fg=MUTED, font=("Segoe UI", 8))
+        self.count.pack(side="right", pady=5)
+        shell = tk.Frame(self, bg=PANEL)
+        shell.pack(fill="both", expand=True, padx=18)
+        columns = ("title", "status", "updated", "url")
+        self.tree = ttk.Treeview(shell, columns=columns, show="headings", style="Factory.Treeview", selectmode="browse")
+        for name, label, width in (("title", "TITLE", 205), ("status", "STATUS", 105), ("updated", "UPDATED", 135), ("url", "PUBLIC URL", 185)):
+            self.tree.heading(name, text=label)
+            self.tree.column(name, width=width, minwidth=70, anchor="w")
+        scroll = ttk.Scrollbar(shell, orient="vertical", command=self.tree.yview)
+        self.tree.configure(yscrollcommand=scroll.set)
+        self.tree.pack(side="left", fill="both", expand=True)
+        scroll.pack(side="right", fill="y")
+        self.tree.bind("<<TreeviewSelect>>", lambda _event: owner._update_actions())
+        self.tree.bind("<Double-1>", lambda _event: owner._edit_selected())
+        actions = tk.Frame(self, bg=PANEL)
+        actions.pack(fill="x", padx=18, pady=(13, 8))
+        self.buttons: dict[str, tk.Button] = {}
+        action_specs = [("edit", "EDIT", owner._edit_selected)]
+        if project_type is ProjectType.BUSINESS:
+            action_specs.extend([
+                ("preview", "PREVIEW", owner._preview_selected),
+                ("publish", "PUBLISH", owner._publish_selected),
+                ("unpublish", "UNPUBLISH", owner._unpublish_selected),
+                ("open", "OPEN LIVE", owner._open_live),
+                ("email", "RETRY EMAIL", owner._retry_email),
+            ])
+        for key, label, callback in action_specs:
+            button = owner._button(actions, label, callback, compact=True, primary=key == "publish")
+            button.pack(side="left", padx=(0, 7))
+            self.buttons[key] = button
+        self.note = tk.Label(self, text="Select a project to edit it.", bg=PANEL, fg=MUTED, anchor="w", font=("Segoe UI", 8))
+        self.note.pack(fill="x", padx=18, pady=(0, 14))
+
+    def selected_id(self) -> str | None:
+        selected = self.tree.selection()
+        return selected[0] if selected else None
 
 
 class Factory(tk.Tk):
     def __init__(self) -> None:
         super().__init__()
-        self.title(APP_NAME)
+        self.title(DESKTOP_TITLE)
         self.geometry("1320x820")
         self.minsize(1120, 720)
         self.configure(bg=INK)
@@ -54,8 +342,11 @@ class Factory(tk.Tk):
         self.preview_server = PreviewServer()
         self.settings = self.store.load_settings()
         self.busy = False
-        self.editing_project_slug: str | None = None
         self.projects: dict[str, Project] = {}
+        self.forms: dict[ProjectType, ProjectForm] = {}
+        self.libraries: dict[ProjectType, LibraryPanel] = {}
+        self.active_project_type = ProjectType.BUSINESS
+        self._tab_change_guard = False
         self._reported_project_load_errors: tuple[tuple[str, str], ...] = ()
         self._configure_styles()
         self._build()
@@ -65,152 +356,74 @@ class Factory(tk.Tk):
     def _configure_styles(self) -> None:
         style = ttk.Style(self)
         style.theme_use("clam")
-        style.configure("Factory.Treeview", background="#0c0a08", foreground=CREAM, fieldbackground="#0c0a08", bordercolor=DEEP_BRASS, rowheight=34, font=("Segoe UI", 9))
-        style.map("Factory.Treeview", background=[("selected", "#49361f")], foreground=[("selected", PAPER)])
-        style.configure("Factory.Treeview.Heading", background="#2a2015", foreground=BRASS, relief="flat", font=("Segoe UI Semibold", 8))
-        style.configure("Factory.Vertical.TScrollbar", background=DEEP_BRASS, troughcolor="#0b0907", bordercolor=INK, arrowcolor=CREAM)
+        style.configure("Factory.Treeview", background="#12151a", foreground=CREAM, fieldbackground="#12151a", bordercolor=DEEP_BRASS, rowheight=32, font=("Segoe UI", 9))
+        style.map("Factory.Treeview", background=[("selected", "#294d86")], foreground=[("selected", PAPER)])
+        style.configure("Factory.Treeview.Heading", background=PANEL_2, foreground=CREAM, relief="flat", font=("Segoe UI Semibold", 8))
+        style.configure("Factory.Vertical.TScrollbar", background=DEEP_BRASS, troughcolor=INK, bordercolor=INK, arrowcolor=CREAM)
+        style.configure("Desktop.TNotebook", background=INK, borderwidth=0, tabmargins=(18, 6, 0, 0))
+        style.configure("Desktop.TNotebook.Tab", background=PANEL_2, foreground=MUTED, padding=(22, 10), font=("Segoe UI Semibold", 10), borderwidth=0)
+        style.map("Desktop.TNotebook.Tab", background=[("selected", ACTIVE)], foreground=[("selected", PAPER)])
+        style.configure("TCombobox", fieldbackground="#101217", background=PANEL_2, foreground=PAPER, arrowcolor=CREAM)
 
     def _build(self) -> None:
-        header = tk.Frame(self, bg=INK, height=78)
+        header = tk.Frame(self, bg=INK, height=66)
         header.pack(fill="x")
         header.pack_propagate(False)
-        tk.Label(header, text="CRISPY BITS", bg=INK, fg=BRASS, font=("Georgia", 24, "bold")).pack(side="left", padx=(24, 18), pady=12)
+        tk.Label(header, text="CRISPY BITS", bg=INK, fg=PAPER, font=("Segoe UI Semibold", 18)).pack(side="left", padx=(22, 12), pady=14)
         title = tk.Frame(header, bg=INK)
-        title.pack(side="left", pady=12)
-        tk.Label(title, text="VIDEO JUKEBOX FACTORY", bg=INK, fg=PAPER, font=("Segoe UI Semibold", 15)).pack(anchor="w")
-        tk.Label(title, text="YOUTUBE CHANNEL + VIDEO LINKS → 30-VIDEO SINGLE-REEL JUKEBOX", bg=INK, fg=MUTED, font=("Segoe UI Semibold", 8)).pack(anchor="w", pady=(4, 0))
+        title.pack(side="left", pady=14)
+        tk.Label(title, text="DESKTOP", bg=INK, fg=BRASS, font=("Segoe UI Semibold", 10)).pack(anchor="w")
+        tk.Label(title, text="Project management", bg=INK, fg=MUTED, font=("Segoe UI", 8)).pack(anchor="w", pady=(2, 0))
         self.settings_button = self._button(header, "SETTINGS", self._open_settings, compact=True)
-        self.settings_button.pack(side="right", padx=24, pady=18)
+        self.settings_button.pack(side="right", padx=22, pady=15)
 
-        divider = tk.Frame(self, bg=DEEP_BRASS, height=1)
-        divider.pack(fill="x")
-        body = tk.PanedWindow(self, orient="horizontal", bg=INK, sashwidth=8, sashrelief="flat", bd=0)
-        body.pack(fill="both", expand=True, padx=18, pady=18)
-        form_panel = tk.Frame(body, bg=PANEL, highlightbackground=DEEP_BRASS, highlightthickness=1)
-        library_panel = tk.Frame(body, bg=PANEL, highlightbackground=DEEP_BRASS, highlightthickness=1)
-        body.add(form_panel, minsize=470, width=510)
-        body.add(library_panel, minsize=590)
-        self._build_form(form_panel)
-        self._build_library(library_panel)
+        self.notebook = ttk.Notebook(self, style="Desktop.TNotebook")
+        self.notebook.pack(fill="both", expand=True, padx=12, pady=(0, 10))
+        self.tab_types: list[ProjectType] = [ProjectType.BUSINESS, ProjectType.MUSIC]
+        for project_type in self.tab_types:
+            page = tk.Frame(self.notebook, bg=INK)
+            self.notebook.add(page, text=project_type.value.upper())
+            body = tk.PanedWindow(page, orient="horizontal", bg=INK, sashwidth=7, sashrelief="flat", bd=0)
+            body.pack(fill="both", expand=True, padx=7, pady=10)
+            form_shell = tk.Frame(body, bg=PANEL, highlightbackground=DEEP_BRASS, highlightthickness=1)
+            library_shell = tk.Frame(body, bg=PANEL, highlightbackground=DEEP_BRASS, highlightthickness=1)
+            body.add(form_shell, minsize=510, width=610)
+            body.add(library_shell, minsize=520)
+            form_canvas = tk.Canvas(form_shell, bg=PANEL, bd=0, highlightthickness=0)
+            form_scrollbar = ttk.Scrollbar(form_shell, orient="vertical", command=form_canvas.yview)
+            form_canvas.configure(yscrollcommand=form_scrollbar.set)
+            form_scrollbar.pack(side="right", fill="y")
+            form_canvas.pack(side="left", fill="both", expand=True)
+            form = ProjectForm(
+                form_canvas,
+                project_type,
+                submit=lambda kind=project_type: self._submit_project(kind),
+                new_project=lambda kind=project_type: self._new_project(kind),
+            )
+            form_window = form_canvas.create_window((0, 0), window=form, anchor="nw")
+            form.bind("<Configure>", lambda _event, canvas=form_canvas: canvas.configure(scrollregion=canvas.bbox("all")))
+            form_canvas.bind("<Configure>", lambda event, canvas=form_canvas, window=form_window: canvas.itemconfigure(window, width=event.width))
+            form_canvas.bind("<Enter>", lambda _event, canvas=form_canvas: canvas.bind_all("<MouseWheel>", lambda event: canvas.yview_scroll(int(-event.delta / 120), "units")))
+            form_canvas.bind("<Leave>", lambda _event, canvas=form_canvas: canvas.unbind_all("<MouseWheel>"))
+            library = LibraryPanel(library_shell, project_type, self)
+            library.pack(fill="both", expand=True)
+            self.forms[project_type] = form
+            self.libraries[project_type] = library
+        self.notebook.bind("<<NotebookTabChanged>>", self._on_tab_changed)
 
-        self.status = tk.Label(self, text="READY", bg="#040302", fg=MUTED, anchor="w", padx=18, font=("Segoe UI Semibold", 8))
+        self.status = tk.Label(self, text="READY", bg="#0b0d11", fg=MUTED, anchor="w", padx=18, font=("Segoe UI Semibold", 8))
         self.status.pack(fill="x", side="bottom", ipady=7)
-
-    def _build_form(self, panel: tk.Frame) -> None:
-        inner = tk.Frame(panel, bg=PANEL)
-        inner.pack(fill="both", expand=True, padx=24, pady=22)
-        self.form_title = tk.Label(inner, text="CREATE A VIDEO JUKEBOX", bg=PANEL, fg=BRASS, font=("Georgia", 18, "bold"))
-        self.form_title.pack(anchor="w")
-        self.form_subtitle = tk.Label(inner, text="Use a channel, individual videos, or both.", bg=PANEL, fg=MUTED, font=("Segoe UI", 9))
-        self.form_subtitle.pack(anchor="w", pady=(5, 12))
-
-        self.title_entry = self._entry(inner, "JUKEBOX TITLE")
-        self.channel_entry = self._entry(inner, "YOUTUBE CHANNEL / MAIN PAGE LINK · OPTIONAL")
-
-        video_heading = tk.Frame(inner, bg=PANEL)
-        video_heading.pack(fill="x", pady=(14, 5))
-        tk.Label(video_heading, text="INDIVIDUAL VIDEO LINKS · OPTIONAL", bg=PANEL, fg=BRASS, font=("Segoe UI Semibold", 8)).pack(side="left")
-        tk.Label(video_heading, text="UP TO 15", bg=PANEL, fg=MUTED, font=("Segoe UI", 8)).pack(side="right")
-        links_shell = tk.Frame(inner, bg="#080706", highlightbackground="#332719", highlightthickness=1, height=174)
-        links_shell.pack(fill="x")
-        links_shell.pack_propagate(False)
-        links_canvas = tk.Canvas(links_shell, bg="#080706", bd=0, highlightthickness=0)
-        links_scroll = ttk.Scrollbar(links_shell, orient="vertical", command=links_canvas.yview, style="Factory.Vertical.TScrollbar")
-        links_canvas.configure(yscrollcommand=links_scroll.set)
-        links_scroll.pack(side="right", fill="y")
-        links_canvas.pack(side="left", fill="both", expand=True)
-        links_frame = tk.Frame(links_canvas, bg="#080706")
-        links_window = links_canvas.create_window((0, 0), window=links_frame, anchor="nw")
-        links_frame.bind("<Configure>", lambda _event: links_canvas.configure(scrollregion=links_canvas.bbox("all")))
-        links_canvas.bind("<Configure>", lambda event: links_canvas.itemconfigure(links_window, width=event.width))
-        self.video_url_entries: list[tk.Entry] = []
-        for index in range(15):
-            row = tk.Frame(links_frame, bg="#080706")
-            row.pack(fill="x", padx=9, pady=(8 if index == 0 else 2, 2))
-            tk.Label(row, text=f"{index + 1:02d}", width=3, anchor="w", bg="#080706", fg=MUTED, font=("Segoe UI Semibold", 8)).pack(side="left")
-            entry = tk.Entry(row, bg="#100d09", fg=PAPER, insertbackground=CREAM, relief="flat", bd=0, highlightbackground="#332719", highlightthickness=1, font=("Segoe UI", 9))
-            entry.pack(side="left", fill="x", expand=True, ipady=5)
-            self.video_url_entries.append(entry)
-        links_canvas.bind("<Enter>", lambda _event: links_canvas.bind_all("<MouseWheel>", lambda event: links_canvas.yview_scroll(int(-event.delta / 120), "units")))
-        links_canvas.bind("<Leave>", lambda _event: links_canvas.unbind_all("<MouseWheel>"))
-
-        ticker_heading = tk.Frame(inner, bg=PANEL)
-        ticker_heading.pack(fill="x", pady=(18, 6))
-        tk.Label(ticker_heading, text="TICKER TEXT", bg=PANEL, fg=BRASS, font=("Segoe UI Semibold", 8)).pack(side="left")
-        self.ticker_count = tk.Label(ticker_heading, text=f"0 / {MAX_TICKER_LENGTH}", bg=PANEL, fg=MUTED, font=("Segoe UI", 8))
-        self.ticker_count.pack(side="right")
-        self.ticker_text = tk.Text(inner, height=4, wrap="word", bg="#080706", fg=PAPER, insertbackground=CREAM, relief="flat", bd=0, highlightbackground="#332719", highlightthickness=1, font=("Segoe UI", 10), padx=12, pady=10)
-        self.ticker_text.pack(fill="x")
-        self.ticker_text.bind("<KeyRelease>", self._ticker_changed)
-        self.ticker_text.insert("1.0", "PULL THE LEVER. LET THE MACHINE CHOOSE WHAT YOU WATCH NEXT.")
-        self._ticker_changed()
-
-        info = tk.Frame(inner, bg="#0d0a07", highlightbackground="#3a2a19", highlightthickness=1)
-        info.pack(fill="x", pady=(12, 10))
-        tk.Label(info, text="AUTOMATIC BUILD", bg="#0d0a07", fg=BRASS, font=("Segoe UI Semibold", 8)).pack(anchor="w", padx=13, pady=(11, 4))
-        tk.Label(info, text=f"Manual links are included first. Duplicate videos are removed, then the channel fills the remaining spaces up to {MAX_VIDEOS}.", bg="#0d0a07", fg=MUTED, wraplength=420, justify="left", font=("Segoe UI", 8)).pack(anchor="w", padx=13, pady=(0, 12))
-
-        form_actions = tk.Frame(inner, bg=PANEL)
-        form_actions.pack(fill="x", pady=(6, 8))
-        self.create_button = self._button(form_actions, "ANALYSE + REVIEW VIDEOS", self._create_jukebox, primary=True)
-        self.create_button.pack(side="left", fill="x", expand=True, ipady=8)
-        self.cancel_edit_button = self._button(form_actions, "CANCEL EDIT", self._cancel_edit, compact=True)
-        tk.Label(inner, text="Next: review all resolved videos with thumbnails and inclusion controls. The jukebox is built only after you approve that list.", bg=PANEL, fg=MUTED, wraplength=430, justify="left", font=("Segoe UI", 8)).pack(anchor="w", pady=(4, 0))
-
-    def _build_library(self, panel: tk.Frame) -> None:
-        heading = tk.Frame(panel, bg=PANEL)
-        heading.pack(fill="x", padx=22, pady=(20, 12))
-        tk.Label(heading, text="JUKEBOX LIBRARY", bg=PANEL, fg=BRASS, font=("Georgia", 18, "bold")).pack(side="left")
-        self.library_count = tk.Label(heading, text="0 PROJECTS", bg=PANEL, fg=MUTED, font=("Segoe UI Semibold", 8))
-        self.library_count.pack(side="right", pady=6)
-
-        shell = tk.Frame(panel, bg=PANEL)
-        shell.pack(fill="both", expand=True, padx=22)
-        columns = ("title", "channel", "videos", "status", "email")
-        self.library = ttk.Treeview(shell, columns=columns, show="headings", style="Factory.Treeview", selectmode="browse")
-        headings = {"title": "TITLE", "channel": "YOUTUBE CHANNEL", "videos": "VIDEOS", "status": "PUBLICATION", "email": "EMAIL"}
-        widths = {"title": 210, "channel": 190, "videos": 64, "status": 100, "email": 95}
-        for column in columns:
-            self.library.heading(column, text=headings[column])
-            self.library.column(column, width=widths[column], minwidth=50, anchor="w" if column in {"title", "channel"} else "center")
-        scroll = ttk.Scrollbar(shell, orient="vertical", command=self.library.yview, style="Factory.Vertical.TScrollbar")
-        self.library.configure(yscrollcommand=scroll.set)
-        self.library.pack(side="left", fill="both", expand=True)
-        scroll.pack(side="right", fill="y")
-        self.library.bind("<<TreeviewSelect>>", lambda _event: self._update_actions())
-        self.library.bind("<Double-1>", lambda _event: self._preview_selected())
-
-        actions = tk.Frame(panel, bg=PANEL)
-        actions.pack(fill="x", padx=22, pady=18)
-        self.preview_button = self._button(actions, "PREVIEW", self._preview_selected, compact=True)
-        self.edit_button = self._button(actions, "EDIT VIDEOS", self._edit_selected, compact=True)
-        self.publish_button = self._button(actions, "PUBLISH", self._publish_selected, compact=True, primary=True)
-        self.unpublish_button = self._button(actions, "UNPUBLISH", self._unpublish_selected, compact=True)
-        self.open_button = self._button(actions, "OPEN LIVE", self._open_live, compact=True)
-        self.email_button = self._button(actions, "RETRY EMAIL", self._retry_email, compact=True)
-        for button in [self.preview_button, self.edit_button, self.publish_button, self.unpublish_button, self.open_button, self.email_button]:
-            button.pack(side="left", padx=(0, 8))
-
-        self.selection_note = tk.Label(panel, text="Select a jukebox to preview or publish it.", bg=PANEL, fg=MUTED, anchor="w", font=("Segoe UI", 8))
-        self.selection_note.pack(fill="x", padx=22, pady=(0, 17))
-        self._update_actions()
-
-    def _entry(self, parent: tk.Misc, label: str) -> tk.Entry:
-        tk.Label(parent, text=label, bg=PANEL, fg=BRASS, font=("Segoe UI Semibold", 8)).pack(anchor="w", pady=(12, 6))
-        entry = tk.Entry(parent, bg="#080706", fg=PAPER, insertbackground=CREAM, relief="flat", bd=0, highlightbackground="#332719", highlightthickness=1, font=("Segoe UI", 10))
-        entry.pack(fill="x", ipady=10)
-        return entry
 
     def _button(self, parent: tk.Misc, text: str, command, *, primary: bool = False, compact: bool = False) -> tk.Button:
         return tk.Button(
             parent,
             text=text,
             command=command,
-            bg="#5a4328" if primary else "#2a2117",
+            bg=ACTIVE if primary else PANEL_2,
             fg=PAPER if primary else CREAM,
-            activebackground="#7a5b34" if primary else "#3b2d1d",
+            activebackground="#3e6cb5" if primary else "#303641",
             activeforeground=PAPER,
-            disabledforeground="#6f6657",
+            disabledforeground="#626978",
             relief="flat",
             bd=0,
             cursor="hand2",
@@ -219,60 +432,62 @@ class Factory(tk.Tk):
             pady=8 if compact else 12,
         )
 
-    def _ticker_changed(self, _event=None) -> None:
-        value = self.ticker_text.get("1.0", "end-1c")
-        if len(value) > MAX_TICKER_LENGTH:
-            value = value[:MAX_TICKER_LENGTH]
-            self.ticker_text.delete("1.0", "end")
-            self.ticker_text.insert("1.0", value)
-        self.ticker_count.configure(text=f"{len(value)} / {MAX_TICKER_LENGTH}", fg=ERROR if len(value) >= MAX_TICKER_LENGTH else MUTED)
-
     def _selected_project(self) -> Project | None:
-        selected = self.library.selection()
-        if not selected:
-            return None
-        return self.projects.get(selected[0])
+        selected_id = self.libraries[self.active_project_type].selected_id()
+        return self.projects.get(selected_id) if selected_id else None
 
-    def _refresh_library(self, select_slug: str | None = None) -> None:
+    def _refresh_library(self, select_id: str | None = None) -> None:
         projects = self.store.list_projects()
         errors = tuple((str(issue.path), issue.message) for issue in self.store.last_load_errors)
         if errors and errors != self._reported_project_load_errors:
             self._reported_project_load_errors = errors
             detail = "\n\n".join(f"{path}\n{message}" for path, message in errors)
             self.after_idle(lambda: messagebox.showwarning(
-                APP_NAME,
+                DESKTOP_TITLE,
                 "One or more saved projects could not be loaded. Their source files were left unchanged.\n\n" + detail,
             ))
-        self.projects = {project.slug: project for project in projects}
-        self.library.delete(*self.library.get_children())
-        for project in projects:
-            self.library.insert("", "end", iid=project.slug, values=(project.title, project.channel_title, len(project.videos), project.status.replace("_", " ").upper(), project.delivery_status.replace("_", " ").upper()))
-        self.library_count.configure(text=f"{len(projects)} PROJECT{'S' if len(projects) != 1 else ''}")
-        if select_slug and select_slug in self.projects:
-            self.library.selection_set(select_slug)
-            self.library.focus(select_slug)
-            self.library.see(select_slug)
+        self.projects = {project.id: project for project in projects}
+        for project_type, panel in self.libraries.items():
+            panel.tree.delete(*panel.tree.get_children())
+            visible = [project for project in projects if project_is_visible_in_tab(project, project_type)]
+            for project in visible:
+                updated = project.updated_at.replace("T", " ").replace("Z", "")[:16]
+                public_url = project.published_url or "—"
+                panel.tree.insert("", "end", iid=project.id, values=(project.title, project.status.replace("_", " ").title(), updated, public_url))
+            panel.count.configure(text=f"{len(visible)} PROJECT{'S' if len(visible) != 1 else ''}")
+        if select_id and select_id in self.projects:
+            project = self.projects[select_id]
+            panel = self.libraries[project.project_type]
+            panel.tree.selection_set(select_id)
+            panel.tree.focus(select_id)
+            panel.tree.see(select_id)
         self._update_actions()
 
     def _update_actions(self) -> None:
-        project = self._selected_project()
-        allowed = project is not None and not self.busy
-        self.preview_button.configure(state="normal" if allowed else "disabled")
-        self.edit_button.configure(state="normal" if allowed else "disabled")
-        self.publish_button.configure(state="normal" if allowed and project.status != "published" else "disabled")
-        self.publish_button.configure(text="UPDATE + REPUBLISH" if project and project.status == "changes_pending" else "PUBLISH")
-        self.unpublish_button.configure(state="normal" if allowed and bool(project.published_url) else "disabled")
-        self.open_button.configure(state="normal" if allowed and bool(project.published_url) else "disabled")
-        self.email_button.configure(state="normal" if allowed and project.status == "published" and project.delivery_status != "sent" else "disabled")
-        if project:
-            self.selection_note.configure(text=f"{project.title} · {len(project.videos)} videos · {project.status.replace('_', ' ').upper()} · EMAIL {project.delivery_status.upper()}")
-        else:
-            self.selection_note.configure(text="Select a jukebox to preview or publish it.")
+        for project_type, panel in self.libraries.items():
+            selected_id = panel.selected_id()
+            project = self.projects.get(selected_id) if selected_id else None
+            allowed = project is not None and not self.busy
+            panel.buttons["edit"].configure(state="normal" if allowed else "disabled")
+            if project_type is ProjectType.MUSIC:
+                panel.note.configure(text=f"{project.title} · Local Music project · publishing unavailable" if project else "Music projects are stored locally in Milestone 3.")
+                continue
+            panel.buttons["preview"].configure(state="normal" if allowed else "disabled")
+            panel.buttons["publish"].configure(state="normal" if allowed and project.status != "published" else "disabled")
+            panel.buttons["publish"].configure(text="UPDATE + REPUBLISH" if project and project.status == "changes_pending" else "PUBLISH")
+            panel.buttons["unpublish"].configure(state="normal" if allowed and bool(project.published_url) else "disabled")
+            panel.buttons["open"].configure(state="normal" if allowed and bool(project.published_url) else "disabled")
+            panel.buttons["email"].configure(state="normal" if allowed and project.status == "published" and project.delivery_status != "sent" else "disabled")
+            if project:
+                panel.note.configure(text=f"{project.title} · {len(project.videos)} videos · {project.status.replace('_', ' ').title()} · Email {project.delivery_status.replace('_', ' ').title()}")
+            else:
+                panel.note.configure(text="Select a Business project to edit, preview or publish it.")
 
     def _set_busy(self, busy: bool, message: str) -> None:
         self.busy = busy
         self.status.configure(text=message, fg=BRASS if busy else MUTED)
-        self.create_button.configure(state="disabled" if busy else "normal")
+        for form in self.forms.values():
+            form.submit_button.configure(state="disabled" if busy else "normal")
         self.settings_button.configure(state="disabled" if busy else "normal")
         self._update_actions()
 
@@ -280,39 +495,53 @@ class Factory(tk.Tk):
         project = self._selected_project()
         if not project or self.busy:
             return
-        self.editing_project_slug = project.slug
-        self.title_entry.delete(0, "end")
-        self.title_entry.insert(0, project.title)
-        self.channel_entry.delete(0, "end")
-        self.channel_entry.insert(0, project.source_channel_url or project.channel_url)
-        for entry in self.video_url_entries:
-            entry.delete(0, "end")
-        for entry, url in zip(self.video_url_entries, project.manual_video_urls):
-            entry.insert(0, url)
-        self.ticker_text.delete("1.0", "end")
-        self.ticker_text.insert("1.0", project.ticker_text)
-        self._ticker_changed()
-        self.form_title.configure(text="EDIT VIDEO JUKEBOX")
-        self.form_subtitle.configure(text=f"Editing {project.title}. The current public version remains live until Update + Republish.")
-        self.create_button.configure(text="ANALYSE + REVIEW CHANGES")
-        if not self.cancel_edit_button.winfo_manager():
-            self.cancel_edit_button.pack(side="right", padx=(8, 0), ipady=5)
-        self.title_entry.focus_set()
+        form = self.forms[project.project_type]
+        if form.is_dirty() and not self._resolve_unsaved(form, "open another project"):
+            return
+        form.load_project(project)
+        form.field_widgets["title"].focus_set()
 
-    def _cancel_edit(self, *, clear: bool = True) -> None:
-        self.editing_project_slug = None
-        self.form_title.configure(text="CREATE A VIDEO JUKEBOX")
-        self.form_subtitle.configure(text="Use a channel, individual videos, or both.")
-        self.create_button.configure(text="ANALYSE + REVIEW VIDEOS")
-        self.cancel_edit_button.pack_forget()
-        if clear:
-            self.title_entry.delete(0, "end")
-            self.channel_entry.delete(0, "end")
-            for entry in self.video_url_entries:
-                entry.delete(0, "end")
-            self.ticker_text.delete("1.0", "end")
-            self.ticker_text.insert("1.0", "PULL THE LEVER. LET THE MACHINE CHOOSE WHAT YOU WATCH NEXT.")
-            self._ticker_changed()
+    def _new_project(self, project_type: ProjectType) -> None:
+        form = self.forms[project_type]
+        if self.busy:
+            return
+        if form.is_dirty() and not self._resolve_unsaved(form, "start a new project"):
+            return
+        form.clear_new()
+        form.field_widgets["title"].focus_set()
+
+    def _submit_project(self, project_type: ProjectType) -> bool:
+        if self.busy:
+            return False
+        return self._create_jukebox() if project_type is ProjectType.BUSINESS else self._save_music_project()
+
+    def _resolve_unsaved(self, form: ProjectForm, action: str) -> bool:
+        choice = messagebox.askyesnocancel(
+            "Unsaved changes",
+            f"Save the current {form.project_type.value.title()} project changes before you {action}?\n\nYes = Save    No = Discard    Cancel = Stay here",
+        )
+        if choice is None:
+            return False
+        if choice:
+            return self._submit_project(form.project_type)
+        form.restore_baseline()
+        return True
+
+    def _on_tab_changed(self, _event=None) -> None:
+        if self._tab_change_guard or not hasattr(self, "notebook"):
+            return
+        target = self.tab_types[self.notebook.index(self.notebook.select())]
+        previous = self.active_project_type
+        if target is previous:
+            return
+        form = self.forms[previous]
+        if form.is_dirty() and not self._resolve_unsaved(form, "switch tabs"):
+            self._tab_change_guard = True
+            self.notebook.select(self.tab_types.index(previous))
+            self._tab_change_guard = False
+            return
+        self.active_project_type = target
+        self._update_actions()
 
     def _run_async(self, message: str, worker, complete) -> None:
         if self.busy:
@@ -331,39 +560,37 @@ class Factory(tk.Tk):
 
     def _async_failed(self, error: Exception) -> None:
         self._set_busy(False, "OPERATION PAUSED")
-        messagebox.showerror(APP_NAME, str(error))
+        messagebox.showerror(DESKTOP_TITLE, str(error))
 
     def _async_complete(self, result, complete) -> None:
         self._set_busy(False, "READY")
         complete(result)
 
-    def _create_jukebox(self) -> None:
-        title = re.sub(r"\s+", " ", self.title_entry.get()).strip()
-        channel_url = self.channel_entry.get().strip()
-        video_urls = [entry.get().strip() for entry in self.video_url_entries if entry.get().strip()]
-        ticker = self.ticker_text.get("1.0", "end-1c").strip()
-        if not title or len(title) > 120:
-            messagebox.showerror(APP_NAME, "Enter a jukebox title of no more than 120 characters.")
-            return
-        if not channel_url and not video_urls:
-            messagebox.showerror(APP_NAME, "Paste a YouTube channel link, at least one individual video link, or both.")
-            return
-        if len(ticker) > MAX_TICKER_LENGTH:
-            messagebox.showerror(APP_NAME, f"Ticker text cannot exceed {MAX_TICKER_LENGTH} characters.")
-            return
+    def _create_jukebox(self) -> bool:
+        form = self.forms[ProjectType.BUSINESS]
+        form.clear_validation()
+        try:
+            values = validate_project_form(form.values(), ProjectType.BUSINESS)
+        except FormValidationError as error:
+            form.show_validation(error)
+            return False
         api_key = str(self.settings.get("youtubeApiKey") or "")
         if not api_key:
-            messagebox.showinfo(APP_NAME, "Save a YouTube Data API key in SETTINGS once, then press Create Jukebox again.")
+            messagebox.showinfo(DESKTOP_TITLE, "Save a YouTube Data API key in SETTINGS once, then press Create Jukebox again.")
             self._open_settings()
-            return
+            return False
 
-        editing_slug = self.editing_project_slug
-        slug = editing_slug or self.store.allocate_slug(title)
+        editing_project_id = form.editing_project_id
+        existing = self.projects.get(editing_project_id) if editing_project_id else None
+        if existing and existing.project_type is not ProjectType.BUSINESS:
+            messagebox.showerror(DESKTOP_TITLE, "A saved project cannot be changed to a different project type.")
+            return False
+        slug = existing.slug if existing else self.store.allocate_slug(values.title)
 
         def worker() -> dict[str, object]:
             client = YouTubeClient(api_key)
-            manual_catalogue = client.fetch_videos(video_urls) if video_urls else None
-            channel_catalogue = client.fetch_catalogue(channel_url, MAX_VIDEOS) if channel_url else None
+            manual_catalogue = client.fetch_videos(values.manual_video_urls) if values.manual_video_urls else None
+            channel_catalogue = client.fetch_catalogue(values.channel_url, MAX_VIDEOS) if values.channel_url else None
             videos = merge_video_selections(
                 manual_catalogue.videos if manual_catalogue else [],
                 channel_catalogue.videos if channel_catalogue else [],
@@ -390,19 +617,45 @@ class Factory(tk.Tk):
                         thumbnail_bytes[video_id] = content
             return {
                 "slug": slug,
-                "title": title,
-                "ticker": ticker,
+                "values": values,
                 "catalogue": catalogue,
                 "videos": videos,
                 "manual_ids": {video.video_id for video in (manual_catalogue.videos if manual_catalogue else [])},
-                "manual_urls": video_urls,
-                "source_channel_url": channel_url,
-                "editing_slug": editing_slug,
-                "excluded_ids": set(self.projects[editing_slug].excluded_video_ids) if editing_slug and editing_slug in self.projects else set(),
+                "editing_project_id": editing_project_id,
+                "excluded_ids": set(existing.excluded_video_ids) if existing else set(),
                 "thumbnails": thumbnail_bytes,
             }
 
         self._run_async("READING YOUTUBE + PREPARING VIDEO REVIEW…", worker, self._review_video_selection)
+        return False
+
+    def _save_music_project(self) -> bool:
+        form = self.forms[ProjectType.MUSIC]
+        form.clear_validation()
+        try:
+            values = validate_project_form(form.values(), ProjectType.MUSIC)
+        except FormValidationError as error:
+            form.show_validation(error)
+            return False
+        existing = self.projects.get(form.editing_project_id) if form.editing_project_id else None
+        if existing and existing.project_type is not ProjectType.MUSIC:
+            messagebox.showerror(DESKTOP_TITLE, "A saved project cannot be changed to a different project type.")
+            return False
+        slug = existing.slug if existing else self.store.allocate_slug(values.title)
+        try:
+            project = build_local_music_project(values, slug, existing)
+            self.store.save_project(project)
+        except (OSError, ValueError) as error:
+            messagebox.showerror(DESKTOP_TITLE, str(error))
+            return False
+        self._refresh_library(project.id)
+        form.load_project(project)
+        self.status.configure(text="MUSIC PROJECT SAVED LOCALLY", fg=SUCCESS)
+        messagebox.showinfo(
+            DESKTOP_TITLE,
+            f"{project.title} was saved locally.\n\nMusic generation and publishing are not available in Milestone 3.",
+        )
+        return True
 
     def _review_video_selection(self, candidate: dict[str, object]) -> None:
         videos = list(candidate["videos"])
@@ -511,7 +764,7 @@ class Factory(tk.Tk):
         def build_selected() -> None:
             selected = [video for video, variable in zip(videos, variables) if variable.get()]
             if not selected:
-                messagebox.showerror(APP_NAME, "Include at least one video before building the jukebox.", parent=dialog)
+                messagebox.showerror(DESKTOP_TITLE, "Include at least one video before building the jukebox.", parent=dialog)
                 return
             canvas.unbind_all("<MouseWheel>")
             dialog.destroy()
@@ -523,7 +776,7 @@ class Factory(tk.Tk):
 
         self._button(footer, "SELECT ALL", lambda: set_all(True), compact=True).pack(side="left", padx=(0, 6))
         self._button(footer, "CLEAR ALL", lambda: set_all(False), compact=True).pack(side="left")
-        build_label = "SAVE REVIEWED CHANGES" if candidate.get("editing_slug") else "BUILD JUKEBOX"
+        build_label = "SAVE REVIEWED CHANGES" if candidate.get("editing_project_id") else "BUILD JUKEBOX"
         self._button(footer, build_label, build_selected, primary=True, compact=True).pack(side="right")
         self._button(footer, "CANCEL", cancel_review, compact=True).pack(side="right", padx=8)
         canvas.bind("<Enter>", lambda _event: canvas.bind_all("<MouseWheel>", lambda event: canvas.yview_scroll(int(-event.delta / 120), "units")))
@@ -541,10 +794,11 @@ class Factory(tk.Tk):
     def _finish_jukebox(self, candidate: dict[str, object], videos: list) -> None:
         catalogue = candidate["catalogue"]
         slug = str(candidate["slug"])
+        values = candidate["values"]
 
         def worker() -> Project:
-            editing_slug = str(candidate.get("editing_slug") or "")
-            existing = self.projects.get(editing_slug or slug)
+            editing_project_id = str(candidate.get("editing_project_id") or "")
+            existing = self.projects.get(editing_project_id) if editing_project_id else None
             selected_ids = {video.video_id for video in videos}
             reviewed_ids = {video.video_id for video in candidate["videos"]}
             excluded_ids = (set(existing.excluded_video_ids) if existing else set()) | (reviewed_ids - selected_ids)
@@ -552,19 +806,19 @@ class Factory(tk.Tk):
             changes_pending = bool(existing and existing.published_url)
             project = Project(
                 slug=slug,
-                title=str(candidate["title"]),
-                ticker_text=str(candidate["ticker"]),
+                title=values.title,
+                ticker_text=values.story_text,
                 channel_url=catalogue.channel_url,
                 channel_id=catalogue.channel_id,
                 channel_title=catalogue.channel_title,
                 channel_thumbnail=catalogue.channel_thumbnail,
                 id=existing.id if existing else str(uuid4()),
-                project_type=existing.project_type if existing else "business",
-                additional_urls=list(existing.additional_urls) if existing else [],
-                business_config=existing.business_config if existing else None,
-                music_config=existing.music_config if existing else None,
-                source_channel_url=str(candidate.get("source_channel_url") or ""),
-                manual_video_urls=[str(url) for url in candidate.get("manual_urls", [])],
+                project_type=ProjectType.BUSINESS,
+                additional_urls=list(values.additional_urls),
+                business_config=values.business_config,
+                music_config=None,
+                source_channel_url=values.channel_url,
+                manual_video_urls=list(values.manual_video_urls),
                 excluded_video_ids=sorted(excluded_ids),
                 videos=videos,
                 status="changes_pending" if changes_pending else "draft",
@@ -583,13 +837,13 @@ class Factory(tk.Tk):
         self._run_async("BUILDING THE REVIEWED JUKEBOX…", worker, self._create_complete)
 
     def _create_complete(self, project: Project) -> None:
-        self._refresh_library(project.slug)
+        self._refresh_library(project.id)
         editing = project.status == "changes_pending"
-        self._cancel_edit()
+        self.forms[ProjectType.BUSINESS].load_project(project)
         if editing:
-            messagebox.showinfo(APP_NAME, f"{project.title} now has {len(project.videos)} reviewed videos.\n\nThe existing live jukebox is unchanged. Press UPDATE + REPUBLISH in the Library when you are ready.")
+            messagebox.showinfo(DESKTOP_TITLE, f"{project.title} now has {len(project.videos)} reviewed videos.\n\nThe existing live jukebox is unchanged. Press UPDATE + REPUBLISH in the Library when you are ready.")
         else:
-            messagebox.showinfo(APP_NAME, f"{project.title} was created with {len(project.videos)} videos.\n\nIt is private until you press PUBLISH in the Library.")
+            messagebox.showinfo(DESKTOP_TITLE, f"{project.title} was created with {len(project.videos)} videos.\n\nIt is private until you press PUBLISH in the Library.")
 
     def _preview_selected(self) -> None:
         project = self._selected_project()
@@ -597,7 +851,7 @@ class Factory(tk.Tk):
             return
         site = self.store.project_dir(project.slug) / "site"
         if not (site / "index.html").is_file():
-            messagebox.showerror(APP_NAME, "The local preview files are missing. Recreate the jukebox.")
+            messagebox.showerror(DESKTOP_TITLE, "The local preview files are missing. Recreate the jukebox.")
             return
         webbrowser.open(self.preview_server.start(site))
 
@@ -631,13 +885,13 @@ class Factory(tk.Tk):
 
     def _publish_complete(self, result: tuple[Project, str | None]) -> None:
         project, email_error = result
-        self._refresh_library(project.slug)
+        self._refresh_library(project.id)
         detail = f"{project.title} is public:\n\n{project.published_url}"
         if email_error:
             detail += f"\n\nThe link and QR email remains queued:\n{email_error}"
         else:
             detail += f"\n\nThe link and titled QR card were emailed to {self.settings.get('deliveryEmail')}."
-        messagebox.showinfo(APP_NAME, detail)
+        messagebox.showinfo(DESKTOP_TITLE, detail)
 
     def _unpublish_selected(self) -> None:
         project = self._selected_project()
@@ -660,8 +914,8 @@ class Factory(tk.Tk):
         self._run_async("UNPUBLISHING THE JUKEBOX…", worker, lambda result: self._unpublish_complete(result))
 
     def _unpublish_complete(self, project: Project) -> None:
-        self._refresh_library(project.slug)
-        messagebox.showinfo(APP_NAME, f"{project.title} is no longer public. Its private project remains in the Library.")
+        self._refresh_library(project.id)
+        messagebox.showinfo(DESKTOP_TITLE, f"{project.title} is no longer public. Its private project remains in the Library.")
 
     def _open_live(self) -> None:
         project = self._selected_project()
@@ -682,12 +936,12 @@ class Factory(tk.Tk):
         self._run_async("SENDING THE LINK + QR EMAIL…", worker, self._email_complete)
 
     def _email_complete(self, project: Project) -> None:
-        self._refresh_library(project.slug)
-        messagebox.showinfo(APP_NAME, f"The {project.title} link and QR card were emailed to {self.settings.get('deliveryEmail')}.")
+        self._refresh_library(project.id)
+        messagebox.showinfo(DESKTOP_TITLE, f"The {project.title} link and QR card were emailed to {self.settings.get('deliveryEmail')}.")
 
     def _open_settings(self) -> None:
         dialog = tk.Toplevel(self)
-        dialog.title("Video Jukebox Factory Settings")
+        dialog.title(f"{DESKTOP_TITLE} — Settings")
         dialog.geometry("650x430")
         dialog.resizable(False, False)
         dialog.configure(bg=INK)
@@ -695,7 +949,7 @@ class Factory(tk.Tk):
         dialog.grab_set()
         frame = tk.Frame(dialog, bg=PANEL, highlightbackground=DEEP_BRASS, highlightthickness=1)
         frame.pack(fill="both", expand=True, padx=22, pady=22)
-        tk.Label(frame, text="FACTORY SETTINGS", bg=PANEL, fg=BRASS, font=("Georgia", 18, "bold")).pack(anchor="w", padx=24, pady=(24, 8))
+        tk.Label(frame, text="SETTINGS", bg=PANEL, fg=PAPER, font=("Segoe UI Semibold", 16)).pack(anchor="w", padx=24, pady=(24, 8))
         tk.Label(frame, text="The YouTube key is encrypted for this Windows account and never written into a published jukebox.", bg=PANEL, fg=MUTED, wraplength=560, justify="left", font=("Segoe UI", 9)).pack(anchor="w", padx=24, pady=(0, 18))
         tk.Label(frame, text="YOUTUBE DATA API KEY", bg=PANEL, fg=BRASS, font=("Segoe UI Semibold", 8)).pack(anchor="w", padx=24)
         key_entry = tk.Entry(frame, show="•", bg="#080706", fg=PAPER, insertbackground=CREAM, relief="flat", highlightbackground="#332719", highlightthickness=1, font=("Segoe UI", 10))
@@ -710,10 +964,10 @@ class Factory(tk.Tk):
             key = key_entry.get().strip()
             email = email_entry.get().strip().lower()
             if not key:
-                messagebox.showerror(APP_NAME, "Enter the YouTube Data API key.", parent=dialog)
+                messagebox.showerror(DESKTOP_TITLE, "Enter the YouTube Data API key.", parent=dialog)
                 return
             if not re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", email):
-                messagebox.showerror(APP_NAME, "Enter a valid delivery email address.", parent=dialog)
+                messagebox.showerror(DESKTOP_TITLE, "Enter a valid delivery email address.", parent=dialog)
                 return
             self.store.save_settings(key, email)
             self.settings = self.store.load_settings()
@@ -725,6 +979,12 @@ class Factory(tk.Tk):
         self._button(buttons, "CANCEL", dialog.destroy, compact=True).pack(side="left", padx=8)
 
     def _close(self) -> None:
+        if self.busy:
+            messagebox.showinfo(DESKTOP_TITLE, "Please wait for the current operation to finish before closing CRISPY BITS DESKTOP.")
+            return
+        for form in self.forms.values():
+            if form.is_dirty() and not self._resolve_unsaved(form, "close the application"):
+                return
         self.preview_server.stop()
         self.destroy()
 
