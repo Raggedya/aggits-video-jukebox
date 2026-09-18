@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import re
 import sys
 import threading
@@ -869,6 +870,14 @@ class Factory(tk.Tk):
         webbrowser.open(self.preview_server.start(site))
         return True
 
+    def _current_delivery_credentials(self) -> tuple[str, str]:
+        """Reload externally provisioned delivery settings immediately before use."""
+        self.settings = self.store.load_settings()
+        return (
+            str(self.settings.get("deliveryEmail") or ""),
+            str(self.settings.get("deliverySecret") or ""),
+        )
+
     def _preview_selected(self) -> None:
         project = self._selected_project()
         if not project:
@@ -893,11 +902,11 @@ class Factory(tk.Tk):
             self.store.save_project(project)
             build_project_site(project, self.store.project_dir(project.slug) / "site")
             email_error = None
-            recipient = str(self.settings.get("deliveryEmail") or "")
+            recipient, delivery_secret = self._current_delivery_credentials()
             try:
                 mark_delivery_attempt(project, recipient)
                 self.store.save_project(project)
-                result = request_delivery(project, recipient, secret=str(self.settings.get("deliverySecret") or ""))
+                result = request_delivery(project, recipient, secret=delivery_secret)
                 mark_delivery_result(project, recipient, result)
             except DeliveryError as error:
                 try:
@@ -955,11 +964,11 @@ class Factory(tk.Tk):
             return
 
         def worker() -> Project:
-            recipient = str(self.settings.get("deliveryEmail") or "")
+            recipient, delivery_secret = self._current_delivery_credentials()
             try:
                 mark_delivery_attempt(project, recipient)
                 self.store.save_project(project)
-                result = request_delivery(project, recipient, secret=str(self.settings.get("deliverySecret") or ""))
+                result = request_delivery(project, recipient, secret=delivery_secret)
                 mark_delivery_result(project, recipient, result)
             except DeliveryError as error:
                 try:
@@ -985,12 +994,12 @@ class Factory(tk.Tk):
             state = Publisher(self.store).reconcile(project)
             delivery_error = None
             if state == "published":
-                recipient = str(self.settings.get("deliveryEmail") or "")
+                recipient, delivery_secret = self._current_delivery_credentials()
                 try:
                     if not delivery_intent_matches(project, recipient):
                         mark_delivery_attempt(project, recipient)
                         self.store.save_project(project)
-                        result = request_delivery(project, recipient, secret=str(self.settings.get("deliverySecret") or ""))
+                        result = request_delivery(project, recipient, secret=delivery_secret)
                         mark_delivery_result(project, recipient, result)
                 except DeliveryError as error:
                     try:
@@ -1077,6 +1086,15 @@ def smoke_test() -> None:
     missing = [str(path) for path in required if not path.is_file()]
     if missing:
         raise RuntimeError(f"Missing packaged resources: {missing}")
+    store = ProjectStore()
+    settings = store.load_settings()
+    if store.settings_path.is_file():
+        try:
+            stored_settings = json.loads(store.settings_path.read_text(encoding="utf-8"))
+        except (OSError, ValueError) as error:
+            raise RuntimeError("The packaged application could not read the existing settings file.") from error
+        if stored_settings.get("deliverySecretProtected") and not settings.get("deliverySecret"):
+            raise RuntimeError("The packaged application could not access the protected delivery credential.")
     print(f"{APP_NAME} v{APP_VERSION} resources OK")
 
 
