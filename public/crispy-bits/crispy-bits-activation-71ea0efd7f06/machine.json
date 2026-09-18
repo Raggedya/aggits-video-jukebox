@@ -1,0 +1,56 @@
+{
+  "schemaVersion": 2,
+  "projectType": "business",
+  "slug": "crispy-bits-activation-71ea0efd7f06",
+  "title": "CRISPY BITS PRODUCTION ACTIVATION TEST",
+  "tickerText": "This temporary machine verifies authenticated Crispy Bits delivery and will be removed after testing.",
+  "channelId": "UC38IQsAvIsxxjztdMZQtwHA",
+  "channelTitle": "CRISPY BITS Activation Test",
+  "channelUrl": "https://www.youtube.com/channel/UC38IQsAvIsxxjztdMZQtwHA",
+  "channelThumbnail": "",
+  "videoCount": 1,
+  "customerConfig": {
+    "customerName": "CRISPY BITS PRODUCTION ACTIVATION TEST",
+    "customerLogo": "",
+    "customerTheme": "cinematic-customer",
+    "tagline": "This temporary machine verifies authenticated Crispy Bits delivery and will be removed after testing.",
+    "customerTagline": "MORE STORIES • MORE TO DISCOVER",
+    "customerStory": "This temporary machine verifies authenticated Crispy Bits delivery and will be removed after testing.",
+    "customerStorySections": [
+      {
+        "heading": "THE BEGINNING",
+        "text": "This temporary machine verifies authenticated Crispy Bits delivery and will be removed after testing."
+      }
+    ],
+    "youtubeChannel": "https://www.youtube.com/channel/UC38IQsAvIsxxjztdMZQtwHA",
+    "subscribeURL": "https://www.youtube.com/channel/UC38IQsAvIsxxjztdMZQtwHA?sub_confirmation=1",
+    "primaryCTA": "VIEW ON YOUTUBE",
+    "shopURL": null,
+    "shopEnabled": false
+  },
+  "videos": [
+    {
+      "id": "dQw4w9WgXcQ",
+      "videoId": "dQw4w9WgXcQ",
+      "title": "CRISPY BITS Production Activation Verification",
+      "shortTitle": "CRISPY BITS PRODUCTION",
+      "displayTitle": "Production Activation Verification",
+      "category": "CRISPY BITS Activation Test",
+      "reelImage": "https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg",
+      "url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+      "videoURL": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+      "embedUrl": "https://www.youtube.com/embed/dQw4w9WgXcQ?autoplay=0",
+      "thumbnailUrl": "https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg",
+      "description": "A closer look at Production Activation Verification from CRISPY BITS Activation Test.",
+      "storyText": "Production Activation Verification. Selected from CRISPY BITS Activation Test. Press Play Video to watch the complete video on YouTube.",
+      "metadata": "CRISPY BITS Activation Test • Video Discovery • YouTube",
+      "shareText": "Production Activation Verification — CRISPY BITS PRODUCTION ACTIVATION TEST",
+      "ctaLabel": "VIEW ON YOUTUBE",
+      "ctaURL": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+      "publishedAt": "2009-10-25T06:57:33Z",
+      "durationSeconds": 213,
+      "channelTitle": "CRISPY BITS Activation Test",
+      "channelId": "UC38IQsAvIsxxjztdMZQtwHA"
+    }
+  ]
+}
