@@ -14,7 +14,7 @@ if (machine) {
   const status = machine.querySelector('.machine-status');
   const playButton = machine.querySelector('[data-action="play"]');
   const shareButton = machine.querySelector('[data-action="share"]');
-  const subscribeButton = machine.querySelector('[data-action="subscribe"]');
+  const shopButton = machine.querySelector('[data-action="shop"]');
   const respinButton = machine.querySelector('[data-action="spin-again"]');
   const soundButton = machine.querySelector('[data-action="sound"]');
   const soundIcon = machine.querySelector('[data-sound-icon]');
@@ -48,6 +48,7 @@ if (machine) {
   let machineDescription = '';
   let masterStorySections = [];
   let channelThumbnail = '';
+  let shopDestination = '';
   let revealTimer = 0;
   let selectionEpoch = 0;
   let reelMotorAudio = null;
@@ -408,7 +409,8 @@ if (machine) {
     meterMode = 'spin';
     playButton.disabled = true;
     shareButton.disabled = true;
-    subscribeButton.disabled = true;
+    shopButton.disabled = true;
+    shopButton.setAttribute('aria-disabled', 'true');
     respinButton.disabled = true;
     machine.dataset.hasWinner = 'false';
     playSample(reelStopAudio, {volume: .58, rate: .9});
@@ -431,7 +433,8 @@ if (machine) {
     meterMode = 'idle';
     playButton.disabled = false;
     shareButton.disabled = false;
-    subscribeButton.disabled = false;
+    shopButton.disabled = !shopDestination;
+    shopButton.setAttribute('aria-disabled', String(!shopDestination));
     respinButton.disabled = false;
     spinning = false;
     scheduleVideoReveal(winner);
@@ -548,13 +551,9 @@ if (machine) {
     }
   }
 
-  function subscribe() {
-    if (!current) return;
-    const channelId = String(current.channelId || '').trim();
-    const destination = channelId
-      ? `https://www.youtube.com/channel/${encodeURIComponent(channelId)}?sub_confirmation=1`
-      : current.url;
-    window.open(destination, '_blank', 'noopener,noreferrer');
+  function openShop() {
+    if (!shopDestination) return;
+    window.open(shopDestination, '_blank', 'noopener,noreferrer');
   }
 
   function bind() {
@@ -571,7 +570,7 @@ if (machine) {
     respinButton.addEventListener('click', spin);
     playButton.addEventListener('click', () => { void openVideo(true); });
     shareButton.addEventListener('click', share);
-    subscribeButton.addEventListener('click', subscribe);
+    shopButton.addEventListener('click', openShop);
     soundButton.addEventListener('click', () => {
       soundEnabled = !soundEnabled;
       try { sessionStorage.setItem('crispyBitsSound', soundEnabled ? 'on' : 'off'); } catch {}
@@ -618,6 +617,10 @@ if (machine) {
       const config = await response.json();
       machineIdentity = String(config.title || config.channelTitle || '').trim();
       machineDescription = String(config.customerConfig?.customerStory || config.tickerText || '').trim();
+      shopDestination = String(config.customerConfig?.shopURL || '').trim();
+      shopButton.disabled = true;
+      shopButton.setAttribute('aria-disabled', 'true');
+      shopButton.setAttribute('aria-label', shopDestination ? 'Shop now' : 'Shop unavailable');
       masterStorySections = Array.isArray(config.customerConfig?.customerStorySections)
         ? config.customerConfig.customerStorySections.filter(beat => beat?.heading && beat?.text)
         : [];

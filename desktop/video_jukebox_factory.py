@@ -9,7 +9,6 @@ from io import BytesIO
 from pathlib import Path
 import tkinter as tk
 from tkinter import messagebox, ttk
-from uuid import uuid4
 
 import requests
 from PIL import Image, ImageOps, ImageTk
@@ -21,6 +20,7 @@ if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
 from aggits_video_factory.config import MAX_TICKER_LENGTH, MAX_VIDEOS, resource_path
+from aggits_video_factory.business_workflow import assemble_business_project
 from aggits_video_factory.delivery import DeliveryError, request_delivery
 from aggits_video_factory.desktop_forms import (
     CTA_CHOICES,
@@ -37,6 +37,7 @@ from aggits_video_factory.preview import PreviewServer
 from aggits_video_factory.publisher import PublishError, Publisher
 from aggits_video_factory.site_builder import build_project_site
 from aggits_video_factory.store import ProjectStore
+from aggits_video_factory.supplementary_sources import retrieve_supplementary_sources
 from aggits_video_factory.youtube_api import YouTubeClient, YouTubeError, merge_video_selections
 
 
@@ -615,6 +616,7 @@ class Factory(tk.Tk):
                 for video_id, content in pool.map(fetch_thumbnail, videos):
                     if content:
                         thumbnail_bytes[video_id] = content
+            source_results = retrieve_supplementary_sources(values.additional_urls)
             return {
                 "slug": slug,
                 "values": values,
@@ -623,6 +625,7 @@ class Factory(tk.Tk):
                 "manual_ids": {video.video_id for video in (manual_catalogue.videos if manual_catalogue else [])},
                 "editing_project_id": editing_project_id,
                 "excluded_ids": set(existing.excluded_video_ids) if existing else set(),
+                "source_results": source_results,
                 "thumbnails": thumbnail_bytes,
             }
 
@@ -662,6 +665,14 @@ class Factory(tk.Tk):
         manual_ids = set(candidate["manual_ids"])
         excluded_ids = set(candidate.get("excluded_ids") or set())
         thumbnail_bytes = dict(candidate["thumbnails"])
+        source_failures = [result for result in candidate.get("source_results", []) if not result.succeeded]
+        if source_failures:
+            detail = "\n".join(f"• {result.url}\n  {result.error}" for result in source_failures)
+            messagebox.showwarning(
+                DESKTOP_TITLE,
+                "One or more optional Additional URLs could not be read. You can still review and build this Business project.\n\n" + detail,
+                parent=self,
+            )
         dialog = tk.Toplevel(self)
         dialog.title("Review Jukebox Videos")
         dialog.geometry("980x720")
@@ -799,35 +810,14 @@ class Factory(tk.Tk):
         def worker() -> Project:
             editing_project_id = str(candidate.get("editing_project_id") or "")
             existing = self.projects.get(editing_project_id) if editing_project_id else None
-            selected_ids = {video.video_id for video in videos}
-            reviewed_ids = {video.video_id for video in candidate["videos"]}
-            excluded_ids = (set(existing.excluded_video_ids) if existing else set()) | (reviewed_ids - selected_ids)
-            excluded_ids -= selected_ids
-            changes_pending = bool(existing and existing.published_url)
-            project = Project(
+            project = assemble_business_project(
+                values=values,
+                catalogue=catalogue,
+                selected_videos=videos,
+                reviewed_videos=list(candidate["videos"]),
+                source_results=list(candidate.get("source_results", [])),
                 slug=slug,
-                title=values.title,
-                ticker_text=values.story_text,
-                channel_url=catalogue.channel_url,
-                channel_id=catalogue.channel_id,
-                channel_title=catalogue.channel_title,
-                channel_thumbnail=catalogue.channel_thumbnail,
-                id=existing.id if existing else str(uuid4()),
-                project_type=ProjectType.BUSINESS,
-                additional_urls=list(values.additional_urls),
-                business_config=values.business_config,
-                music_config=None,
-                source_channel_url=values.channel_url,
-                manual_video_urls=list(values.manual_video_urls),
-                excluded_video_ids=sorted(excluded_ids),
-                videos=videos,
-                status="changes_pending" if changes_pending else "draft",
-                created_at=existing.created_at if existing else utc_now(),
-                published_at=existing.published_at if existing else None,
-                published_url=existing.published_url if existing else None,
-                delivery_status=existing.delivery_status if changes_pending and existing else "not_requested",
-                publication_revision=existing.publication_revision if existing else None,
-                extra_fields=dict(existing.extra_fields) if existing else {},
+                existing=existing,
             )
             project_dir = self.store.project_dir(slug)
             build_project_site(project, project_dir / "site")
@@ -840,20 +830,25 @@ class Factory(tk.Tk):
         self._refresh_library(project.id)
         editing = project.status == "changes_pending"
         self.forms[ProjectType.BUSINESS].load_project(project)
+        self._open_project_preview(project)
         if editing:
-            messagebox.showinfo(DESKTOP_TITLE, f"{project.title} now has {len(project.videos)} reviewed videos.\n\nThe existing live jukebox is unchanged. Press UPDATE + REPUBLISH in the Library when you are ready.")
+            messagebox.showinfo(DESKTOP_TITLE, f"{project.title} now has {len(project.videos)} reviewed videos and its local preview has opened.\n\nThe existing live jukebox is unchanged. Press UPDATE + REPUBLISH in the Library when you are ready.")
         else:
-            messagebox.showinfo(DESKTOP_TITLE, f"{project.title} was created with {len(project.videos)} videos.\n\nIt is private until you press PUBLISH in the Library.")
+            messagebox.showinfo(DESKTOP_TITLE, f"{project.title} was created with {len(project.videos)} videos and its local preview has opened.\n\nIt is private until you press PUBLISH in the Library.")
+
+    def _open_project_preview(self, project: Project) -> bool:
+        site = self.store.project_dir(project.slug) / "site"
+        if not (site / "index.html").is_file():
+            messagebox.showerror(DESKTOP_TITLE, "The local preview files are missing. Recreate the jukebox.")
+            return False
+        webbrowser.open(self.preview_server.start(site))
+        return True
 
     def _preview_selected(self) -> None:
         project = self._selected_project()
         if not project:
             return
-        site = self.store.project_dir(project.slug) / "site"
-        if not (site / "index.html").is_file():
-            messagebox.showerror(DESKTOP_TITLE, "The local preview files are missing. Recreate the jukebox.")
-            return
-        webbrowser.open(self.preview_server.start(site))
+        self._open_project_preview(project)
 
     def _publish_selected(self) -> None:
         project = self._selected_project()

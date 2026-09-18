@@ -131,7 +131,8 @@ class FactoryTests(unittest.TestCase):
             self.assertIn("reel-actual-slotmachine-freesound-261346.mp3", script)
             self.assertIn("machine.dataset.videoOpen = 'true'", script)
             self.assertIn("await closeVideo()", script)
-            self.assertIn("sub_confirmation=1", script)
+            self.assertIn("shopDestination = String(config.customerConfig?.shopURL || '').trim()", script)
+            self.assertNotIn("sub_confirmation=1", script)
             self.assertIn("function startStoryTicker()", script)
             self.assertIn("storyTrack.style.setProperty('--story-start', `${start}px`)", script)
             self.assertIn("storyTrack.style.setProperty('--story-end', `${end}px`)", script)
@@ -170,6 +171,8 @@ class FactoryTests(unittest.TestCase):
             page = (destination / "index.html").read_text(encoding="utf-8")
             self.assertNotIn("VIDEO MUSIC MACHINE", page)
             self.assertIn("SHOP NOW", page)
+            self.assertIn('data-action="shop"', page)
+            self.assertNotIn('data-action="subscribe"', page)
             self.assertNotIn("OPEN<br>YOUTUBE", page)
             self.assertIn("crispy-bits-logo-cutout-v2.png", page)
             self.assertIn("data-content-description", page)
@@ -421,6 +424,8 @@ class FactoryTests(unittest.TestCase):
             self.assertNotIn("business_config", payload)
             self.assertEqual(payload["slug"], "legacy-business")
             self.assertEqual(payload["customerConfig"]["subscribeURL"], "https://www.youtube.com/channel/UClegacy?sub_confirmation=1")
+            self.assertIsNone(payload["customerConfig"]["shopURL"])
+            self.assertFalse(payload["customerConfig"]["shopEnabled"])
 
             def snapshot(root: Path) -> dict[str, bytes]:
                 return {

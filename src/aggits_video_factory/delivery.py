@@ -5,7 +5,7 @@ from typing import Any
 import requests
 
 from .config import DELIVERY_ENDPOINT
-from .models import Project
+from .models import Project, ProjectType
 
 
 class DeliveryError(RuntimeError):
@@ -13,6 +13,8 @@ class DeliveryError(RuntimeError):
 
 
 def request_delivery(project: Project, email: str, timeout: float = 30.0) -> dict[str, Any]:
+    if project.project_type is not ProjectType.BUSINESS:
+        raise DeliveryError("Music email delivery is not available in Milestone 4.")
     if not project.published_url or not project.publication_revision:
         raise DeliveryError("The jukebox must be published before its email can be sent.")
     payload = {

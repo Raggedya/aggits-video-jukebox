@@ -12,7 +12,7 @@ from typing import Any
 import requests
 
 from .config import GITHUB_REMOTE, PUBLIC_BASE_URL, PUBLIC_PATH
-from .models import Project, utc_now
+from .models import Project, ProjectType, utc_now
 from .store import ProjectStore, slugify
 
 
@@ -142,6 +142,8 @@ class Publisher:
         return workspace
 
     def publish(self, project: Project) -> tuple[str, str]:
+        if project.project_type is not ProjectType.BUSINESS:
+            raise PublishError("Music publishing is not available in Milestone 4.")
         workspace = self.ensure_workspace()
         public_root = workspace / "public" / PUBLIC_PATH
         public_root.mkdir(parents=True, exist_ok=True)
@@ -190,14 +192,18 @@ class Publisher:
         return _run([self.git, "rev-parse", "HEAD"], cwd=workspace)
 
     def _wait_for_publication(self, slug: str, revision: str, timeout: int = 240) -> None:
-        url = f"{PUBLIC_BASE_URL}/{slug}/machine.json?revision={revision}"
+        machine_url = f"{PUBLIC_BASE_URL}/{slug}/machine.json?revision={revision}"
+        qr_url = f"{PUBLIC_BASE_URL}/{slug}/qr-card.png?revision={revision}"
         deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:
             try:
-                response = requests.get(url, timeout=15, headers={"cache-control": "no-cache"})
-                if response.ok and response.json().get("slug") == slug:
+                machine_response = requests.get(machine_url, timeout=15, headers={"cache-control": "no-cache"})
+                machine_ready = machine_response.ok and machine_response.json().get("slug") == slug
+                qr_response = requests.get(qr_url, timeout=15, headers={"cache-control": "no-cache"}) if machine_ready else None
+                qr_ready = bool(qr_response and qr_response.ok and qr_response.content.startswith(b"\x89PNG\r\n\x1a\n"))
+                if machine_ready and qr_ready:
                     return
-            except (requests.RequestException, ValueError):
+            except (requests.RequestException, AttributeError, TypeError, ValueError):
                 pass
             time.sleep(5)
-        raise PublishError("GitHub accepted the publication, but the live Pages URL did not become ready within four minutes. The library can retry the email later.")
+        raise PublishError("GitHub accepted the publication, but the live machine and QR did not both become ready within four minutes. The library can retry the email later.")

@@ -11,7 +11,7 @@ from PIL import Image, ImageDraw, ImageEnhance, ImageFilter, ImageFont, ImageOps
 from qrcode.constants import ERROR_CORRECT_H
 
 from .config import BRAND_NAME, PUBLIC_BASE_URL, resource_path
-from .models import Project
+from .models import Project, ProjectType
 
 
 BRASS = "#b88a4f"
@@ -198,6 +198,8 @@ def create_social_card(project: Project, destination: Path) -> None:
 
 
 def build_project_site(project: Project, destination: Path) -> Path:
+    if project.project_type is not ProjectType.BUSINESS:
+        raise ValueError("Music machine generation is not available in Milestone 4.")
     destination.mkdir(parents=True, exist_ok=True)
     assets = destination / "assets"
     if assets.exists():
@@ -222,6 +224,7 @@ def build_project_site(project: Project, destination: Path) -> Path:
         template = template.replace(token, value)
     (destination / "index.html").write_text(template, encoding="utf-8")
 
+    shop_url = project.business_config.shop_url if project.business_config else None
     payload = {
         "schemaVersion": 2,
         "slug": project.slug,
@@ -242,6 +245,8 @@ def build_project_site(project: Project, destination: Path) -> Path:
             "customerStorySections": story_sections,
             "youtubeChannel": project.channel_url,
             "subscribeURL": f"https://www.youtube.com/channel/{project.channel_id}?sub_confirmation=1" if project.channel_id else project.channel_url,
+            "shopURL": shop_url,
+            "shopEnabled": bool(shop_url),
             "primaryCTA": "VIEW ON YOUTUBE",
         },
         "videos": [
