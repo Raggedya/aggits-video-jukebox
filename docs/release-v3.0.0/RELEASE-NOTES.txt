@@ -1,0 +1,38 @@
+CRISPY BITS DESKTOP v3.0.0
+================================
+
+NEW
+
+- One unified desktop application with real BUSINESS and MUSIC tabs.
+- Music Primary Call to Action with Spotify, Bandcamp, music, merchandise,
+  tickets, Apple Music, official website and custom destinations.
+- Up to three supplementary public information URLs per project.
+- Genuine Business Shop URL behaviour, with a safe disabled state when no
+  Shop URL is configured.
+- One shared persistent Library for Business and Music projects.
+- Authenticated, recipient-aware and idempotent delivery infrastructure.
+- Recoverable publication and unpublication verification states.
+- Persistent, bounded and redacted diagnostic logging.
+
+PRESERVED
+
+- Existing Crispy Bits Business projects and stable public URLs.
+- Proven YouTube analysis, review and video-selection workflow.
+- Existing deployed reel, lever, video, story ticker and machine appearance.
+- Existing QR architecture and GitHub Pages namespace.
+- Great Alpine Caravans production deployment.
+
+BACKWARD COMPATIBILITY
+
+Crispy Bits Desktop v3.0.0 reads existing v2.3.0 Business projects and
+treats them as Business projects. Existing deployed URLs are preserved and
+projects do not need to be republished merely because the new desktop is run.
+
+After a project has deliberately been saved or upgraded by v3.0.0, use
+Crispy Bits Desktop v3.0.0 for later editing unless backward editing with
+v2.3.0 has specifically been verified.
+
+CODE SIGNING
+
+This release contains embedded Windows product and version metadata but is
+unsigned because no trusted code-signing certificate is configured.

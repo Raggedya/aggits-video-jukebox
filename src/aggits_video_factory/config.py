@@ -4,9 +4,10 @@ import os
 import sys
 from pathlib import Path
 
+from .version import APP_VERSION, PRODUCT_NAME
 
-APP_NAME = "CRISPY BITS Video Jukebox Factory"
-APP_VERSION = "2.3.0"
+
+APP_NAME = PRODUCT_NAME
 BRAND_NAME = "CRISPY BITS"
 GITHUB_OWNER = "Raggedya"
 GITHUB_REPOSITORY = "aggits-video-jukebox"

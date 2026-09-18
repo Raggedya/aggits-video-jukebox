@@ -1,15 +1,16 @@
-# CRISPY BITS Video Jukebox Factory
+# CRISPY BITS DESKTOP
 
-A standalone Windows desktop application that turns a public YouTube channel, up to 15 individually chosen videos, or both into a CRISPY BITS video-first discovery experience. Its text-based cylindrical selector reuses the proven Music Machine single-reel engine, followed by a cinematic 16:9 YouTube stage, customer information and customer-themed environment.
+A standalone Windows desktop application for creating and managing CRISPY BITS BUSINESS and CRISPY BITS MUSIC projects. Both workflows share the proven YouTube analysis, review, machine generation, Library, publication, QR, delivery and recovery infrastructure.
 
 ## Factory workflow
 
-1. Open **Settings** once and save a YouTube Data API v3 key.
-2. Enter a jukebox title and ticker text (up to 1,000 characters), then supply a channel URL, up to 15 individual video URLs, or both.
-3. Press **Analyse + Review Videos**. Explicit videos are included first; duplicates are removed and the channel fills the remaining places up to 30 public, embeddable videos.
-4. Review the resolved list with thumbnails and default-on inclusion checkboxes, then build using only the videos you keep checked.
-5. Preview privately, then publish or unpublish from the Library.
-6. After a successful publication, the separate delivery Worker emails the live link and titled QR card.
+1. Open **Settings** once and save a YouTube Data API v3 key, Delivery Email and provisioned delivery credential.
+2. Choose **BUSINESS** or **MUSIC**, enter a title and Bio / Story, then supply a channel URL, up to 15 individual video URLs, or both.
+3. Business projects may configure a Shop URL. Music projects configure one Primary Call to Action and Destination URL.
+4. Press **Analyse + Review Videos**. Explicit videos are included first; duplicates are removed and the channel fills the remaining places up to 30 public, embeddable videos.
+5. Review the resolved list, then build using only the videos you keep checked.
+6. Preview privately, then publish or unpublish from the Library.
+7. After a verified publication, the separate delivery Worker emails the live link and titled QR card.
 
 Published jukeboxes can be reopened with **Edit Videos**. Reviewed changes remain private and the existing live version stays untouched until **Update + Republish** is pressed.
 
@@ -25,7 +26,15 @@ $env:PYTHONPATH = "$PWD\src"
 .\.venv\Scripts\python.exe desktop\video_jukebox_factory.py
 ```
 
-Build the standalone EXE with `desktop\build.ps1`.
+Build a development EXE with `desktop\build.ps1`.
+
+Create the clean, tested, versioned release candidate with:
+
+```powershell
+.\desktop\release-build.ps1
+```
+
+The release command uses Python 3.12.10, installs the exact versions in `requirements-release.txt`, runs Python and Worker tests, validates JavaScript and Python syntax, embeds Windows version metadata, smoke-tests the packaged executable, and creates the release manifest.
 
 ## Separate services
 

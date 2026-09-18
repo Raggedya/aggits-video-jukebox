@@ -19,7 +19,7 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from aggits_video_factory.config import MAX_TICKER_LENGTH, MAX_VIDEOS, resource_path
+from aggits_video_factory.config import APP_NAME, APP_VERSION, MAX_TICKER_LENGTH, MAX_VIDEOS, resource_path
 from aggits_video_factory.business_workflow import assemble_reviewed_project
 from aggits_video_factory.delivery import (
     DeliveryError,
@@ -59,7 +59,7 @@ DEEP_BRASS = "#343b49"
 ACTIVE = "#315a9c"
 SUCCESS = "#7fc6a4"
 ERROR = "#ef9292"
-DESKTOP_TITLE = "CRISPY BITS DESKTOP"
+DESKTOP_TITLE = APP_NAME
 
 
 class ProjectForm(tk.Frame):
@@ -1072,7 +1072,7 @@ def smoke_test() -> None:
     missing = [str(path) for path in required if not path.is_file()]
     if missing:
         raise RuntimeError(f"Missing packaged resources: {missing}")
-    print("Video Jukebox Factory resources OK")
+    print(f"{APP_NAME} v{APP_VERSION} resources OK")
 
 
 if __name__ == "__main__":

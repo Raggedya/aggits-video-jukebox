@@ -12,3 +12,5 @@ __pycache__/
 .wrangler/
 .dev.vars
 tmp/
+.release-build/
+release-artifacts/

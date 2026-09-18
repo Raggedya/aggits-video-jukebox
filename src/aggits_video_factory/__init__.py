@@ -1,3 +1,5 @@
-"""Standalone CRISPY BITS Video Jukebox Factory."""
+"""CRISPY BITS DESKTOP application package."""
 
-__version__ = "2.3.0"
+from .version import APP_VERSION
+
+__version__ = APP_VERSION

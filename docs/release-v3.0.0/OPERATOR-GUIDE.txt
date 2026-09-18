@@ -1,0 +1,41 @@
+CRISPY BITS DESKTOP — OPERATOR QUICK GUIDE
+===========================================
+
+BUSINESS
+
+1. Open the BUSINESS tab.
+2. Enter the Title and YouTube Channel URL.
+3. Add up to three optional Additional URLs.
+4. Enter an optional Shop URL.
+5. Enter Bio / Story Information.
+6. Expand Individual YouTube Videos if specific videos are required.
+7. Select CREATE CRISPY BITS to analyse the source.
+8. Review and include the required videos, then build.
+9. Check the local preview.
+10. Publish from the Library when ready.
+11. Use Library actions to Edit, Update + Republish, Unpublish or reopen.
+
+MUSIC
+
+Follow the same general workflow in the MUSIC tab. Instead of Shop URL,
+choose one Primary Call to Action and enter its Destination URL. Selecting
+Custom also requires a Button Label.
+
+PUBLISH RECOVERY
+
+If publication reports VERIFICATION PENDING, do not publish again. Select
+CHECK LIVE STATUS to reconcile the push that already occurred. This avoids
+unnecessary duplicate publication attempts.
+
+DELIVERY
+
+Delivery Email in Settings is the actual address used for new authenticated
+Crispy Bits deliveries. If delivery fails, resolve the indicated issue and
+use RETRY EMAIL. Exact retries are designed to avoid duplicate email.
+
+ROLLBACK NOTE
+
+The legacy Crispy Bits Business v2.3.0 executable remains available as the
+known-good rollback application. After deliberately saving a project with
+v3.0.0, continue editing that project with v3.0.0 unless backward editing has
+specifically been verified.
