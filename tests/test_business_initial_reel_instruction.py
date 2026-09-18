@@ -30,14 +30,12 @@ class BusinessInitialReelInstructionTests(unittest.TestCase):
         self.assertTrue(BUSINESS_INSTRUCTION.endswith("→"))
         self.assertNotIn("←", BUSINESS_INSTRUCTION)
 
-    def test_music_initial_reel_instruction_remains_unchanged(self):
+    def test_music_initial_reel_uses_the_same_right_pointing_lever_instruction(self):
         page = generated_page(music_project())
 
-        self.assertIn(f"<strong>{MUSIC_INSTRUCTION}</strong>", page)
-        self.assertNotIn(BUSINESS_INSTRUCTION, page)
-        self.assertIn("const initialReelInstruction = activeProjectType === 'business'", SCRIPT)
-        self.assertIn("? 'PULL THE LEVER  ──────→'", SCRIPT)
-        self.assertIn(": 'PULL TO DISCOVER';", SCRIPT)
+        self.assertIn(f"<strong>{BUSINESS_INSTRUCTION}</strong>", page)
+        self.assertNotIn(f"<strong>{MUSIC_INSTRUCTION}</strong>", page)
+        self.assertIn("const initialReelInstruction = 'PULL THE LEVER  ──────→';", SCRIPT)
 
     def test_landing_re_spin_and_shop_plaque_paths_do_not_use_initial_instruction(self):
         spin_block = SCRIPT.split("  async function spin() {", 1)[1].split("  function resetLever", 1)[0]

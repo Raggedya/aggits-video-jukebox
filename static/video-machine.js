@@ -678,9 +678,7 @@ if (machine) {
       machineIdentity = String(config.title || config.channelTitle || '').trim();
       machineDescription = String(config.customerConfig?.customerStory || config.tickerText || '').trim();
       activeProjectType = String(config.projectType || 'business').trim().toLowerCase();
-      const initialReelInstruction = activeProjectType === 'business'
-        ? 'PULL THE LEVER  ──────→'
-        : 'PULL TO DISCOVER';
+      const initialReelInstruction = 'PULL THE LEVER  ──────→';
       const musicPrimaryCta = activeProjectType === 'music' ? config.musicConfig?.primaryCTA : null;
       shopDestination = String(config.customerConfig?.shopURL || '').trim();
       primaryActionDestination = activeProjectType === 'music'
@@ -694,9 +692,7 @@ if (machine) {
       primaryActionButton.disabled = true;
       primaryActionButton.setAttribute('aria-disabled', 'true');
       primaryActionButton.setAttribute('aria-label', primaryActionDestination ? primaryActionLabel : `${primaryActionLabel || 'Primary action'} unavailable`);
-      masterStorySections = activeProjectType === 'music' && Array.isArray(config.customerConfig?.customerStorySections)
-        ? config.customerConfig.customerStorySections.filter(beat => beat?.heading && beat?.text)
-        : [];
+      masterStorySections = [];
       channelThumbnail = String(config.channelThumbnail || '').trim();
       catalogue = Array.isArray(config.videos) ? config.videos.filter(video => video?.videoId) : [];
       if (!catalogue.length) throw new Error('No videos');

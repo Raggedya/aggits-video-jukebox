@@ -233,13 +233,9 @@ class MusicWorkflowTests(unittest.TestCase):
             self.assertNotIn("https://example.com/preorder", rebuilt)
             self.assertIn("<b>GET TICKETS</b>", page)
 
-    def test_music_story_headings_are_type_appropriate_and_business_has_no_generated_sections(self):
+    def test_neither_project_type_generates_editorial_story_sections(self):
         music_text = "The band formed in 2018. Their sound developed on stage. The album was released in 2025."
-        music_sections = _story_sections(music_text, "The Fakeaways", ProjectType.MUSIC)
-        music_headings = {item["heading"] for item in music_sections}
-        self.assertNotIn("CUSTOM BUILDS", music_headings)
-        self.assertNotIn("CUSTOMER FIRST", music_headings)
-        self.assertTrue(music_headings & {"THE BAND", "THE MUSIC", "ON STAGE", "THE RELEASES", "2018", "2025"})
+        self.assertEqual(_story_sections(music_text, "The Fakeaways", ProjectType.MUSIC), [])
         business_text = "We create custom builds. The customer comes first."
         self.assertEqual(_story_sections(business_text, "Example", ProjectType.BUSINESS), [])
         self.assertEqual(_story_sections(business_text, "Example"), [])
@@ -433,7 +429,7 @@ class MusicWorkflowTests(unittest.TestCase):
                 self.assertIn('data-action="shop"', page.text)
                 self.assertIn('data-action="play"', page.text)
                 self.assertIn('data-action="spin-again"', page.text)
-                self.assertIn("THE STORY SO FAR", page.text)
+                self.assertNotIn("THE STORY SO FAR", page.text)
                 self.assertEqual(config["musicConfig"]["primaryCTA"]["destinationURL"], cta.destination_url)
                 self.assertIn("openPrimaryAction", script)
                 self.assertIn("spinSingleReel", script)

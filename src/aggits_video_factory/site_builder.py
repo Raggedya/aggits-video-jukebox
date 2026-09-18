@@ -25,39 +25,8 @@ def _story_sections(
     customer_name: str,
     project_type: ProjectType = ProjectType.BUSINESS,
 ) -> list[dict[str, str]]:
-    """Turn approved Music copy into readable story beats without adding facts."""
-    if project_type is ProjectType.BUSINESS:
-        return []
-    cleaned = re.sub(r"\*{2,}[^*]+\*{2,}", " ", source or "")
-    cleaned = re.sub(r"(\b(?:19|20)\d{2})\s+where\s+", r"\1. ", cleaned, flags=re.IGNORECASE)
-    cleaned = re.sub(r"\s+I was promoted\b", ". I was promoted", cleaned, flags=re.IGNORECASE)
-    cleaned = cleaned.replace("; ", ". ")
-    sentences = [
-        sentence.strip()
-        for sentence in re.split(r"(?<=[.!?])\s+|\n+", re.sub(r"\s+", " ", cleaned).strip())
-        if sentence.strip()
-    ]
-    music_headings = ["THE BEGINNING", "THE SOUND", "THE STORY", "THE MUSIC", "THE JOURNEY", "THE NEXT CHAPTER"]
-    sections: list[dict[str, str]] = []
-    for index, sentence in enumerate(sentences[:10]):
-        years = re.findall(r"\b(?:19|20)\d{2}\b", sentence)
-        lowered = sentence.casefold()
-        if years:
-            heading = years[-1]
-        elif "album" in lowered or "release" in lowered:
-            heading = "THE RELEASES"
-        elif "live" in lowered or "stage" in lowered or "tour" in lowered:
-            heading = "ON STAGE"
-        elif "band" in lowered or "artist" in lowered:
-            heading = "THE BAND"
-        elif "music" in lowered or "song" in lowered or "sound" in lowered:
-            heading = "THE MUSIC"
-        else:
-            heading = music_headings[min(index, len(music_headings) - 1)]
-        sections.append({"heading": heading, "text": sentence})
-    if not sections:
-        sections.append({"heading": customer_name.upper(), "text": "Pull the lever and discover the story."})
-    return sections
+    """No generated editorial sections: both project types render their stored Bio verbatim."""
+    return []
 
 
 def _reel_short_title(source: str) -> str:
@@ -218,9 +187,9 @@ def build_project_site(project: Project, destination: Path) -> Path:
     description = f"Pull the CRISPY BITS reel and discover one of {len(project.videos)} videos from {project.title}."
     story_sections = _story_sections(project.ticker_text, project.title, project.project_type)
     primary_action_label = music_cta.display_label if music_cta else "SHOP NOW"
-    initial_reel_instruction = "PULL THE LEVER  ──────→" if project.project_type is ProjectType.BUSINESS else "PULL TO DISCOVER"
-    story_header_markup = "" if project.project_type is ProjectType.BUSINESS else "<header>THE STORY SO FAR</header>"
-    story_aria_label = project.title if project.project_type is ProjectType.BUSINESS else "The story so far"
+    initial_reel_instruction = "PULL THE LEVER  ──────→"
+    story_header_markup = ""
+    story_aria_label = project.title
     replacements = {
         "{{META_DESCRIPTION}}": html.escape(description, quote=True),
         "{{CANONICAL_URL}}": html.escape(canonical, quote=True),

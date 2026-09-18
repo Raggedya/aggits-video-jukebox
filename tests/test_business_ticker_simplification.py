@@ -71,13 +71,23 @@ class BusinessTickerSimplificationTests(unittest.TestCase):
         self.assertNotIn(project.additional_urls[0], page)
         self.assertNotIn(project.additional_urls[0], config["customerConfig"]["customerStory"])
 
-    def test_music_headings_and_selected_video_story_integration_remain_unchanged(self):
+    def test_music_uses_one_title_and_original_bio_without_generated_headings(self):
         project = music_project()
+        project.title = "THE FAKEAWAYS"
+        project.ticker_text = "The band formed together.\n\nTheir original music developed on stage."
         page, config = generated_site(project)
+        story_markup = page.split('<section class="customer-story"', 1)[1].split("</section>", 1)[0]
 
-        self.assertIn("<header>THE STORY SO FAR</header>", page)
-        self.assertTrue(config["customerConfig"]["customerStorySections"])
-        self.assertIn("activeProjectType === 'music' && Array.isArray", SCRIPT)
+        self.assertEqual(story_markup.count("<h3>THE FAKEAWAYS</h3>"), 1)
+        self.assertIn(project.ticker_text, story_markup)
+        self.assertEqual(config["customerConfig"]["customerStory"], project.ticker_text)
+        self.assertEqual(config["customerConfig"]["customerStorySections"], [])
+        self.assertNotIn("THE STORY SO FAR", story_markup)
+        self.assertNotIn("THE BEGINNING", story_markup)
+        self.assertNotIn("THE MUSIC", story_markup)
+        self.assertIn("masterStorySections = [];", SCRIPT)
+
+    def test_selected_video_story_integration_and_scrolling_remain_unchanged(self):
         self.assertIn("appendStoryText(section, 'h4', titleOnly(video));", SCRIPT)
         self.assertIn("appendStoryText(section, 'p', video.storyText", SCRIPT)
         self.assertIn("storyTrack.classList.add('is-scrolling');", SCRIPT)
