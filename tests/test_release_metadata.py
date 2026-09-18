@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import importlib.util
 import unittest
+from pathlib import Path
+import tkinter as tk
 
 import aggits_video_factory
 from aggits_video_factory.config import APP_NAME, APP_VERSION
@@ -26,6 +29,38 @@ class ReleaseMetadataTests(unittest.TestCase):
         from aggits_video_factory.config import application_data_root
 
         self.assertEqual(application_data_root().parts[-2:], ("CRISPY BITS", "Video Jukebox Factory"))
+
+    def test_library_actions_fit_the_supported_minimum_width(self):
+        desktop_path = Path(__file__).parents[1] / "desktop" / "video_jukebox_factory.py"
+        spec = importlib.util.spec_from_file_location("release_desktop", desktop_path)
+        self.assertIsNotNone(spec)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+
+        class Owner:
+            _edit_selected = _preview_selected = _publish_selected = lambda self: None
+            _unpublish_selected = _open_live = _retry_email = lambda self: None
+            _check_live_status = lambda self: None
+
+            def _button(self, parent, text, command, *, primary=False, compact=False):
+                return module.Factory._button(self, parent, text, command, primary=primary, compact=compact)
+
+            def _update_actions(self):
+                return None
+
+        root = tk.Tk()
+        root.withdraw()
+        try:
+            panel = module.LibraryPanel(root, module.ProjectType.BUSINESS, Owner())
+            panel.pack()
+            root.update_idletasks()
+            minimum_inner_width = 520 - 36
+            buttons = list(panel.buttons.values())
+            for row in (buttons[:4], buttons[4:]):
+                requested_width = sum(button.winfo_reqwidth() + 7 for button in row)
+                self.assertLessEqual(requested_width, minimum_inner_width)
+        finally:
+            root.destroy()
 
 
 if __name__ == "__main__":

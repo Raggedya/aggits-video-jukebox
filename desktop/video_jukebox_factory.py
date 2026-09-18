@@ -324,9 +324,14 @@ class LibraryPanel(tk.Frame):
             ("email", "RETRY EMAIL", owner._retry_email),
             ("verify", "CHECK LIVE STATUS", owner._check_live_status),
         ]
-        for key, label, callback in action_specs:
+        for column in range(4):
+            actions.grid_columnconfigure(column, weight=1)
+        for index, (key, label, callback) in enumerate(action_specs):
             button = owner._button(actions, label, callback, compact=True, primary=key == "publish")
-            button.pack(side="left", padx=(0, 7))
+            # Wrap seven actions across two restrained rows so the recovery
+            # action remains fully visible at the supported 1120 x 720 size.
+            button.configure(font=("Segoe UI Semibold", 8), padx=6)
+            button.grid(row=index // 4, column=index % 4, sticky="ew", padx=(0, 7), pady=(0, 7 if index < 4 else 0))
             self.buttons[key] = button
         self.note = tk.Label(self, text="Select a project to edit it.", bg=PANEL, fg=MUTED, anchor="w", font=("Segoe UI", 8))
         self.note.pack(fill="x", padx=18, pady=(0, 14))
