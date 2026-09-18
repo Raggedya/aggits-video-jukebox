@@ -34,3 +34,24 @@ Build the standalone EXE with `desktop\build.ps1`.
 - D1: `aggits-video-jukebox-production`
 
 The Worker requires the `RESEND_API_KEY` secret and a verified `REPORT_FROM_EMAIL` sender before automatic email delivery can succeed.
+
+## Delivery hardening (Milestone 6)
+
+Recipient-selectable delivery uses HMAC-SHA256 authentication. The canonical signed bytes are:
+
+```text
+{unix_timestamp}\n{nonce}\nPOST\n/api/deliveries\n{exact UTF-8 request body bytes}
+```
+
+The desktop sends the hexadecimal signature in `X-Crispy-Signature`, with `X-Crispy-Timestamp` and `X-Crispy-Nonce`. The Worker allows a five-minute clock window and records nonces in D1 for replay protection. Delivery identity is `(slug, publication revision, normalized recipient)`; a deterministic SHA-256 digest of that tuple is supplied to Resend as its idempotency key.
+
+Before production use:
+
+1. Generate one strong random shared secret outside source control.
+2. Configure it on the Worker as the Cloudflare secret `DELIVERY_HMAC_SECRET`.
+3. Apply Worker D1 migration `0002_delivery_security.sql`.
+4. Store the same secret on the authorised Windows desktop with `python tools/provision_delivery_secret.py` (DPAPI), or provision `CRISPY_BITS_DELIVERY_SECRET` securely in its launch environment.
+5. Deploy the reviewed Worker only after explicit production approval.
+6. `ALLOW_LEGACY_DELIVERY=true` is retained temporarily so the approved v2.3.0 rollback application can still deliver to fixed `OWNER_EMAIL`. This compatibility path ignores caller-selected recipients and should be removed after v2.3.0 retirement; set it to `false` then. Authenticated current-desktop requests always use the signed recipient.
+
+Persistent desktop diagnostics are written under `%LOCALAPPDATA%\CRISPY BITS\Video Jukebox Factory\logs\` with bounded rotation. Publication pushes that outlive Pages verification are retained as recoverable `Verification Pending` operations and can be reconciled with **Check Live Status** without another Git push.

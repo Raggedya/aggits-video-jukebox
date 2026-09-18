@@ -8,15 +8,27 @@ import time
 from datetime import datetime
 from pathlib import Path
 from typing import Any
+from uuid import uuid4
 
 import requests
 
 from .config import GITHUB_REMOTE, PUBLIC_BASE_URL, PUBLIC_PATH
-from .models import Project, ProjectType, utc_now
+from .diagnostics import get_logger
+from .models import Project, ProjectType, PublicationOperation, utc_now
 from .store import ProjectStore, slugify
 
 
 class PublishError(RuntimeError):
+    pass
+
+
+class PublicationVerificationPending(PublishError):
+    def __init__(self, project: Project, message: str) -> None:
+        super().__init__(message)
+        self.project = project
+
+
+class UnpublishVerificationPending(PublicationVerificationPending):
     pass
 
 
@@ -113,6 +125,31 @@ class Publisher:
     def __init__(self, store: ProjectStore) -> None:
         self.store = store
         self.git = _executable("git")
+        self.logger = get_logger()
+
+    def _start_operation(self, project: Project, operation_type: str) -> PublicationOperation:
+        operation = PublicationOperation(
+            operation_id=str(uuid4()),
+            operation_type=operation_type,
+            project_id=project.id,
+            slug=project.slug,
+            target_revision=None,
+            expected_url=f"{PUBLIC_BASE_URL}/{project.slug}/",
+            started_at=utc_now(),
+        )
+        project.publication_operation = operation
+        self.store.save_project(project)
+        self.logger.info("Publication operation started id=%s type=%s slug=%s", operation.operation_id, operation_type, project.slug)
+        return operation
+
+    def _fail_operation(self, project: Project, error: Exception, status: str) -> None:
+        operation = project.publication_operation
+        if operation:
+            operation.verification_status = "failed"
+            operation.last_error = str(error)
+        project.status = status
+        self.store.save_project(project)
+        self.logger.error("Publication operation failed type=%s slug=%s error=%s", operation.operation_type if operation else "unknown", project.slug, error)
 
     def _archive_workspace(self, workspace: Path) -> None:
         resolved = workspace.resolve()
@@ -148,68 +185,178 @@ class Publisher:
 
     def publish(self, project: Project) -> tuple[str, str]:
         _validate_project_type(project)
-        workspace = self.ensure_workspace()
-        public_root = workspace / "public" / PUBLIC_PATH
-        public_root.mkdir(parents=True, exist_ok=True)
-        target = _valid_public_machine_path(public_root, project.slug)
-        source = self.store.project_dir(project.slug) / "site"
-        if not source.is_dir():
-            raise PublishError("The generated jukebox files are missing. Recreate the jukebox and try again.")
-        if target.exists():
-            shutil.rmtree(target)
-        shutil.copytree(source, target)
-
-        library = [item for item in _load_library(workspace) if str(item.get("slug")) != project.slug]
-        library.append({
-            "slug": project.slug,
-            "title": project.title,
-            "projectType": project.project_type.value,
-            "channelId": project.channel_id,
-            "channelTitle": project.channel_title,
-            "videoCount": len(project.videos),
-            "publishedAt": utc_now(),
-            "url": f"{PUBLIC_BASE_URL}/{project.slug}/",
-        })
-        _write_library(workspace, library)
-        _run([self.git, "add", "--", f"public/{PUBLIC_PATH}/{project.slug}", f"public/{PUBLIC_PATH}/library.json", f"public/{PUBLIC_PATH}/index.html"], cwd=workspace)
-        staged = _run([self.git, "diff", "--cached", "--name-only"], cwd=workspace)
-        if staged:
-            _run([self.git, "commit", "-m", f"Publish {project.title} video jukebox"], cwd=workspace)
-            _run([self.git, "push", "origin", "main"], cwd=workspace, timeout=240)
-        revision = _run([self.git, "rev-parse", "HEAD"], cwd=workspace)
         public_url = f"{PUBLIC_BASE_URL}/{project.slug}/"
-        self._wait_for_publication(project.slug, revision)
+        operation = self._start_operation(project, "publish")
+        try:
+            workspace = self.ensure_workspace()
+            public_root = workspace / "public" / PUBLIC_PATH
+            public_root.mkdir(parents=True, exist_ok=True)
+            target = _valid_public_machine_path(public_root, project.slug)
+            source = self.store.project_dir(project.slug) / "site"
+            if not source.is_dir():
+                raise PublishError("The generated jukebox files are missing. Recreate the jukebox and try again.")
+            if target.exists():
+                shutil.rmtree(target)
+            shutil.copytree(source, target)
+
+            library = [item for item in _load_library(workspace) if str(item.get("slug")) != project.slug]
+            library.append({
+                "slug": project.slug,
+                "title": project.title,
+                "projectType": project.project_type.value,
+                "channelId": project.channel_id,
+                "channelTitle": project.channel_title,
+                "videoCount": len(project.videos),
+                "publishedAt": utc_now(),
+                "url": public_url,
+            })
+            _write_library(workspace, library)
+            _run([self.git, "add", "--", f"public/{PUBLIC_PATH}/{project.slug}", f"public/{PUBLIC_PATH}/library.json", f"public/{PUBLIC_PATH}/index.html"], cwd=workspace)
+            staged = _run([self.git, "diff", "--cached", "--name-only"], cwd=workspace)
+            if staged:
+                _run([self.git, "commit", "-m", f"Publish {project.title} video jukebox"], cwd=workspace)
+                _run([self.git, "push", "origin", "main"], cwd=workspace, timeout=240)
+            revision = _run([self.git, "rev-parse", "HEAD"], cwd=workspace)
+        except Exception as error:
+            self._fail_operation(project, error, "publish_failed")
+            raise
+        operation.target_revision = revision
+        operation.git_confirmed_at = utc_now()
+        operation.verification_status = "pending"
+        project.published_url = public_url
+        project.publication_revision = revision
+        project.status = "verification_pending"
+        if not project.delivery_record or project.delivery_record.revision != revision:
+            project.delivery_status = "not_requested"
+        self.store.save_project(project)
+        self.logger.info("Git push confirmed slug=%s revision=%s", project.slug, revision)
+        try:
+            self._wait_for_publication(project.slug, revision)
+        except PublishError as error:
+            operation.last_error = str(error)
+            project.status = "verification_pending"
+            self.store.save_project(project)
+            self.logger.warning("Pages verification pending slug=%s revision=%s", project.slug, revision)
+            raise PublicationVerificationPending(
+                project,
+                "The update was pushed successfully, but the live site could not yet be verified. Use CHECK LIVE STATUS before publishing again.",
+            ) from error
+        operation.verification_status = "verified"
+        operation.verified_at = utc_now()
+        operation.last_error = None
+        self.store.save_project(project)
         return public_url, revision
 
     def unpublish(self, project: Project) -> str:
         _validate_project_type(project)
-        workspace = self.ensure_workspace()
-        public_root = workspace / "public" / PUBLIC_PATH
-        target = _valid_public_machine_path(public_root, project.slug)
-        if target.exists():
-            shutil.rmtree(target)
-        library = [item for item in _load_library(workspace) if str(item.get("slug")) != project.slug]
-        _write_library(workspace, library)
-        _run([self.git, "add", "-A", "--", f"public/{PUBLIC_PATH}/{project.slug}", f"public/{PUBLIC_PATH}/library.json", f"public/{PUBLIC_PATH}/index.html"], cwd=workspace)
-        staged = _run([self.git, "diff", "--cached", "--name-only"], cwd=workspace)
-        if staged:
-            _run([self.git, "commit", "-m", f"Unpublish {project.title} video jukebox"], cwd=workspace)
-            _run([self.git, "push", "origin", "main"], cwd=workspace, timeout=240)
-        return _run([self.git, "rev-parse", "HEAD"], cwd=workspace)
+        operation = self._start_operation(project, "unpublish")
+        try:
+            workspace = self.ensure_workspace()
+            public_root = workspace / "public" / PUBLIC_PATH
+            target = _valid_public_machine_path(public_root, project.slug)
+            if target.exists():
+                shutil.rmtree(target)
+            library = [item for item in _load_library(workspace) if str(item.get("slug")) != project.slug]
+            _write_library(workspace, library)
+            _run([self.git, "add", "-A", "--", f"public/{PUBLIC_PATH}/{project.slug}", f"public/{PUBLIC_PATH}/library.json", f"public/{PUBLIC_PATH}/index.html"], cwd=workspace)
+            staged = _run([self.git, "diff", "--cached", "--name-only"], cwd=workspace)
+            if staged:
+                _run([self.git, "commit", "-m", f"Unpublish {project.title} video jukebox"], cwd=workspace)
+                _run([self.git, "push", "origin", "main"], cwd=workspace, timeout=240)
+            revision = _run([self.git, "rev-parse", "HEAD"], cwd=workspace)
+        except Exception as error:
+            self._fail_operation(project, error, "unpublish_failed")
+            raise
+        operation.target_revision = revision
+        operation.git_confirmed_at = utc_now()
+        operation.verification_status = "pending"
+        project.status = "unpublish_verification_pending"
+        self.store.save_project(project)
+        self.logger.info("Unpublish push confirmed slug=%s revision=%s", project.slug, revision)
+        try:
+            self._wait_for_unpublication(project.slug)
+        except PublishError as error:
+            operation.last_error = str(error)
+            self.store.save_project(project)
+            self.logger.warning("Unpublish verification pending slug=%s revision=%s", project.slug, revision)
+            raise UnpublishVerificationPending(
+                project,
+                "The removal was pushed successfully, but the live site could not yet be confirmed absent. Use CHECK LIVE STATUS before trying again.",
+            ) from error
+        operation.verification_status = "verified"
+        operation.verified_at = utc_now()
+        operation.last_error = None
+        self.store.save_project(project)
+        return revision
+
+    def reconcile(self, project: Project) -> str:
+        operation = project.publication_operation
+        if not operation or operation.verification_status != "pending":
+            raise PublishError("This project has no publication operation waiting for verification.")
+        if operation.operation_type == "publish":
+            if not self._publication_ready(project.slug, operation.target_revision or ""):
+                operation.last_error = "The live machine or QR is not ready yet."
+                self.store.save_project(project)
+                raise PublicationVerificationPending(project, "The live machine is still not verified. No new publish was attempted.")
+            operation.verification_status = "verified"
+            operation.verified_at = utc_now()
+            operation.last_error = None
+            project.status = "published"
+            project.published_url = operation.expected_url
+            project.publication_revision = operation.target_revision
+            project.published_at = project.published_at or utc_now()
+            self.store.save_project(project)
+            self.logger.info("Publication reconciled slug=%s revision=%s", project.slug, operation.target_revision)
+            return "published"
+        if operation.operation_type == "unpublish":
+            if not self._unpublication_ready(project.slug):
+                operation.last_error = "The public machine is still reachable."
+                self.store.save_project(project)
+                raise UnpublishVerificationPending(project, "The public machine is still reachable. No new unpublish was attempted.")
+            operation.verification_status = "verified"
+            operation.verified_at = utc_now()
+            operation.last_error = None
+            project.status = "unpublished"
+            project.published_url = None
+            project.published_at = None
+            project.publication_revision = None
+            project.delivery_status = "not_requested"
+            self.store.save_project(project)
+            self.logger.info("Unpublish reconciled slug=%s", project.slug)
+            return "unpublished"
+        raise PublishError("The pending publication operation type is not supported.")
 
     def _wait_for_publication(self, slug: str, revision: str, timeout: int = 240) -> None:
-        machine_url = f"{PUBLIC_BASE_URL}/{slug}/machine.json?revision={revision}"
-        qr_url = f"{PUBLIC_BASE_URL}/{slug}/qr-card.png?revision={revision}"
         deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:
-            try:
-                machine_response = requests.get(machine_url, timeout=15, headers={"cache-control": "no-cache"})
-                machine_ready = machine_response.ok and machine_response.json().get("slug") == slug
-                qr_response = requests.get(qr_url, timeout=15, headers={"cache-control": "no-cache"}) if machine_ready else None
-                qr_ready = bool(qr_response and qr_response.ok and qr_response.content.startswith(b"\x89PNG\r\n\x1a\n"))
-                if machine_ready and qr_ready:
-                    return
-            except (requests.RequestException, AttributeError, TypeError, ValueError):
-                pass
+            if self._publication_ready(slug, revision):
+                return
             time.sleep(5)
-        raise PublishError("GitHub accepted the publication, but the live machine and QR did not both become ready within four minutes. The library can retry the email later.")
+        raise PublishError("GitHub accepted the publication, but the live machine and QR did not both become ready within four minutes.")
+
+    def _wait_for_unpublication(self, slug: str, timeout: int = 240) -> None:
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            if self._unpublication_ready(slug):
+                return
+            time.sleep(5)
+        raise PublishError("GitHub accepted the removal, but the public machine still could not be confirmed absent within four minutes.")
+
+    def _publication_ready(self, slug: str, revision: str) -> bool:
+        machine_url = f"{PUBLIC_BASE_URL}/{slug}/machine.json?revision={revision}"
+        qr_url = f"{PUBLIC_BASE_URL}/{slug}/qr-card.png?revision={revision}"
+        try:
+            machine_response = requests.get(machine_url, timeout=15, headers={"cache-control": "no-cache"})
+            machine_ready = machine_response.ok and machine_response.json().get("slug") == slug
+            qr_response = requests.get(qr_url, timeout=15, headers={"cache-control": "no-cache"}) if machine_ready else None
+            return bool(qr_response and qr_response.ok and qr_response.content.startswith(b"\x89PNG\r\n\x1a\n"))
+        except (requests.RequestException, AttributeError, TypeError, ValueError):
+            return False
+
+    def _unpublication_ready(self, slug: str) -> bool:
+        machine_url = f"{PUBLIC_BASE_URL}/{slug}/machine.json?verification={int(time.time())}"
+        try:
+            response = requests.get(machine_url, timeout=15, headers={"cache-control": "no-cache"})
+            return response.status_code in {404, 410}
+        except requests.RequestException:
+            return False

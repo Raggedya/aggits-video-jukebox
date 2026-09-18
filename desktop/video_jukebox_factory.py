@@ -21,7 +21,15 @@ if str(SRC) not in sys.path:
 
 from aggits_video_factory.config import MAX_TICKER_LENGTH, MAX_VIDEOS, resource_path
 from aggits_video_factory.business_workflow import assemble_reviewed_project
-from aggits_video_factory.delivery import DeliveryError, request_delivery
+from aggits_video_factory.delivery import (
+    DeliveryError,
+    delivery_intent_matches,
+    mark_delivery_attempt,
+    mark_delivery_failure,
+    mark_delivery_result,
+    request_delivery,
+)
+from aggits_video_factory.diagnostics import configure_logging, log_directory, open_log_folder
 from aggits_video_factory.desktop_forms import (
     CTA_CHOICES,
     DEFAULT_CTA_LABEL,
@@ -33,7 +41,7 @@ from aggits_video_factory.desktop_forms import (
 )
 from aggits_video_factory.models import Project, ProjectType, utc_now
 from aggits_video_factory.preview import PreviewServer
-from aggits_video_factory.publisher import PublishError, Publisher
+from aggits_video_factory.publisher import PublicationVerificationPending, PublishError, Publisher, UnpublishVerificationPending
 from aggits_video_factory.site_builder import build_project_site
 from aggits_video_factory.store import ProjectStore
 from aggits_video_factory.supplementary_sources import retrieve_supplementary_sources
@@ -314,6 +322,7 @@ class LibraryPanel(tk.Frame):
             ("unpublish", "UNPUBLISH", owner._unpublish_selected),
             ("open", "OPEN LIVE", owner._open_live),
             ("email", "RETRY EMAIL", owner._retry_email),
+            ("verify", "CHECK LIVE STATUS", owner._check_live_status),
         ]
         for key, label, callback in action_specs:
             button = owner._button(actions, label, callback, compact=True, primary=key == "publish")
@@ -335,6 +344,8 @@ class Factory(tk.Tk):
         self.minsize(1120, 720)
         self.configure(bg=INK)
         self.store = ProjectStore()
+        self.logger = configure_logging(self.store.root)
+        self.logger.info("Application startup")
         self.preview_server = PreviewServer()
         self.settings = self.store.load_settings()
         self.busy = False
@@ -438,6 +449,7 @@ class Factory(tk.Tk):
         if errors and errors != self._reported_project_load_errors:
             self._reported_project_load_errors = errors
             detail = "\n\n".join(f"{path}\n{message}" for path, message in errors)
+            self.logger.warning("Project load warnings count=%s", len(errors))
             self.after_idle(lambda: messagebox.showwarning(
                 DESKTOP_TITLE,
                 "One or more saved projects could not be loaded. Their source files were left unchanged.\n\n" + detail,
@@ -464,15 +476,46 @@ class Factory(tk.Tk):
             selected_id = panel.selected_id()
             project = self.projects.get(selected_id) if selected_id else None
             allowed = project is not None and not self.busy
-            panel.buttons["edit"].configure(state="normal" if allowed else "disabled")
+            pending = bool(
+                project
+                and (
+                    project.status in {"verification_pending", "unpublish_verification_pending"}
+                    or (project.publication_operation and project.publication_operation.verification_status == "pending")
+                )
+            )
+            panel.buttons["edit"].configure(state="normal" if allowed and not pending else "disabled")
             panel.buttons["preview"].configure(state="normal" if allowed else "disabled")
-            panel.buttons["publish"].configure(state="normal" if allowed and project.status != "published" else "disabled")
+            panel.buttons["publish"].configure(state="normal" if allowed and project.status != "published" and not pending else "disabled")
             panel.buttons["publish"].configure(text="UPDATE + REPUBLISH" if project and project.status == "changes_pending" else "PUBLISH")
-            panel.buttons["unpublish"].configure(state="normal" if allowed and bool(project.published_url) else "disabled")
+            panel.buttons["unpublish"].configure(state="normal" if allowed and bool(project.published_url) and not pending else "disabled")
             panel.buttons["open"].configure(state="normal" if allowed and bool(project.published_url) else "disabled")
-            panel.buttons["email"].configure(state="normal" if allowed and project.status == "published" and project.delivery_status != "sent" else "disabled")
+            recipient = str(self.settings.get("deliveryEmail") or "")
+            delivered_to_current = False
+            if project and project.status == "published":
+                try:
+                    delivered_to_current = delivery_intent_matches(project, recipient)
+                except DeliveryError:
+                    pass
+            panel.buttons["email"].configure(state="normal" if allowed and project.status == "published" and not delivered_to_current else "disabled")
+            panel.buttons["verify"].configure(state="normal" if allowed and pending else "disabled")
             if project:
-                panel.note.configure(text=f"{project.title} · {len(project.videos)} videos · {project.status.replace('_', ' ').title()} · Email {project.delivery_status.replace('_', ' ').title()}")
+                status_label = {
+                    "verification_pending": "Publication Verification Pending",
+                    "unpublish_verification_pending": "Removal Verification Pending",
+                }.get(project.status, project.status.replace("_", " ").title())
+                delivery_label = {
+                    "sent": "Delivered",
+                    "already_delivered": "Delivered",
+                    "unknown": "Delivery Pending",
+                    "attempting": "Delivery Pending",
+                    "failed": "Delivery Failed",
+                }.get(project.delivery_status, project.delivery_status.replace("_", " ").title())
+                recipient_detail = (
+                    f" to {project.delivery_record.recipient}"
+                    if project.delivery_record and project.delivery_record.recipient and project.delivery_record.revision == (project.publication_revision or "")
+                    else ""
+                )
+                panel.note.configure(text=f"{project.title} · {len(project.videos)} videos · {status_label} · {delivery_label}{recipient_detail}")
             else:
                 panel.note.configure(text=f"Select a {project_type.value.title()} project to edit, preview or publish it.")
 
@@ -553,7 +596,14 @@ class Factory(tk.Tk):
 
     def _async_failed(self, error: Exception) -> None:
         self._set_busy(False, "OPERATION PAUSED")
-        messagebox.showerror(DESKTOP_TITLE, str(error))
+        self.logger.error("Operation paused type=%s error=%s", type(error).__name__, error)
+        if isinstance(error, (PublicationVerificationPending, UnpublishVerificationPending)):
+            self._refresh_library(error.project.id)
+            messagebox.showwarning(DESKTOP_TITLE, f"{error}\n\nNo second Git operation was attempted. Use CHECK LIVE STATUS to reconcile it.\n\nDiagnostics: {log_directory(self.store.root)}")
+            return
+        if isinstance(error, (PublishError, DeliveryError)):
+            self._refresh_library()
+        messagebox.showerror(DESKTOP_TITLE, f"{error}\n\nDiagnostics: {log_directory(self.store.root)}")
 
     def _async_complete(self, result, complete) -> None:
         self._set_busy(False, "READY")
@@ -775,6 +825,7 @@ class Factory(tk.Tk):
         project_type = ProjectType(candidate.get("project_type", ProjectType.BUSINESS))
 
         def worker() -> Project:
+            self.logger.info("Build started slug=%s type=%s", slug, project_type.value)
             editing_project_id = str(candidate.get("editing_project_id") or "")
             existing = self.projects.get(editing_project_id) if editing_project_id else None
             project = assemble_reviewed_project(
@@ -790,6 +841,7 @@ class Factory(tk.Tk):
             project_dir = self.store.project_dir(slug)
             build_project_site(project, project_dir / "site")
             self.store.save_project(project)
+            self.logger.info("Build completed slug=%s videos=%s", project.slug, len(project.videos))
             return project
 
         self._run_async("BUILDING THE REVIEWED JUKEBOX…", worker, self._create_complete)
@@ -832,14 +884,21 @@ class Factory(tk.Tk):
             project.published_url = public_url
             project.published_at = utc_now()
             project.publication_revision = revision
-            project.delivery_status = "queued"
+            project.delivery_status = "not_requested"
             self.store.save_project(project)
             build_project_site(project, self.store.project_dir(project.slug) / "site")
             email_error = None
+            recipient = str(self.settings.get("deliveryEmail") or "")
             try:
-                request_delivery(project, str(self.settings.get("deliveryEmail") or ""))
-                project.delivery_status = "sent"
+                mark_delivery_attempt(project, recipient)
+                self.store.save_project(project)
+                result = request_delivery(project, recipient, secret=str(self.settings.get("deliverySecret") or ""))
+                mark_delivery_result(project, recipient, result)
             except DeliveryError as error:
+                try:
+                    mark_delivery_failure(project, recipient, error)
+                except DeliveryError:
+                    project.delivery_status = "failed"
                 email_error = str(error)
             self.store.save_project(project)
             return project, email_error
@@ -891,8 +950,18 @@ class Factory(tk.Tk):
             return
 
         def worker() -> Project:
-            request_delivery(project, str(self.settings.get("deliveryEmail") or ""))
-            project.delivery_status = "sent"
+            recipient = str(self.settings.get("deliveryEmail") or "")
+            try:
+                mark_delivery_attempt(project, recipient)
+                self.store.save_project(project)
+                result = request_delivery(project, recipient, secret=str(self.settings.get("deliverySecret") or ""))
+                mark_delivery_result(project, recipient, result)
+            except DeliveryError as error:
+                try:
+                    mark_delivery_failure(project, recipient, error)
+                finally:
+                    self.store.save_project(project)
+                raise
             self.store.save_project(project)
             return project
 
@@ -901,6 +970,44 @@ class Factory(tk.Tk):
     def _email_complete(self, project: Project) -> None:
         self._refresh_library(project.id)
         messagebox.showinfo(DESKTOP_TITLE, f"The {project.title} link and QR card were emailed to {self.settings.get('deliveryEmail')}.")
+
+    def _check_live_status(self) -> None:
+        project = self._selected_project()
+        if not project:
+            return
+
+        def worker() -> tuple[Project, str | None]:
+            state = Publisher(self.store).reconcile(project)
+            delivery_error = None
+            if state == "published":
+                recipient = str(self.settings.get("deliveryEmail") or "")
+                try:
+                    if not delivery_intent_matches(project, recipient):
+                        mark_delivery_attempt(project, recipient)
+                        self.store.save_project(project)
+                        result = request_delivery(project, recipient, secret=str(self.settings.get("deliverySecret") or ""))
+                        mark_delivery_result(project, recipient, result)
+                except DeliveryError as error:
+                    try:
+                        mark_delivery_failure(project, recipient, error)
+                    except DeliveryError:
+                        project.delivery_status = "failed"
+                    delivery_error = str(error)
+                self.store.save_project(project)
+            return project, delivery_error
+
+        self._run_async("CHECKING LIVE PUBLICATION STATUS…", worker, self._reconcile_complete)
+
+    def _reconcile_complete(self, result: tuple[Project, str | None]) -> None:
+        project, delivery_error = result
+        self._refresh_library(project.id)
+        if project.status == "published":
+            detail = f"{project.title} is verified as published."
+            if delivery_error:
+                detail += f"\n\nDelivery still needs attention:\n{delivery_error}"
+        else:
+            detail = f"{project.title} is verified as unpublished. Its private project remains in the Library."
+        messagebox.showinfo(DESKTOP_TITLE, detail)
 
     def _open_settings(self) -> None:
         dialog = tk.Toplevel(self)
@@ -940,6 +1047,7 @@ class Factory(tk.Tk):
         buttons.pack(fill="x", padx=24)
         self._button(buttons, "SAVE SETTINGS", save, primary=True, compact=True).pack(side="left")
         self._button(buttons, "CANCEL", dialog.destroy, compact=True).pack(side="left", padx=8)
+        self._button(buttons, "OPEN LOG FOLDER", lambda: open_log_folder(self.store.root), compact=True).pack(side="right")
 
     def _close(self) -> None:
         if self.busy:

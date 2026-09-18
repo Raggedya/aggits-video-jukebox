@@ -6,6 +6,9 @@
   "workers_dev": true,
   "vars": {
     "PUBLIC_BASE_URL": "https://raggedya.github.io/aggits-video-jukebox",
+    "GITHUB_OWNER": "Raggedya",
+    "GITHUB_REPOSITORY": "aggits-video-jukebox",
+    "ALLOW_LEGACY_DELIVERY": "true",
     "OWNER_EMAIL": "andrewharris501@gmail.com",
     "REPORT_FROM_EMAIL": "AGGITS Video Jukebox <onboarding@resend.dev>"
   },

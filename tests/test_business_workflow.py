@@ -316,6 +316,7 @@ class BusinessWorkflowTests(unittest.TestCase):
             publisher = Publisher(store)
             with patch.object(publisher, "ensure_workspace", return_value=workspace), \
                     patch.object(publisher, "_wait_for_publication"), \
+                    patch.object(publisher, "_wait_for_unpublication"), \
                     patch("aggits_video_factory.publisher._run", side_effect=fake_git):
                 first_url, first_revision = publisher.publish(project)
                 project.status = "published"
@@ -381,11 +382,12 @@ class BusinessWorkflowTests(unittest.TestCase):
 
         project.published_url = "https://raggedya.github.io/aggits-video-jukebox/crispy-bits/test-business-a/"
         project.publication_revision = "revision-one"
+        project.status = "published"
         response = Mock(ok=True, status_code=200)
         response.json.return_value = {"ok": True}
         with patch("aggits_video_factory.delivery.requests.post", return_value=response) as post:
-            request_delivery(project, " Owner@Example.com ")
-        payload = post.call_args.kwargs["json"]
+            request_delivery(project, " Owner@Example.com ", secret="test-secret", timestamp=1_700_000_000, nonce="a" * 32)
+        payload = json.loads(post.call_args.kwargs["data"])
         self.assertEqual(payload["email"], "owner@example.com")
         self.assertEqual(payload["publicUrl"], project.published_url)
         self.assertEqual(payload["qrUrl"], f"{project.published_url.rstrip('/')}/qr-card.png")

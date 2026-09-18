@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import os
+import logging
 import re
 import shutil
 from dataclasses import dataclass
@@ -9,6 +11,7 @@ from typing import Any
 
 from .config import application_data_root
 from .credentials import protect, unprotect
+from .diagnostics import configure_logging
 from .migrations import CURRENT_PROJECT_SCHEMA_VERSION, LEGACY_PROJECT_SCHEMA_VERSION
 from .models import Project, utc_now
 
@@ -31,6 +34,7 @@ class ProjectIdentityError(ValueError):
 
 class ProjectStore:
     def __init__(self, root: Path | None = None) -> None:
+        use_default_root = root is None
         self.root = root or application_data_root()
         self.projects_dir = self.root / "projects"
         self.workspace_dir = self.root / "publisher-workspace"
@@ -38,6 +42,7 @@ class ProjectStore:
         self.settings_path = self.root / "settings.json"
         self.last_load_errors: list[ProjectLoadDiagnostic] = []
         self.projects_dir.mkdir(parents=True, exist_ok=True)
+        self.logger = configure_logging(self.root) if use_default_root else logging.getLogger("crispy_bits")
 
     def project_dir(self, slug: str) -> Path:
         safe = slugify(slug)
@@ -103,23 +108,30 @@ class ProjectStore:
                 projects.append(Project.from_dict(value))
             except (OSError, ValueError, TypeError) as error:
                 self.last_load_errors.append(ProjectLoadDiagnostic(path=path, message=str(error)))
+                self.logger.error("Project could not be loaded path=%s error=%s", path, error)
         return sorted(projects, key=lambda item: item.updated_at, reverse=True)
 
     def load_settings(self) -> dict[str, Any]:
         if not self.settings_path.is_file():
-            return {"deliveryEmail": "andrewharris501@gmail.com", "youtubeApiKey": ""}
+            return {"deliveryEmail": "andrewharris501@gmail.com", "youtubeApiKey": "", "deliverySecret": os.environ.get("CRISPY_BITS_DELIVERY_SECRET", "")}
         try:
             value = json.loads(self.settings_path.read_text(encoding="utf-8"))
         except (OSError, ValueError):
-            return {"deliveryEmail": "andrewharris501@gmail.com", "youtubeApiKey": ""}
+            return {"deliveryEmail": "andrewharris501@gmail.com", "youtubeApiKey": "", "deliverySecret": os.environ.get("CRISPY_BITS_DELIVERY_SECRET", "")}
         encrypted = str(value.get("youtubeApiKeyProtected") or "")
+        delivery_encrypted = str(value.get("deliverySecretProtected") or "")
         try:
             key = unprotect(encrypted) if encrypted else ""
         except (OSError, ValueError, RuntimeError):
             key = ""
+        try:
+            delivery_secret = unprotect(delivery_encrypted) if delivery_encrypted else ""
+        except (OSError, ValueError, RuntimeError):
+            delivery_secret = ""
         return {
             "deliveryEmail": str(value.get("deliveryEmail") or "andrewharris501@gmail.com"),
             "youtubeApiKey": key,
+            "deliverySecret": os.environ.get("CRISPY_BITS_DELIVERY_SECRET", "") or delivery_secret,
         }
 
     def save_settings(self, youtube_api_key: str, delivery_email: str) -> None:
@@ -129,6 +141,30 @@ class ProjectStore:
             "youtubeApiKeyProtected": protect(youtube_api_key.strip()),
             "deliveryEmail": delivery_email.strip().lower(),
         }
+        if self.settings_path.is_file():
+            try:
+                existing = json.loads(self.settings_path.read_text(encoding="utf-8"))
+                if existing.get("deliverySecretProtected"):
+                    payload["deliverySecretProtected"] = existing["deliverySecretProtected"]
+            except (OSError, ValueError, TypeError):
+                pass
+        temporary = self.root / ".settings.json.tmp"
+        temporary.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+        temporary.replace(self.settings_path)
+
+    def save_delivery_secret(self, delivery_secret: str) -> None:
+        secret = delivery_secret.strip()
+        if not secret:
+            raise ValueError("Delivery authentication secret cannot be empty.")
+        payload: dict[str, Any] = {"schemaVersion": 1}
+        if self.settings_path.is_file():
+            try:
+                current = json.loads(self.settings_path.read_text(encoding="utf-8"))
+                if isinstance(current, dict):
+                    payload.update(current)
+            except (OSError, ValueError, TypeError):
+                pass
+        payload["deliverySecretProtected"] = protect(secret)
         temporary = self.root / ".settings.json.tmp"
         temporary.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
         temporary.replace(self.settings_path)

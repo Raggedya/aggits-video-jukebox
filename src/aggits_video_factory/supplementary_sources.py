@@ -10,6 +10,8 @@ from urllib.parse import urljoin, urlparse
 
 import requests
 
+from .diagnostics import get_logger
+
 
 MAX_ADDITIONAL_SOURCES = 3
 MAX_REDIRECTS = 5
@@ -229,6 +231,7 @@ def retrieve_supplementary_sources(
             try:
                 results.append(retrieve_supplementary_source(url, session=client, resolver=resolver))
             except (SupplementarySourceError, requests.RequestException, LookupError, OSError, UnicodeError) as error:
+                get_logger().warning("Supplementary source unavailable url=%s category=%s detail=%s", url, type(error).__name__, _clean_text(str(error))[:300])
                 results.append(SupplementarySourceResult(
                     url=url,
                     final_url="",

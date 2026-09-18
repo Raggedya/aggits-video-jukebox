@@ -203,6 +203,8 @@ def build_local_music_project(
         published_url=existing.published_url if existing else None,
         delivery_status=existing.delivery_status if existing else "not_requested",
         publication_revision=existing.publication_revision if existing else None,
+        delivery_record=existing.delivery_record if existing else None,
+        publication_operation=existing.publication_operation if existing else None,
         extra_fields=dict(existing.extra_fields) if existing else {},
     )
 

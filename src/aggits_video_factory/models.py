@@ -34,6 +34,87 @@ class PrimaryCtaType(str, Enum):
     CUSTOM = "custom"
 
 
+@dataclass(slots=True)
+class DeliveryRecord:
+    recipient: str
+    revision: str
+    status: str = "not_requested"
+    sent_at: str | None = None
+    last_attempt_at: str | None = None
+    error_summary: str | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "recipient": self.recipient,
+            "revision": self.revision,
+            "status": self.status,
+            "sent_at": self.sent_at,
+            "last_attempt_at": self.last_attempt_at,
+            "error_summary": self.error_summary,
+        }
+
+    @classmethod
+    def from_dict(cls, value: dict[str, Any] | None) -> "DeliveryRecord | None":
+        if not value:
+            return None
+        return cls(
+            recipient=str(value.get("recipient") or ""),
+            revision=str(value.get("revision") or ""),
+            status=str(value.get("status") or "not_requested"),
+            sent_at=value.get("sent_at", value.get("sentAt")),
+            last_attempt_at=value.get("last_attempt_at", value.get("lastAttemptAt")),
+            error_summary=value.get("error_summary", value.get("errorSummary")),
+        )
+
+
+@dataclass(slots=True)
+class PublicationOperation:
+    operation_id: str
+    operation_type: str
+    project_id: str
+    slug: str
+    target_revision: str | None
+    expected_url: str
+    started_at: str
+    git_confirmed_at: str | None = None
+    verification_status: str = "not_started"
+    verified_at: str | None = None
+    last_error: str | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "operation_id": self.operation_id,
+            "operation_type": self.operation_type,
+            "project_id": self.project_id,
+            "slug": self.slug,
+            "target_revision": self.target_revision,
+            "expected_url": self.expected_url,
+            "started_at": self.started_at,
+            "git_confirmed_at": self.git_confirmed_at,
+            "verification_status": self.verification_status,
+            "verified_at": self.verified_at,
+            "last_error": self.last_error,
+        }
+
+    @classmethod
+    def from_dict(cls, value: dict[str, Any] | None) -> "PublicationOperation | None":
+        if not value:
+            return None
+        return cls(
+            operation_id=str(value.get("operation_id") or value.get("operationId") or ""),
+            operation_type=str(value.get("operation_type") or value.get("operationType") or ""),
+            project_id=str(value.get("project_id") or value.get("projectId") or ""),
+            slug=str(value.get("slug") or ""),
+            target_revision=value.get("target_revision", value.get("targetRevision")),
+            expected_url=str(value.get("expected_url") or value.get("expectedUrl") or ""),
+            started_at=str(value.get("started_at") or value.get("startedAt") or ""),
+            git_confirmed_at=value.get("git_confirmed_at", value.get("gitConfirmedAt")),
+            verification_status=str(value.get("verification_status") or value.get("verificationStatus") or "not_started"),
+            verified_at=value.get("verified_at", value.get("verifiedAt")),
+            last_error=value.get("last_error", value.get("lastError")),
+        )
+
+
 PRIMARY_CTA_LABELS: dict[PrimaryCtaType, str] = {
     PrimaryCtaType.SPOTIFY: "LISTEN ON SPOTIFY",
     PrimaryCtaType.BANDCAMP: "BUY ON BANDCAMP",
@@ -222,6 +303,8 @@ class Project:
     published_url: str | None = None
     delivery_status: str = "not_requested"
     publication_revision: str | None = None
+    delivery_record: DeliveryRecord | None = None
+    publication_operation: PublicationOperation | None = None
     extra_fields: dict[str, Any] = field(default_factory=dict, repr=False)
 
     def __setattr__(self, name: str, value: object) -> None:
@@ -289,6 +372,8 @@ class Project:
             "published_url": self.published_url,
             "delivery_status": self.delivery_status,
             "publication_revision": self.publication_revision,
+            "delivery_record": self.delivery_record.to_dict() if self.delivery_record else None,
+            "publication_operation": self.publication_operation.to_dict() if self.publication_operation else None,
             "schemaVersion": CURRENT_PROJECT_SCHEMA_VERSION,
         }
 
@@ -304,6 +389,7 @@ class Project:
             "manual_video_urls", "manualVideoUrls", "excluded_video_ids", "excludedVideoIds", "videos", "status",
             "created_at", "createdAt", "updated_at", "updatedAt", "published_at", "publishedAt", "published_url",
             "publishedUrl", "delivery_status", "deliveryStatus", "publication_revision", "publicationRevision",
+            "delivery_record", "deliveryRecord", "publication_operation", "publicationOperation",
         }
         project_type = value.get("project_type", value.get("projectType", ProjectType.BUSINESS.value))
         business_value = value.get("business_config", value.get("businessConfig"))
@@ -336,5 +422,7 @@ class Project:
             published_url=value.get("published_url") or value.get("publishedUrl"),
             delivery_status=str(value.get("delivery_status") or value.get("deliveryStatus") or "not_requested"),
             publication_revision=value.get("publication_revision") or value.get("publicationRevision"),
+            delivery_record=DeliveryRecord.from_dict(value.get("delivery_record", value.get("deliveryRecord"))),
+            publication_operation=PublicationOperation.from_dict(value.get("publication_operation", value.get("publicationOperation"))),
             extra_fields=_extra_fields(value, known),
         )
