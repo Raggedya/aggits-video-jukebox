@@ -678,6 +678,9 @@ if (machine) {
       machineIdentity = String(config.title || config.channelTitle || '').trim();
       machineDescription = String(config.customerConfig?.customerStory || config.tickerText || '').trim();
       activeProjectType = String(config.projectType || 'business').trim().toLowerCase();
+      const initialReelInstruction = activeProjectType === 'business'
+        ? 'PULL THE LEVER  ──────→'
+        : 'PULL TO DISCOVER';
       const musicPrimaryCta = activeProjectType === 'music' ? config.musicConfig?.primaryCTA : null;
       shopDestination = String(config.customerConfig?.shopURL || '').trim();
       primaryActionDestination = activeProjectType === 'music'
@@ -722,7 +725,7 @@ if (machine) {
       updateStory();
       window.setTimeout(startStoryTicker, 350);
       document.fonts?.ready?.then(startStoryTicker).catch(() => {});
-      renderRows({videoId: '__pull_to_discover__', shortTitle: 'PULL TO DISCOVER'});
+      renderRows({videoId: '__pull_to_discover__', shortTitle: initialReelInstruction});
       setState('IDLE', 'Pull the lever or press Re-Spin to select a video.');
       respinButton.disabled = false;
     } catch (error) {

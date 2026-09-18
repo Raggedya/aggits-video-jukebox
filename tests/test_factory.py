@@ -182,7 +182,7 @@ class FactoryTests(unittest.TestCase):
             self.assertNotIn("data-destination-title", page)
             self.assertIn("THE STORY SO FAR", page)
             self.assertEqual(page.count('class="reel" data-reel="0"'), 1)
-            self.assertIn('<div class="reel-strip"><span></span><strong>PULL TO DISCOVER</strong><span></span></div>', page)
+            self.assertIn('<div class="reel-strip"><span></span><strong>PULL THE LEVER  ──────→</strong><span></span></div>', page)
             self.assertIn("CRISPY BITS", page)
             self.assertTrue((destination / "assets" / "music-machine" / "aggits-cabinet-emerald-v1.png").is_file())
             self.assertTrue((destination / "assets" / "music-machine" / "crispy-bits-logo-cutout-v2.png").is_file())

@@ -228,6 +228,7 @@ def build_project_site(project: Project, destination: Path) -> Path:
     description = f"Pull the CRISPY BITS reel and discover one of {len(project.videos)} videos from {project.title}."
     story_sections = _story_sections(project.ticker_text, project.title, project.project_type)
     primary_action_label = music_cta.display_label if music_cta else "SHOP NOW"
+    initial_reel_instruction = "PULL THE LEVER  ──────→" if project.project_type is ProjectType.BUSINESS else "PULL TO DISCOVER"
     replacements = {
         "{{META_DESCRIPTION}}": html.escape(description, quote=True),
         "{{CANONICAL_URL}}": html.escape(canonical, quote=True),
@@ -235,6 +236,7 @@ def build_project_site(project: Project, destination: Path) -> Path:
         "{{PAGE_TITLE}}": html.escape(f"{project.title} — CRISPY BITS Video Jukebox"),
         "{{MACHINE_LABEL}}": html.escape(f"{project.title} CRISPY BITS Video Jukebox", quote=True),
         "{{MACHINE_TITLE}}": html.escape(project.title),
+        "{{INITIAL_REEL_INSTRUCTION}}": initial_reel_instruction,
         "{{TICKER_TEXT}}": html.escape(project.ticker_text or "PULL FOR A VIDEO"),
         "{{PRIMARY_ACTION_LABEL}}": html.escape(primary_action_label),
         "{{PRIMARY_ACTION_ARIA}}": html.escape("Shop unavailable" if project.project_type is ProjectType.BUSINESS else primary_action_label, quote=True),
