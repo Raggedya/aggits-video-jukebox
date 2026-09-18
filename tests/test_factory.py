@@ -188,7 +188,9 @@ class FactoryTests(unittest.TestCase):
             self.assertTrue((destination / "social-card.jpg").is_file())
 
     def test_legacy_v2_migration_is_deterministic_and_does_not_invent_cta_data(self):
-        legacy = self.legacy_project_value()
+        legacy = self.legacy_project_value(
+            subscribeURL="https://www.youtube.com/channel/UClegacy?sub_confirmation=1",
+        )
         legacy["videos"][0]["legacy_video_flag"] = "keep"
         first = Project.from_dict(legacy)
         second = Project.from_dict(legacy)
@@ -199,6 +201,7 @@ class FactoryTests(unittest.TestCase):
         self.assertIsNotNone(first.business_config)
         self.assertIsNone(first.business_config.shop_url)
         self.assertIsNone(first.music_config)
+        self.assertEqual(first.extra_fields["subscribeURL"], "https://www.youtube.com/channel/UClegacy?sub_confirmation=1")
         self.assertEqual(first.extra_fields["future_legacy_field"], {"must": "survive"})
         self.assertEqual(first.videos[0].extra_fields["legacy_video_flag"], "keep")
         self.assertNotIn("shop_url", legacy)
@@ -209,6 +212,7 @@ class FactoryTests(unittest.TestCase):
         self.assertEqual(encoded["project_type"], "business")
         self.assertEqual(encoded["business_config"], {"shop_url": None})
         self.assertIsNone(encoded["music_config"])
+        self.assertEqual(encoded["subscribeURL"], "https://www.youtube.com/channel/UClegacy?sub_confirmation=1")
         self.assertEqual(encoded["future_legacy_field"], {"must": "survive"})
         self.assertEqual(encoded["videos"][0]["legacy_video_flag"], "keep")
         self.assertEqual(migrate_project_dict(encoded).data, encoded)
@@ -295,8 +299,30 @@ class FactoryTests(unittest.TestCase):
             with self.subTest(cta_type=cta_type):
                 cta = PrimaryCta(cta_type=cta_type, destination_url="https://example.com/action")
                 self.assertEqual(cta.display_label, label)
+                restored = PrimaryCta.from_dict(cta.to_dict())
+                self.assertEqual(restored.cta_type.value, cta_type)
+                self.assertEqual(restored.display_label, label)
+                self.assertEqual(restored.destination_url, "https://example.com/action")
         custom = PrimaryCta(cta_type="custom", destination_url="https://example.com/custom", custom_label="JOIN THE CLUB")
         self.assertEqual(custom.display_label, "JOIN THE CLUB")
+        restored_custom = PrimaryCta.from_dict(custom.to_dict())
+        self.assertEqual(restored_custom.custom_label, "JOIN THE CLUB")
+        self.assertEqual(restored_custom.display_label, "JOIN THE CLUB")
+
+        for count in range(4):
+            with self.subTest(additional_url_count=count):
+                urls = [f"https://source-{index}.example" for index in range(count)]
+                project = Project(
+                    slug=f"url-count-{count}",
+                    title=f"URL Count {count}",
+                    ticker_text="",
+                    channel_url="",
+                    channel_id="",
+                    channel_title="",
+                    channel_thumbnail="",
+                    additional_urls=urls,
+                )
+                self.assertEqual(Project.from_dict(project.to_dict()).additional_urls, urls)
         with self.assertRaises(ProjectValidationError):
             Project.from_dict({**self.legacy_project_value(), "schemaVersion": 3, "id": "5bfd106b-90d2-43c3-bb84-d94a7d494826", "project_type": "tourism"})
         with self.assertRaises(ProjectMigrationError):
@@ -382,16 +408,28 @@ class FactoryTests(unittest.TestCase):
 
     def test_legacy_business_site_output_schema_remains_unchanged(self):
         with tempfile.TemporaryDirectory() as temporary:
-            project = Project.from_dict(self.legacy_project_value())
-            destination = Path(temporary) / "site"
-            build_project_site(project, destination)
-            payload = json.loads((destination / "machine.json").read_text(encoding="utf-8"))
+            legacy_project = Project.from_dict(self.legacy_project_value())
+            current_project = Project.from_dict(legacy_project.to_dict())
+            legacy_destination = Path(temporary) / "legacy-site"
+            current_destination = Path(temporary) / "current-site"
+            build_project_site(legacy_project, legacy_destination)
+            build_project_site(current_project, current_destination)
+            payload = json.loads((legacy_destination / "machine.json").read_text(encoding="utf-8"))
             self.assertEqual(payload["schemaVersion"], 2)
             self.assertNotIn("id", payload)
             self.assertNotIn("project_type", payload)
             self.assertNotIn("business_config", payload)
             self.assertEqual(payload["slug"], "legacy-business")
             self.assertEqual(payload["customerConfig"]["subscribeURL"], "https://www.youtube.com/channel/UClegacy?sub_confirmation=1")
+
+            def snapshot(root: Path) -> dict[str, bytes]:
+                return {
+                    path.relative_to(root).as_posix(): path.read_bytes()
+                    for path in sorted(root.rglob("*"))
+                    if path.is_file()
+                }
+
+            self.assertEqual(snapshot(legacy_destination), snapshot(current_destination))
 
     @unittest.skipUnless(os.environ.get("LOCALAPPDATA"), "Windows LocalAppData is unavailable")
     def test_real_great_alpine_v2_project_migrates_from_safe_copy(self):
