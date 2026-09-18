@@ -7,6 +7,7 @@ if (machine) {
   const reel = machine.querySelector('[data-reel]');
   const rows = [...reel.querySelectorAll('.reel-strip > *')];
   const lever = machine.querySelector('.lever');
+  const shopPlaque = machine.querySelector('[data-shop-plaque]');
   const titleNode = machine.querySelector('[data-machine-title]');
   const storyWindow = machine.querySelector('[data-story-window]');
   const storyTrack = machine.querySelector('[data-story-track]');
@@ -36,6 +37,8 @@ if (machine) {
   const needleShadows = [...machine.querySelectorAll('[data-meter-shadow]')];
   const scales = [...machine.querySelectorAll('[data-meter-scale]')];
   const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+  const SHOP_PLAQUE_TITLE_DURATION = 10000;
+  const SHOP_PLAQUE_PROMPT_DURATION = 3500;
 
   let catalogue = [];
   let current = null;
@@ -52,6 +55,8 @@ if (machine) {
   let primaryActionDestination = '';
   let shopDestination = '';
   let activeProjectType = 'business';
+  let shopPlaqueTimer = 0;
+  let shopPlaqueEnabled = false;
   let revealTimer = 0;
   let selectionEpoch = 0;
   let reelMotorAudio = null;
@@ -565,6 +570,40 @@ if (machine) {
     window.open(shopDestination, '_blank', 'noopener,noreferrer');
   }
 
+  function stopShopPlaqueCycle() {
+    window.clearTimeout(shopPlaqueTimer);
+    shopPlaqueTimer = 0;
+    shopPlaque.dataset.shopPlaqueState = 'title';
+  }
+
+  function scheduleShopPlaqueState(state, delay) {
+    window.clearTimeout(shopPlaqueTimer);
+    shopPlaqueTimer = window.setTimeout(() => {
+      if (!shopPlaqueEnabled) return;
+      shopPlaque.dataset.shopPlaqueState = state;
+      scheduleShopPlaqueState(
+        state === 'shop' ? 'title' : 'shop',
+        state === 'shop' ? SHOP_PLAQUE_PROMPT_DURATION : SHOP_PLAQUE_TITLE_DURATION,
+      );
+    }, delay);
+  }
+
+  function configureShopPlaque(shopEnabled) {
+    stopShopPlaqueCycle();
+    shopPlaqueEnabled = activeProjectType === 'business' && shopEnabled === true && Boolean(shopDestination);
+    shopPlaque.classList.toggle('is-shop-enabled', shopPlaqueEnabled);
+    if (!shopPlaqueEnabled) {
+      shopPlaque.removeAttribute('role');
+      shopPlaque.removeAttribute('tabindex');
+      shopPlaque.removeAttribute('aria-label');
+      return;
+    }
+    shopPlaque.setAttribute('role', 'link');
+    shopPlaque.setAttribute('tabindex', '0');
+    shopPlaque.setAttribute('aria-label', `Visit ${machineIdentity || 'this business'} online shop`);
+    scheduleShopPlaqueState('shop', SHOP_PLAQUE_TITLE_DURATION);
+  }
+
   function bind() {
     lever.addEventListener('pointerdown', onLeverDown);
     lever.addEventListener('pointermove', onLeverMove);
@@ -582,6 +621,15 @@ if (machine) {
     primaryActionButton.addEventListener('click', () => {
       if (activeProjectType === 'music') openPrimaryAction();
       else openShop();
+    });
+    shopPlaque.addEventListener('click', () => {
+      if (shopPlaqueEnabled) openShop();
+    });
+    shopPlaque.addEventListener('keydown', event => {
+      if (shopPlaqueEnabled && (event.key === 'Enter' || event.key === ' ')) {
+        event.preventDefault();
+        openShop();
+      }
     });
     soundButton.addEventListener('click', () => {
       soundEnabled = !soundEnabled;
@@ -651,6 +699,7 @@ if (machine) {
       if (!catalogue.length) throw new Error('No videos');
       titleNode.textContent = config.title || 'VIDEO JUKEBOX';
       sizeClass(titleNode, titleNode.textContent);
+      configureShopPlaque(config.customerConfig?.shopEnabled);
       document.title = `${config.title || 'Video Jukebox'} — CRISPY BITS`;
       setCustomerBackdrop(catalogue[0]);
       if (channelThumbnail) {
@@ -686,6 +735,7 @@ if (machine) {
   window.addEventListener('resize', () => {
     startStoryTicker();
   });
+  window.addEventListener('pagehide', stopShopPlaqueCycle);
 
   window.CrispyBitsMachine = Object.freeze({
     spin,

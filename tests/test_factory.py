@@ -438,9 +438,16 @@ class FactoryTests(unittest.TestCase):
 
     @unittest.skipUnless(os.environ.get("LOCALAPPDATA"), "Windows LocalAppData is unavailable")
     def test_real_great_alpine_v2_project_migrates_from_safe_copy(self):
-        source = Path(os.environ["LOCALAPPDATA"]) / "CRISPY BITS" / "Video Jukebox Factory" / "projects" / "great-alpine-caravans" / "project.json"
-        if not source.is_file():
+        protected_source = Path(os.environ["LOCALAPPDATA"]) / "CRISPY BITS" / "Video Jukebox Factory" / "projects" / "great-alpine-caravans" / "project.json"
+        if not protected_source.is_file():
             self.skipTest("The protected Great Alpine v2.3.0 project is not present on this machine.")
+        protected_bytes = protected_source.read_bytes()
+        protected_payload = json.loads(protected_bytes.decode("utf-8"))
+        source = protected_source
+        if int(protected_payload.get("schemaVersion", 2)) != 2:
+            source = protected_source.with_name("project.json.v2.backup")
+            if not source.is_file():
+                self.skipTest("The protected Great Alpine v2 migration backup is not present on this machine.")
         original_bytes = source.read_bytes()
         legacy = json.loads(original_bytes.decode("utf-8"))
         self.assertEqual(int(legacy.get("schemaVersion", 2)), 2)
@@ -469,6 +476,7 @@ class FactoryTests(unittest.TestCase):
             self.assertIsNone(migrated.music_config)
             UUID(migrated.id)
             self.assertEqual(source.read_bytes(), original_bytes)
+            self.assertEqual(protected_source.read_bytes(), protected_bytes)
 
             store.save_project(migrated)
             self.assertEqual((copied_dir / "project.json.v2.backup").read_bytes(), original_bytes)
