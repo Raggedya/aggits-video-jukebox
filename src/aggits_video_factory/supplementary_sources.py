@@ -18,7 +18,7 @@ MAX_EXTRACTED_TEXT = 6_000
 CONNECT_TIMEOUT_SECONDS = 5
 READ_TIMEOUT_SECONDS = 10
 ALLOWED_CONTENT_TYPES = {"text/html", "application/xhtml+xml", "text/plain"}
-USER_AGENT = "CRISPY-BITS-Desktop/Business-Source-Reader"
+USER_AGENT = "CRISPY-BITS-Desktop/Supplementary-Source-Reader"
 
 
 class SupplementarySourceError(ValueError):

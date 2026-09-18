@@ -20,6 +20,11 @@ class PublishError(RuntimeError):
     pass
 
 
+def _validate_project_type(project: Project) -> None:
+    if project.project_type not in {ProjectType.BUSINESS, ProjectType.MUSIC}:
+        raise PublishError(f"Unsupported project type: {project.project_type!r}.")
+
+
 def _executable(name: str) -> str:
     located = shutil.which(name)
     if located:
@@ -142,8 +147,7 @@ class Publisher:
         return workspace
 
     def publish(self, project: Project) -> tuple[str, str]:
-        if project.project_type is not ProjectType.BUSINESS:
-            raise PublishError("Music publishing is not available in Milestone 4.")
+        _validate_project_type(project)
         workspace = self.ensure_workspace()
         public_root = workspace / "public" / PUBLIC_PATH
         public_root.mkdir(parents=True, exist_ok=True)
@@ -159,6 +163,7 @@ class Publisher:
         library.append({
             "slug": project.slug,
             "title": project.title,
+            "projectType": project.project_type.value,
             "channelId": project.channel_id,
             "channelTitle": project.channel_title,
             "videoCount": len(project.videos),
@@ -177,6 +182,7 @@ class Publisher:
         return public_url, revision
 
     def unpublish(self, project: Project) -> str:
+        _validate_project_type(project)
         workspace = self.ensure_workspace()
         public_root = workspace / "public" / PUBLIC_PATH
         target = _valid_public_machine_path(public_root, project.slug)

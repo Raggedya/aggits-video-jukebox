@@ -14,7 +14,8 @@ if (machine) {
   const status = machine.querySelector('.machine-status');
   const playButton = machine.querySelector('[data-action="play"]');
   const shareButton = machine.querySelector('[data-action="share"]');
-  const shopButton = machine.querySelector('[data-action="shop"]');
+  const primaryActionButton = machine.querySelector('[data-action="shop"]');
+  const shopButton = primaryActionButton;
   const respinButton = machine.querySelector('[data-action="spin-again"]');
   const soundButton = machine.querySelector('[data-action="sound"]');
   const soundIcon = machine.querySelector('[data-sound-icon]');
@@ -48,7 +49,9 @@ if (machine) {
   let machineDescription = '';
   let masterStorySections = [];
   let channelThumbnail = '';
+  let primaryActionDestination = '';
   let shopDestination = '';
+  let activeProjectType = 'business';
   let revealTimer = 0;
   let selectionEpoch = 0;
   let reelMotorAudio = null;
@@ -409,8 +412,8 @@ if (machine) {
     meterMode = 'spin';
     playButton.disabled = true;
     shareButton.disabled = true;
-    shopButton.disabled = true;
-    shopButton.setAttribute('aria-disabled', 'true');
+    primaryActionButton.disabled = true;
+    primaryActionButton.setAttribute('aria-disabled', 'true');
     respinButton.disabled = true;
     machine.dataset.hasWinner = 'false';
     playSample(reelStopAudio, {volume: .58, rate: .9});
@@ -433,8 +436,9 @@ if (machine) {
     meterMode = 'idle';
     playButton.disabled = false;
     shareButton.disabled = false;
-    shopButton.disabled = !shopDestination;
-    shopButton.setAttribute('aria-disabled', String(!shopDestination));
+    if (activeProjectType === 'business') shopButton.disabled = !shopDestination;
+    else primaryActionButton.disabled = !primaryActionDestination;
+    primaryActionButton.setAttribute('aria-disabled', String(!primaryActionDestination));
     respinButton.disabled = false;
     spinning = false;
     scheduleVideoReveal(winner);
@@ -551,6 +555,11 @@ if (machine) {
     }
   }
 
+  function openPrimaryAction() {
+    if (!primaryActionDestination) return;
+    window.open(primaryActionDestination, '_blank', 'noopener,noreferrer');
+  }
+
   function openShop() {
     if (!shopDestination) return;
     window.open(shopDestination, '_blank', 'noopener,noreferrer');
@@ -570,7 +579,10 @@ if (machine) {
     respinButton.addEventListener('click', spin);
     playButton.addEventListener('click', () => { void openVideo(true); });
     shareButton.addEventListener('click', share);
-    shopButton.addEventListener('click', openShop);
+    primaryActionButton.addEventListener('click', () => {
+      if (activeProjectType === 'music') openPrimaryAction();
+      else openShop();
+    });
     soundButton.addEventListener('click', () => {
       soundEnabled = !soundEnabled;
       try { sessionStorage.setItem('crispyBitsSound', soundEnabled ? 'on' : 'off'); } catch {}
@@ -617,10 +629,20 @@ if (machine) {
       const config = await response.json();
       machineIdentity = String(config.title || config.channelTitle || '').trim();
       machineDescription = String(config.customerConfig?.customerStory || config.tickerText || '').trim();
+      activeProjectType = String(config.projectType || 'business').trim().toLowerCase();
+      const musicPrimaryCta = activeProjectType === 'music' ? config.musicConfig?.primaryCTA : null;
       shopDestination = String(config.customerConfig?.shopURL || '').trim();
-      shopButton.disabled = true;
-      shopButton.setAttribute('aria-disabled', 'true');
-      shopButton.setAttribute('aria-label', shopDestination ? 'Shop now' : 'Shop unavailable');
+      primaryActionDestination = activeProjectType === 'music'
+        ? String(musicPrimaryCta?.destinationURL || '').trim()
+        : shopDestination;
+      const primaryActionLabel = activeProjectType === 'music'
+        ? String(musicPrimaryCta?.displayLabel || '').trim()
+        : 'SHOP NOW';
+      const primaryActionText = primaryActionButton.querySelector('b');
+      if (primaryActionText && primaryActionLabel) primaryActionText.textContent = primaryActionLabel;
+      primaryActionButton.disabled = true;
+      primaryActionButton.setAttribute('aria-disabled', 'true');
+      primaryActionButton.setAttribute('aria-label', primaryActionDestination ? primaryActionLabel : `${primaryActionLabel || 'Primary action'} unavailable`);
       masterStorySections = Array.isArray(config.customerConfig?.customerStorySections)
         ? config.customerConfig.customerStorySections.filter(beat => beat?.heading && beat?.text)
         : [];

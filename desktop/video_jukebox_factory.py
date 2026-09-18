@@ -20,14 +20,13 @@ if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
 from aggits_video_factory.config import MAX_TICKER_LENGTH, MAX_VIDEOS, resource_path
-from aggits_video_factory.business_workflow import assemble_business_project
+from aggits_video_factory.business_workflow import assemble_reviewed_project
 from aggits_video_factory.delivery import DeliveryError, request_delivery
 from aggits_video_factory.desktop_forms import (
     CTA_CHOICES,
     DEFAULT_CTA_LABEL,
     FormValidationError,
     ProjectFormValues,
-    build_local_music_project,
     project_is_visible_in_tab,
     project_to_form_values,
     validate_project_form,
@@ -243,19 +242,16 @@ class ProjectForm(tk.Frame):
             self.submit_button.configure(text="CREATE CRISPY BITS")
             self.stage_note.configure(text="Analyse and review videos, then build locally.")
         else:
-            self.submit_button.configure(text="SAVE LOCAL MUSIC PROJECT")
-            self.stage_note.configure(text="Local project only · Music publishing is not available yet.")
+            self.submit_button.configure(text="CREATE CRISPY BITS")
+            self.stage_note.configure(text="Analyse and review videos, then build locally.")
         self.mark_clean()
 
     def load_project(self, project: Project) -> None:
         self.editing_project_id = project.id
         self.set_values(project_to_form_values(project))
         self.mode_label.configure(text=f"EDIT {project.project_type.value.upper()} PROJECT")
-        self.submit_button.configure(text="SAVE CHANGES" if project.project_type is ProjectType.BUSINESS else "SAVE LOCAL CHANGES")
-        if project.project_type is ProjectType.BUSINESS:
-            self.stage_note.configure(text="Reviewed changes remain private until Update + Republish.")
-        else:
-            self.stage_note.configure(text="Local project only · Music publishing is not available yet.")
+        self.submit_button.configure(text="SAVE CHANGES")
+        self.stage_note.configure(text="Reviewed changes remain private until Update + Republish.")
         self.mark_clean()
 
     def mark_clean(self) -> None:
@@ -311,15 +307,14 @@ class LibraryPanel(tk.Frame):
         actions = tk.Frame(self, bg=PANEL)
         actions.pack(fill="x", padx=18, pady=(13, 8))
         self.buttons: dict[str, tk.Button] = {}
-        action_specs = [("edit", "EDIT", owner._edit_selected)]
-        if project_type is ProjectType.BUSINESS:
-            action_specs.extend([
-                ("preview", "PREVIEW", owner._preview_selected),
-                ("publish", "PUBLISH", owner._publish_selected),
-                ("unpublish", "UNPUBLISH", owner._unpublish_selected),
-                ("open", "OPEN LIVE", owner._open_live),
-                ("email", "RETRY EMAIL", owner._retry_email),
-            ])
+        action_specs = [
+            ("edit", "EDIT", owner._edit_selected),
+            ("preview", "PREVIEW", owner._preview_selected),
+            ("publish", "PUBLISH", owner._publish_selected),
+            ("unpublish", "UNPUBLISH", owner._unpublish_selected),
+            ("open", "OPEN LIVE", owner._open_live),
+            ("email", "RETRY EMAIL", owner._retry_email),
+        ]
         for key, label, callback in action_specs:
             button = owner._button(actions, label, callback, compact=True, primary=key == "publish")
             button.pack(side="left", padx=(0, 7))
@@ -470,9 +465,6 @@ class Factory(tk.Tk):
             project = self.projects.get(selected_id) if selected_id else None
             allowed = project is not None and not self.busy
             panel.buttons["edit"].configure(state="normal" if allowed else "disabled")
-            if project_type is ProjectType.MUSIC:
-                panel.note.configure(text=f"{project.title} · Local Music project · publishing unavailable" if project else "Music projects are stored locally in Milestone 3.")
-                continue
             panel.buttons["preview"].configure(state="normal" if allowed else "disabled")
             panel.buttons["publish"].configure(state="normal" if allowed and project.status != "published" else "disabled")
             panel.buttons["publish"].configure(text="UPDATE + REPUBLISH" if project and project.status == "changes_pending" else "PUBLISH")
@@ -482,7 +474,7 @@ class Factory(tk.Tk):
             if project:
                 panel.note.configure(text=f"{project.title} · {len(project.videos)} videos · {project.status.replace('_', ' ').title()} · Email {project.delivery_status.replace('_', ' ').title()}")
             else:
-                panel.note.configure(text="Select a Business project to edit, preview or publish it.")
+                panel.note.configure(text=f"Select a {project_type.value.title()} project to edit, preview or publish it.")
 
     def _set_busy(self, busy: bool, message: str) -> None:
         self.busy = busy
@@ -514,7 +506,7 @@ class Factory(tk.Tk):
     def _submit_project(self, project_type: ProjectType) -> bool:
         if self.busy:
             return False
-        return self._create_jukebox() if project_type is ProjectType.BUSINESS else self._save_music_project()
+        return self._create_jukebox(project_type)
 
     def _resolve_unsaved(self, form: ProjectForm, action: str) -> bool:
         choice = messagebox.askyesnocancel(
@@ -567,11 +559,11 @@ class Factory(tk.Tk):
         self._set_busy(False, "READY")
         complete(result)
 
-    def _create_jukebox(self) -> bool:
-        form = self.forms[ProjectType.BUSINESS]
+    def _create_jukebox(self, project_type: ProjectType) -> bool:
+        form = self.forms[project_type]
         form.clear_validation()
         try:
-            values = validate_project_form(form.values(), ProjectType.BUSINESS)
+            values = validate_project_form(form.values(), project_type)
         except FormValidationError as error:
             form.show_validation(error)
             return False
@@ -583,7 +575,7 @@ class Factory(tk.Tk):
 
         editing_project_id = form.editing_project_id
         existing = self.projects.get(editing_project_id) if editing_project_id else None
-        if existing and existing.project_type is not ProjectType.BUSINESS:
+        if existing and existing.project_type is not project_type:
             messagebox.showerror(DESKTOP_TITLE, "A saved project cannot be changed to a different project type.")
             return False
         slug = existing.slug if existing else self.store.allocate_slug(values.title)
@@ -619,6 +611,7 @@ class Factory(tk.Tk):
             source_results = retrieve_supplementary_sources(values.additional_urls)
             return {
                 "slug": slug,
+                "project_type": project_type,
                 "values": values,
                 "catalogue": catalogue,
                 "videos": videos,
@@ -632,34 +625,6 @@ class Factory(tk.Tk):
         self._run_async("READING YOUTUBE + PREPARING VIDEO REVIEW…", worker, self._review_video_selection)
         return False
 
-    def _save_music_project(self) -> bool:
-        form = self.forms[ProjectType.MUSIC]
-        form.clear_validation()
-        try:
-            values = validate_project_form(form.values(), ProjectType.MUSIC)
-        except FormValidationError as error:
-            form.show_validation(error)
-            return False
-        existing = self.projects.get(form.editing_project_id) if form.editing_project_id else None
-        if existing and existing.project_type is not ProjectType.MUSIC:
-            messagebox.showerror(DESKTOP_TITLE, "A saved project cannot be changed to a different project type.")
-            return False
-        slug = existing.slug if existing else self.store.allocate_slug(values.title)
-        try:
-            project = build_local_music_project(values, slug, existing)
-            self.store.save_project(project)
-        except (OSError, ValueError) as error:
-            messagebox.showerror(DESKTOP_TITLE, str(error))
-            return False
-        self._refresh_library(project.id)
-        form.load_project(project)
-        self.status.configure(text="MUSIC PROJECT SAVED LOCALLY", fg=SUCCESS)
-        messagebox.showinfo(
-            DESKTOP_TITLE,
-            f"{project.title} was saved locally.\n\nMusic generation and publishing are not available in Milestone 3.",
-        )
-        return True
-
     def _review_video_selection(self, candidate: dict[str, object]) -> None:
         videos = list(candidate["videos"])
         manual_ids = set(candidate["manual_ids"])
@@ -667,10 +632,11 @@ class Factory(tk.Tk):
         thumbnail_bytes = dict(candidate["thumbnails"])
         source_failures = [result for result in candidate.get("source_results", []) if not result.succeeded]
         if source_failures:
+            project_type = ProjectType(candidate.get("project_type", ProjectType.BUSINESS))
             detail = "\n".join(f"• {result.url}\n  {result.error}" for result in source_failures)
             messagebox.showwarning(
                 DESKTOP_TITLE,
-                "One or more optional Additional URLs could not be read. You can still review and build this Business project.\n\n" + detail,
+                f"One or more optional Additional URLs could not be read. You can still review and build this {project_type.value.title()} project.\n\n" + detail,
                 parent=self,
             )
         dialog = tk.Toplevel(self)
@@ -806,11 +772,13 @@ class Factory(tk.Tk):
         catalogue = candidate["catalogue"]
         slug = str(candidate["slug"])
         values = candidate["values"]
+        project_type = ProjectType(candidate.get("project_type", ProjectType.BUSINESS))
 
         def worker() -> Project:
             editing_project_id = str(candidate.get("editing_project_id") or "")
             existing = self.projects.get(editing_project_id) if editing_project_id else None
-            project = assemble_business_project(
+            project = assemble_reviewed_project(
+                project_type=project_type,
                 values=values,
                 catalogue=catalogue,
                 selected_videos=videos,
@@ -829,7 +797,7 @@ class Factory(tk.Tk):
     def _create_complete(self, project: Project) -> None:
         self._refresh_library(project.id)
         editing = project.status == "changes_pending"
-        self.forms[ProjectType.BUSINESS].load_project(project)
+        self.forms[project.project_type].load_project(project)
         self._open_project_preview(project)
         if editing:
             messagebox.showinfo(DESKTOP_TITLE, f"{project.title} now has {len(project.videos)} reviewed videos and its local preview has opened.\n\nThe existing live jukebox is unchanged. Press UPDATE + REPUBLISH in the Library when you are ready.")

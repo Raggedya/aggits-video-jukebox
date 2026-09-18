@@ -14,7 +14,7 @@ from aggits_video_factory.delivery import DeliveryError, request_delivery
 from aggits_video_factory.desktop_forms import ProjectFormValues, validate_project_form
 from aggits_video_factory.models import BusinessConfig, MusicConfig, Project, ProjectType, Video
 from aggits_video_factory.preview import PreviewServer
-from aggits_video_factory.publisher import PublishError, Publisher
+from aggits_video_factory.publisher import Publisher
 from aggits_video_factory.site_builder import build_project_site
 from aggits_video_factory.store import ProjectStore
 from aggits_video_factory.supplementary_sources import (
@@ -403,7 +403,7 @@ class BusinessWorkflowTests(unittest.TestCase):
             self.assertIn("machine.json", get.call_args_list[0].args[0])
             self.assertIn("qr-card.png", get.call_args_list[1].args[0])
 
-    def test_music_generation_remains_unavailable(self):
+    def test_music_generation_requires_a_configured_primary_cta(self):
         project = Project(
             slug="music-only",
             title="Music Only",
@@ -417,14 +417,8 @@ class BusinessWorkflowTests(unittest.TestCase):
             videos=[sample_video()],
         )
         with tempfile.TemporaryDirectory() as temporary:
-            with self.assertRaisesRegex(ValueError, "Music machine generation is not available"):
+            with self.assertRaisesRegex(ValueError, "requires a configured primary CTA"):
                 build_project_site(project, Path(temporary) / "site")
-            with self.assertRaisesRegex(PublishError, "Music publishing is not available"):
-                Publisher(ProjectStore(Path(temporary) / "store")).publish(project)
-            project.published_url = "https://example.com/music/"
-            project.publication_revision = "revision"
-            with self.assertRaisesRegex(DeliveryError, "Music email delivery is not available"):
-                request_delivery(project, "owner@example.com")
 
 
 if __name__ == "__main__":

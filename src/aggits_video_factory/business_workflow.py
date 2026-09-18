@@ -8,8 +8,9 @@ from .supplementary_sources import SupplementarySourceResult
 from .youtube_api import ChannelCatalogue
 
 
-def assemble_business_project(
+def assemble_reviewed_project(
     *,
+    project_type: ProjectType,
     values: ValidatedProjectForm,
     catalogue: ChannelCatalogue,
     selected_videos: list[Video],
@@ -18,10 +19,16 @@ def assemble_business_project(
     slug: str,
     existing: Project | None = None,
 ) -> Project:
-    """Create the persisted Business record after the authoritative video review."""
-    if values.business_config is None or values.music_config is not None:
-        raise ValueError("Validated Business configuration is required.")
-    if existing and existing.project_type is not ProjectType.BUSINESS:
+    """Create a persisted project after the shared authoritative video review."""
+    if project_type is ProjectType.BUSINESS:
+        if values.business_config is None or values.music_config is not None:
+            raise ValueError("Validated Business configuration is required.")
+    elif project_type is ProjectType.MUSIC:
+        if values.music_config is None or values.music_config.primary_cta is None or values.business_config is not None:
+            raise ValueError("Validated Music configuration is required.")
+    else:
+        raise ValueError(f"Unsupported project type: {project_type!r}.")
+    if existing and existing.project_type is not project_type:
         raise ValueError("An existing project cannot change project type.")
 
     selected_ids = {video.video_id for video in selected_videos}
@@ -41,10 +48,10 @@ def assemble_business_project(
         channel_title=catalogue.channel_title,
         channel_thumbnail=catalogue.channel_thumbnail,
         id=existing.id if existing else str(uuid4()),
-        project_type=ProjectType.BUSINESS,
+        project_type=project_type,
         additional_urls=list(values.additional_urls),
-        business_config=values.business_config,
-        music_config=None,
+        business_config=values.business_config if project_type is ProjectType.BUSINESS else None,
+        music_config=values.music_config if project_type is ProjectType.MUSIC else None,
         source_channel_url=values.channel_url,
         manual_video_urls=list(values.manual_video_urls),
         excluded_video_ids=sorted(excluded_ids),
@@ -57,3 +64,13 @@ def assemble_business_project(
         publication_revision=existing.publication_revision if existing else None,
         extra_fields=extra_fields,
     )
+
+
+def assemble_business_project(**kwargs) -> Project:
+    """Compatibility entry point for the approved Business workflow."""
+    return assemble_reviewed_project(project_type=ProjectType.BUSINESS, **kwargs)
+
+
+def assemble_music_project(**kwargs) -> Project:
+    """Music adapter over the same reviewed-project assembly service."""
+    return assemble_reviewed_project(project_type=ProjectType.MUSIC, **kwargs)

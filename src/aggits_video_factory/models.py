@@ -98,9 +98,8 @@ class PrimaryCta:
         if self.cta_type is PrimaryCtaType.CUSTOM:
             if not self.custom_label:
                 raise ProjectValidationError("A custom primary CTA requires a custom label.")
-            if not self.display_label:
-                self.display_label = self.custom_label
-        elif not self.display_label:
+            self.display_label = self.custom_label
+        else:
             self.display_label = PRIMARY_CTA_LABELS[self.cta_type]
         if not self.destination_url:
             raise ProjectValidationError("A configured primary CTA requires a destination URL.")

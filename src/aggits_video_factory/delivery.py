@@ -13,8 +13,8 @@ class DeliveryError(RuntimeError):
 
 
 def request_delivery(project: Project, email: str, timeout: float = 30.0) -> dict[str, Any]:
-    if project.project_type is not ProjectType.BUSINESS:
-        raise DeliveryError("Music email delivery is not available in Milestone 4.")
+    if project.project_type not in {ProjectType.BUSINESS, ProjectType.MUSIC}:
+        raise DeliveryError(f"Unsupported project type: {project.project_type!r}.")
     if not project.published_url or not project.publication_revision:
         raise DeliveryError("The jukebox must be published before its email can be sent.")
     payload = {
@@ -25,6 +25,8 @@ def request_delivery(project: Project, email: str, timeout: float = 30.0) -> dic
         "qrUrl": f"{project.published_url.rstrip('/')}/qr-card.png",
         "revision": project.publication_revision,
         "brand": "CRISPY BITS",
+        "projectType": project.project_type.value,
+        "productName": "CRISPY BITS MUSIC" if project.project_type is ProjectType.MUSIC else "CRISPY BITS BUSINESS",
     }
     try:
         response = requests.post(DELIVERY_ENDPOINT, json=payload, timeout=timeout)

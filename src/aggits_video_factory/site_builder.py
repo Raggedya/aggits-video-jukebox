@@ -20,7 +20,11 @@ CREAM = "#f2e4bf"
 INK = "#070605"
 
 
-def _story_sections(source: str, customer_name: str) -> list[dict[str, str]]:
+def _story_sections(
+    source: str,
+    customer_name: str,
+    project_type: ProjectType = ProjectType.BUSINESS,
+) -> list[dict[str, str]]:
     """Turn approved customer copy into readable story beats without adding facts."""
     cleaned = re.sub(r"\*{2,}[^*]+\*{2,}", " ", source or "")
     cleaned = re.sub(r"(\b(?:19|20)\d{2})\s+where\s+", r"\1. ", cleaned, flags=re.IGNORECASE)
@@ -31,22 +35,32 @@ def _story_sections(source: str, customer_name: str) -> list[dict[str, str]]:
         for sentence in re.split(r"(?<=[.!?])\s+|\n+", re.sub(r"\s+", " ", cleaned).strip())
         if sentence.strip()
     ]
-    fallback_headings = ["THE BEGINNING", "THE JOURNEY", "THE EXPERIENCE", "THE IDEA", "THE WORK", "THE APPROACH"]
+    business_headings = ["THE BEGINNING", "THE JOURNEY", "THE EXPERIENCE", "THE IDEA", "THE WORK", "THE APPROACH"]
+    music_headings = ["THE BEGINNING", "THE SOUND", "THE STORY", "THE MUSIC", "THE JOURNEY", "THE NEXT CHAPTER"]
+    fallback_headings = music_headings if project_type is ProjectType.MUSIC else business_headings
     sections: list[dict[str, str]] = []
     for index, sentence in enumerate(sentences[:10]):
         years = re.findall(r"\b(?:19|20)\d{2}\b", sentence)
         lowered = sentence.casefold()
         if years:
             heading = years[-1]
-        elif "promoted" in lowered:
+        elif project_type is ProjectType.MUSIC and ("album" in lowered or "release" in lowered):
+            heading = "THE RELEASES"
+        elif project_type is ProjectType.MUSIC and ("live" in lowered or "stage" in lowered or "tour" in lowered):
+            heading = "ON STAGE"
+        elif project_type is ProjectType.MUSIC and ("band" in lowered or "artist" in lowered):
+            heading = "THE BAND"
+        elif project_type is ProjectType.MUSIC and ("music" in lowered or "song" in lowered or "sound" in lowered):
+            heading = "THE MUSIC"
+        elif project_type is ProjectType.BUSINESS and "promoted" in lowered:
             heading = "TEAM LEADERSHIP"
-        elif "main aim" in lowered:
+        elif project_type is ProjectType.BUSINESS and "main aim" in lowered:
             heading = "THE AIM"
-        elif "custom build" in lowered:
+        elif project_type is ProjectType.BUSINESS and "custom build" in lowered:
             heading = "CUSTOM BUILDS"
-        elif "technology" in lowered:
+        elif project_type is ProjectType.BUSINESS and "technology" in lowered:
             heading = "THE APPROACH"
-        elif "customer" in lowered:
+        elif project_type is ProjectType.BUSINESS and "customer" in lowered:
             heading = "CUSTOMER FIRST"
         else:
             heading = fallback_headings[min(index, len(fallback_headings) - 1)]
@@ -198,8 +212,11 @@ def create_social_card(project: Project, destination: Path) -> None:
 
 
 def build_project_site(project: Project, destination: Path) -> Path:
-    if project.project_type is not ProjectType.BUSINESS:
-        raise ValueError("Music machine generation is not available in Milestone 4.")
+    if project.project_type not in {ProjectType.BUSINESS, ProjectType.MUSIC}:
+        raise ValueError(f"Unsupported project type: {project.project_type!r}.")
+    music_cta = project.music_config.primary_cta if project.music_config else None
+    if project.project_type is ProjectType.MUSIC and music_cta is None:
+        raise ValueError("A Music project requires a configured primary CTA before generation.")
     destination.mkdir(parents=True, exist_ok=True)
     assets = destination / "assets"
     if assets.exists():
@@ -209,7 +226,8 @@ def build_project_site(project: Project, destination: Path) -> Path:
     canonical = project.published_url or f"{PUBLIC_BASE_URL}/{project.slug}/"
     social_url = f"{canonical.rstrip('/')}/social-card.jpg"
     description = f"Pull the CRISPY BITS reel and discover one of {len(project.videos)} videos from {project.title}."
-    story_sections = _story_sections(project.ticker_text, project.title)
+    story_sections = _story_sections(project.ticker_text, project.title, project.project_type)
+    primary_action_label = music_cta.display_label if music_cta else "SHOP NOW"
     replacements = {
         "{{META_DESCRIPTION}}": html.escape(description, quote=True),
         "{{CANONICAL_URL}}": html.escape(canonical, quote=True),
@@ -218,6 +236,8 @@ def build_project_site(project: Project, destination: Path) -> Path:
         "{{MACHINE_LABEL}}": html.escape(f"{project.title} CRISPY BITS Video Jukebox", quote=True),
         "{{MACHINE_TITLE}}": html.escape(project.title),
         "{{TICKER_TEXT}}": html.escape(project.ticker_text or "PULL FOR A VIDEO"),
+        "{{PRIMARY_ACTION_LABEL}}": html.escape(primary_action_label),
+        "{{PRIMARY_ACTION_ARIA}}": html.escape("Shop unavailable" if project.project_type is ProjectType.BUSINESS else primary_action_label, quote=True),
     }
     template = resource_path("templates/machine.html").read_text(encoding="utf-8")
     for token, value in replacements.items():
@@ -225,8 +245,24 @@ def build_project_site(project: Project, destination: Path) -> Path:
     (destination / "index.html").write_text(template, encoding="utf-8")
 
     shop_url = project.business_config.shop_url if project.business_config else None
+    customer_config = {
+        "customerName": project.title,
+        "customerLogo": project.channel_thumbnail,
+        "customerTheme": "cinematic-customer",
+        "tagline": project.ticker_text,
+        "customerTagline": "MORE STORIES • MORE TO DISCOVER",
+        "customerStory": project.ticker_text,
+        "customerStorySections": story_sections,
+        "youtubeChannel": project.channel_url,
+        "subscribeURL": f"https://www.youtube.com/channel/{project.channel_id}?sub_confirmation=1" if project.channel_id else project.channel_url,
+        "primaryCTA": "VIEW ON YOUTUBE",
+    }
+    if project.project_type is ProjectType.BUSINESS:
+        customer_config.update({"shopURL": shop_url, "shopEnabled": bool(shop_url)})
+
     payload = {
         "schemaVersion": 2,
+        "projectType": project.project_type.value,
         "slug": project.slug,
         "title": project.title,
         "tickerText": project.ticker_text,
@@ -235,20 +271,7 @@ def build_project_site(project: Project, destination: Path) -> Path:
         "channelUrl": project.channel_url,
         "channelThumbnail": project.channel_thumbnail,
         "videoCount": len(project.videos),
-        "customerConfig": {
-            "customerName": project.title,
-            "customerLogo": project.channel_thumbnail,
-            "customerTheme": "cinematic-customer",
-            "tagline": project.ticker_text,
-            "customerTagline": "MORE STORIES • MORE TO DISCOVER",
-            "customerStory": project.ticker_text,
-            "customerStorySections": story_sections,
-            "youtubeChannel": project.channel_url,
-            "subscribeURL": f"https://www.youtube.com/channel/{project.channel_id}?sub_confirmation=1" if project.channel_id else project.channel_url,
-            "shopURL": shop_url,
-            "shopEnabled": bool(shop_url),
-            "primaryCTA": "VIEW ON YOUTUBE",
-        },
+        "customerConfig": customer_config,
         "videos": [
             {
                 "id": item.video_id,
@@ -276,6 +299,14 @@ def build_project_site(project: Project, destination: Path) -> Path:
             for item in project.videos
         ],
     }
+    if music_cta:
+        payload["musicConfig"] = {
+            "primaryCTA": {
+                "type": music_cta.cta_type.value,
+                "displayLabel": music_cta.display_label,
+                "destinationURL": music_cta.destination_url,
+            }
+        }
     (destination / "machine.json").write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     create_qr_card(project, destination / "qr-card.png")
     create_social_card(project, destination / "social-card.jpg")
