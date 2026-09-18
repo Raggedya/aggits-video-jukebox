@@ -233,7 +233,7 @@ class MusicWorkflowTests(unittest.TestCase):
             self.assertNotIn("https://example.com/preorder", rebuilt)
             self.assertIn("<b>GET TICKETS</b>", page)
 
-    def test_music_story_headings_are_type_appropriate_and_business_story_is_unchanged(self):
+    def test_music_story_headings_are_type_appropriate_and_business_has_no_generated_sections(self):
         music_text = "The band formed in 2018. Their sound developed on stage. The album was released in 2025."
         music_sections = _story_sections(music_text, "The Fakeaways", ProjectType.MUSIC)
         music_headings = {item["heading"] for item in music_sections}
@@ -241,13 +241,8 @@ class MusicWorkflowTests(unittest.TestCase):
         self.assertNotIn("CUSTOMER FIRST", music_headings)
         self.assertTrue(music_headings & {"THE BAND", "THE MUSIC", "ON STAGE", "THE RELEASES", "2018", "2025"})
         business_text = "We create custom builds. The customer comes first."
-        self.assertEqual(
-            _story_sections(business_text, "Example", ProjectType.BUSINESS),
-            _story_sections(business_text, "Example"),
-        )
-        business_headings = [item["heading"] for item in _story_sections(business_text, "Example")]
-        self.assertIn("CUSTOM BUILDS", business_headings)
-        self.assertIn("CUSTOMER FIRST", business_headings)
+        self.assertEqual(_story_sections(business_text, "Example", ProjectType.BUSINESS), [])
+        self.assertEqual(_story_sections(business_text, "Example"), [])
 
     def test_reviewed_music_assembly_reuses_shared_video_review_and_preserves_manual_story(self):
         values = validate_project_form(ProjectFormValues(

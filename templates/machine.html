@@ -83,8 +83,8 @@
         <button type="button" class="control-button" data-action="spin-again" disabled><span class="control-icon" aria-hidden="true">↻</span><b>RE-SPIN</b></button>
       </section>
 
-      <section class="customer-story" aria-label="The story so far">
-        <header>THE STORY SO FAR</header>
+      <section class="customer-story" aria-label="{{STORY_ARIA_LABEL}}">
+        {{STORY_HEADER_MARKUP}}
         <div class="story-window" data-story-window role="button" tabindex="0" aria-label="Customer story. Tap to pause or resume.">
           <div class="story-track" data-story-track>
             <section><h3>{{MACHINE_TITLE}}</h3><p data-ticker-copy>{{TICKER_TEXT}}</p></section>

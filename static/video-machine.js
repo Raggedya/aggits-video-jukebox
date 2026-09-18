@@ -694,7 +694,7 @@ if (machine) {
       primaryActionButton.disabled = true;
       primaryActionButton.setAttribute('aria-disabled', 'true');
       primaryActionButton.setAttribute('aria-label', primaryActionDestination ? primaryActionLabel : `${primaryActionLabel || 'Primary action'} unavailable`);
-      masterStorySections = Array.isArray(config.customerConfig?.customerStorySections)
+      masterStorySections = activeProjectType === 'music' && Array.isArray(config.customerConfig?.customerStorySections)
         ? config.customerConfig.customerStorySections.filter(beat => beat?.heading && beat?.text)
         : [];
       channelThumbnail = String(config.channelThumbnail || '').trim();

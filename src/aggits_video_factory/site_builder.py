@@ -25,7 +25,9 @@ def _story_sections(
     customer_name: str,
     project_type: ProjectType = ProjectType.BUSINESS,
 ) -> list[dict[str, str]]:
-    """Turn approved customer copy into readable story beats without adding facts."""
+    """Turn approved Music copy into readable story beats without adding facts."""
+    if project_type is ProjectType.BUSINESS:
+        return []
     cleaned = re.sub(r"\*{2,}[^*]+\*{2,}", " ", source or "")
     cleaned = re.sub(r"(\b(?:19|20)\d{2})\s+where\s+", r"\1. ", cleaned, flags=re.IGNORECASE)
     cleaned = re.sub(r"\s+I was promoted\b", ". I was promoted", cleaned, flags=re.IGNORECASE)
@@ -35,35 +37,23 @@ def _story_sections(
         for sentence in re.split(r"(?<=[.!?])\s+|\n+", re.sub(r"\s+", " ", cleaned).strip())
         if sentence.strip()
     ]
-    business_headings = ["THE BEGINNING", "THE JOURNEY", "THE EXPERIENCE", "THE IDEA", "THE WORK", "THE APPROACH"]
     music_headings = ["THE BEGINNING", "THE SOUND", "THE STORY", "THE MUSIC", "THE JOURNEY", "THE NEXT CHAPTER"]
-    fallback_headings = music_headings if project_type is ProjectType.MUSIC else business_headings
     sections: list[dict[str, str]] = []
     for index, sentence in enumerate(sentences[:10]):
         years = re.findall(r"\b(?:19|20)\d{2}\b", sentence)
         lowered = sentence.casefold()
         if years:
             heading = years[-1]
-        elif project_type is ProjectType.MUSIC and ("album" in lowered or "release" in lowered):
+        elif "album" in lowered or "release" in lowered:
             heading = "THE RELEASES"
-        elif project_type is ProjectType.MUSIC and ("live" in lowered or "stage" in lowered or "tour" in lowered):
+        elif "live" in lowered or "stage" in lowered or "tour" in lowered:
             heading = "ON STAGE"
-        elif project_type is ProjectType.MUSIC and ("band" in lowered or "artist" in lowered):
+        elif "band" in lowered or "artist" in lowered:
             heading = "THE BAND"
-        elif project_type is ProjectType.MUSIC and ("music" in lowered or "song" in lowered or "sound" in lowered):
+        elif "music" in lowered or "song" in lowered or "sound" in lowered:
             heading = "THE MUSIC"
-        elif project_type is ProjectType.BUSINESS and "promoted" in lowered:
-            heading = "TEAM LEADERSHIP"
-        elif project_type is ProjectType.BUSINESS and "main aim" in lowered:
-            heading = "THE AIM"
-        elif project_type is ProjectType.BUSINESS and "custom build" in lowered:
-            heading = "CUSTOM BUILDS"
-        elif project_type is ProjectType.BUSINESS and "technology" in lowered:
-            heading = "THE APPROACH"
-        elif project_type is ProjectType.BUSINESS and "customer" in lowered:
-            heading = "CUSTOMER FIRST"
         else:
-            heading = fallback_headings[min(index, len(fallback_headings) - 1)]
+            heading = music_headings[min(index, len(music_headings) - 1)]
         sections.append({"heading": heading, "text": sentence})
     if not sections:
         sections.append({"heading": customer_name.upper(), "text": "Pull the lever and discover the story."})
@@ -229,6 +219,8 @@ def build_project_site(project: Project, destination: Path) -> Path:
     story_sections = _story_sections(project.ticker_text, project.title, project.project_type)
     primary_action_label = music_cta.display_label if music_cta else "SHOP NOW"
     initial_reel_instruction = "PULL THE LEVER  ──────→" if project.project_type is ProjectType.BUSINESS else "PULL TO DISCOVER"
+    story_header_markup = "" if project.project_type is ProjectType.BUSINESS else "<header>THE STORY SO FAR</header>"
+    story_aria_label = project.title if project.project_type is ProjectType.BUSINESS else "The story so far"
     replacements = {
         "{{META_DESCRIPTION}}": html.escape(description, quote=True),
         "{{CANONICAL_URL}}": html.escape(canonical, quote=True),
@@ -237,6 +229,8 @@ def build_project_site(project: Project, destination: Path) -> Path:
         "{{MACHINE_LABEL}}": html.escape(f"{project.title} CRISPY BITS Video Jukebox", quote=True),
         "{{MACHINE_TITLE}}": html.escape(project.title),
         "{{INITIAL_REEL_INSTRUCTION}}": initial_reel_instruction,
+        "{{STORY_HEADER_MARKUP}}": story_header_markup,
+        "{{STORY_ARIA_LABEL}}": html.escape(story_aria_label, quote=True),
         "{{TICKER_TEXT}}": html.escape(project.ticker_text or "PULL FOR A VIDEO"),
         "{{PRIMARY_ACTION_LABEL}}": html.escape(primary_action_label),
         "{{PRIMARY_ACTION_ARIA}}": html.escape("Shop unavailable" if project.project_type is ProjectType.BUSINESS else primary_action_label, quote=True),
