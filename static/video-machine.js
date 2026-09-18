@@ -53,6 +53,7 @@ if (machine) {
   let masterStorySections = [];
   let channelThumbnail = '';
   let primaryActionDestination = '';
+  let primaryActionLabel = 'SHOP NOW';
   let shopDestination = '';
   let activeProjectType = 'business';
   let shopPlaqueTimer = 0;
@@ -570,6 +571,11 @@ if (machine) {
     window.open(shopDestination, '_blank', 'noopener,noreferrer');
   }
 
+  function openPlaqueAction() {
+    if (activeProjectType === 'music') openPrimaryAction();
+    else openShop();
+  }
+
   function stopShopPlaqueCycle() {
     window.clearTimeout(shopPlaqueTimer);
     shopPlaqueTimer = 0;
@@ -590,7 +596,9 @@ if (machine) {
 
   function configureShopPlaque(shopEnabled) {
     stopShopPlaqueCycle();
-    shopPlaqueEnabled = activeProjectType === 'business' && shopEnabled === true && Boolean(shopDestination);
+    shopPlaqueEnabled = activeProjectType === 'music'
+      ? Boolean(primaryActionDestination)
+      : shopEnabled === true && Boolean(shopDestination);
     shopPlaque.classList.toggle('is-shop-enabled', shopPlaqueEnabled);
     if (!shopPlaqueEnabled) {
       shopPlaque.removeAttribute('role');
@@ -600,7 +608,12 @@ if (machine) {
     }
     shopPlaque.setAttribute('role', 'link');
     shopPlaque.setAttribute('tabindex', '0');
-    shopPlaque.setAttribute('aria-label', `Visit ${machineIdentity || 'this business'} online shop`);
+    shopPlaque.setAttribute(
+      'aria-label',
+      activeProjectType === 'music'
+        ? `${primaryActionLabel} for ${machineIdentity || 'this artist'}`
+        : `Visit ${machineIdentity || 'this business'} online shop`,
+    );
     scheduleShopPlaqueState('shop', SHOP_PLAQUE_TITLE_DURATION);
   }
 
@@ -623,12 +636,12 @@ if (machine) {
       else openShop();
     });
     shopPlaque.addEventListener('click', () => {
-      if (shopPlaqueEnabled) openShop();
+      if (shopPlaqueEnabled) openPlaqueAction();
     });
     shopPlaque.addEventListener('keydown', event => {
       if (shopPlaqueEnabled && (event.key === 'Enter' || event.key === ' ')) {
         event.preventDefault();
-        openShop();
+        openPlaqueAction();
       }
     });
     soundButton.addEventListener('click', () => {
@@ -684,7 +697,7 @@ if (machine) {
       primaryActionDestination = activeProjectType === 'music'
         ? String(musicPrimaryCta?.destinationURL || '').trim()
         : shopDestination;
-      const primaryActionLabel = activeProjectType === 'music'
+      primaryActionLabel = activeProjectType === 'music'
         ? String(musicPrimaryCta?.displayLabel || '').trim()
         : 'SHOP NOW';
       const primaryActionText = primaryActionButton.querySelector('b');

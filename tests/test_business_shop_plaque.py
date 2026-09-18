@@ -99,7 +99,11 @@ class BusinessShopPlaqueTests(unittest.TestCase):
 
     def test_plaque_defaults_to_business_title_and_cycles_at_restrained_intervals(self):
         self.assertIn('<strong data-machine-title>{{MACHINE_TITLE}}</strong>', TEMPLATE)
-        self.assertIn('data-shop-plaque-prompt aria-hidden="true">SHOP NOW →</strong>', TEMPLATE)
+        prompt = TEMPLATE.split('data-shop-plaque-prompt aria-hidden="true">', 1)[1].split('</strong>', 1)[0]
+        self.assertIn('<span>SHOP NOW</span>', prompt)
+        self.assertNotIn('→', prompt)
+        self.assertIn('class="customer-identity-touch"', prompt)
+        self.assertIn('aria-hidden="true" focusable="false"', prompt)
         self.assertIn("const SHOP_PLAQUE_TITLE_DURATION = 10000;", SCRIPT)
         self.assertIn("const SHOP_PLAQUE_PROMPT_DURATION = 3500;", SCRIPT)
         self.assertIn("shopPlaque.dataset.shopPlaqueState = 'title';", SCRIPT)
@@ -108,12 +112,26 @@ class BusinessShopPlaqueTests(unittest.TestCase):
         self.assertIn("state === 'shop' ? SHOP_PLAQUE_PROMPT_DURATION : SHOP_PLAQUE_TITLE_DURATION", SCRIPT)
         self.assertIn("transition:opacity .7s ease", STYLES)
 
+    def test_touch_symbol_is_visible_only_inside_the_shop_now_state(self):
+        title_markup = TEMPLATE.split('<strong data-machine-title>', 1)[1].split('</strong>', 1)[0]
+        prompt_markup = TEMPLATE.split('data-shop-plaque-prompt aria-hidden="true">', 1)[1].split('</strong>', 1)[0]
+
+        self.assertNotIn("customer-identity-touch", title_markup)
+        self.assertEqual(prompt_markup.count('class="customer-identity-touch"'), 1)
+        self.assertIn(".customer-identity-shop{display:flex", STYLES)
+        self.assertIn("opacity:0", STYLES.split(".customer-identity-shop{", 1)[1].split("}", 1)[0])
+        self.assertIn(
+            '.customer-identity[data-shop-plaque-state="shop"] .customer-identity-shop{opacity:1',
+            STYLES,
+        )
+
     def test_both_visual_states_share_one_click_and_keyboard_shop_handler(self):
         self.assertIn("shopPlaque.addEventListener('click'", SCRIPT)
-        self.assertIn("if (shopPlaqueEnabled) openShop();", SCRIPT)
+        self.assertIn("if (shopPlaqueEnabled) openPlaqueAction();", SCRIPT)
         self.assertIn("shopPlaque.addEventListener('keydown'", SCRIPT)
         self.assertIn("event.key === 'Enter' || event.key === ' '", SCRIPT)
         self.assertIn("window.open(shopDestination, '_blank', 'noopener,noreferrer');", SCRIPT)
+        self.assertIn("window.open(primaryActionDestination, '_blank', 'noopener,noreferrer');", SCRIPT)
         self.assertNotIn("data-shop-plaque-state ===", SCRIPT)
         self.assertIn("shopPlaque.setAttribute('role', 'link');", SCRIPT)
         self.assertIn("shopPlaque.setAttribute('tabindex', '0');", SCRIPT)
@@ -125,19 +143,21 @@ class BusinessShopPlaqueTests(unittest.TestCase):
 
         self.assertFalse(config["customerConfig"]["shopEnabled"])
         self.assertIsNone(config["customerConfig"]["shopURL"])
-        self.assertIn("shopPlaqueEnabled = activeProjectType === 'business' && shopEnabled === true && Boolean(shopDestination);", SCRIPT)
+        self.assertIn(": shopEnabled === true && Boolean(shopDestination);", SCRIPT)
         self.assertIn("shopPlaque.removeAttribute('role');", SCRIPT)
         self.assertIn("shopPlaque.removeAttribute('tabindex');", SCRIPT)
         self.assertIn("shopPlaque.removeAttribute('aria-label');", SCRIPT)
 
-    def test_music_never_enables_or_consumes_the_business_shop_plaque(self):
+    def test_music_plaque_uses_primary_cta_without_consuming_business_shop_configuration(self):
         config = generated_config(music_project())
 
         self.assertEqual(config["projectType"], "music")
         self.assertNotIn("shopURL", config["customerConfig"])
         self.assertNotIn("shopEnabled", config["customerConfig"])
-        self.assertIn("activeProjectType === 'business'", SCRIPT)
+        self.assertIn("activeProjectType === 'music'\n      ? Boolean(primaryActionDestination)", SCRIPT)
         self.assertNotIn("activeProjectType === 'music' && shopEnabled", SCRIPT)
+        self.assertIn("if (activeProjectType === 'music') openPrimaryAction();\n    else openShop();", SCRIPT)
+        self.assertIn("`${primaryActionLabel} for ${machineIdentity || 'this artist'}`", SCRIPT)
 
     def test_existing_bottom_shop_control_and_no_shop_state_are_unchanged(self):
         self.assertIn('data-action="shop" aria-label="{{PRIMARY_ACTION_ARIA}}" disabled', TEMPLATE)
@@ -156,6 +176,7 @@ class BusinessShopPlaqueTests(unittest.TestCase):
         self.assertIn(".customer-identity-copy{display:grid", STYLES)
         self.assertIn("grid-area:1/1", STYLES)
         self.assertIn('.customer-identity[data-shop-plaque-state="shop"]', STYLES)
+        self.assertIn(".customer-identity-touch{display:block;width:.9em;height:.9em", STYLES)
         self.assertIn(".customer-identity.is-shop-enabled:focus-visible", STYLES)
         self.assertIn("@media (prefers-reduced-motion:reduce)", STYLES)
         self.assertIn(".customer-identity-copy>strong{transition-duration:.01ms!important;transform:none!important;filter:none!important}", STYLES)
