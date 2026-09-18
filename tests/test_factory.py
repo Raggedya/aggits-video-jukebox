@@ -130,7 +130,7 @@ class FactoryTests(unittest.TestCase):
             self.assertIn('.music-machine[data-video-open="true"] .video-stage', video_css)
             page = (destination / "index.html").read_text(encoding="utf-8")
             self.assertNotIn("VIDEO MUSIC MACHINE", page)
-            self.assertIn("SUBSCRIBE", page)
+            self.assertIn("SHOP NOW", page)
             self.assertNotIn("OPEN<br>YOUTUBE", page)
             self.assertIn("crispy-bits-logo-cutout-v2.png", page)
             self.assertIn("data-content-description", page)
