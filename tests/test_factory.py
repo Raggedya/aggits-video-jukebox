@@ -133,7 +133,7 @@ class FactoryTests(unittest.TestCase):
             self.assertIn("await closeVideo()", script)
             self.assertIn("shopDestination = String(config.customerConfig?.shopURL || '').trim()", script)
             self.assertNotIn("sub_confirmation=1", script)
-            self.assertIn("function startStoryTicker()", script)
+            self.assertIn("function startStoryTicker(force = false)", script)
             self.assertIn("storyTrack.style.setProperty('--story-start', `${start}px`)", script)
             self.assertIn("storyTrack.style.setProperty('--story-end', `${end}px`)", script)
             self.assertIn("function updateStory(video = null)", script)

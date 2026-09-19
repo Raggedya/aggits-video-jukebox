@@ -58,6 +58,9 @@ if (machine) {
   let activeProjectType = 'business';
   let shopPlaqueTimer = 0;
   let shopPlaqueEnabled = false;
+  let storyTickerStarted = false;
+  let storyTickerStarting = false;
+  let storyTickerEpoch = 0;
   let revealTimer = 0;
   let selectionEpoch = 0;
   let reelMotorAudio = null;
@@ -154,17 +157,22 @@ if (machine) {
     });
   }
 
-  function startStoryTicker() {
+  function startStoryTicker(force = false) {
     if (!storyTrack || !storyWindow) return;
+    if ((storyTickerStarted || storyTickerStarting) && !force) return;
+    storyTickerStarting = true;
+    const epoch = ++storyTickerEpoch;
     storyTrack.classList.remove('is-scrolling');
     storyTrack.style.removeProperty('--story-start');
     storyTrack.style.removeProperty('--story-end');
     storyTrack.style.removeProperty('--story-duration');
     requestAnimationFrame(() => requestAnimationFrame(() => {
+      if (epoch !== storyTickerEpoch) return;
       const contentHeight = storyTrack.scrollHeight;
       const windowHeight = storyWindow.clientHeight;
       if (!contentHeight || !windowHeight) {
-        window.setTimeout(startStoryTicker, 200);
+        storyTickerStarting = false;
+        window.setTimeout(() => startStoryTicker(force), 200);
         return;
       }
       const start = Math.round(windowHeight * .88);
@@ -174,6 +182,8 @@ if (machine) {
       storyTrack.style.setProperty('--story-end', `${end}px`);
       storyTrack.style.setProperty('--story-duration', `${Math.max(34, travel / 12).toFixed(1)}s`);
       storyTrack.classList.add('is-scrolling');
+      storyTickerStarted = true;
+      storyTickerStarting = false;
     }));
   }
 
@@ -200,7 +210,6 @@ if (machine) {
       appendStoryText(section, 'p', video.storyText || `Selected from ${video.channelTitle || machineIdentity}. Press Play Video to watch on YouTube.`);
     }
     storyTrack.replaceChildren(section);
-    window.setTimeout(startStoryTicker, 0);
   }
 
   function updateSoundControl() {
@@ -745,7 +754,7 @@ if (machine) {
 
   load();
   window.addEventListener('resize', () => {
-    startStoryTicker();
+    startStoryTicker(true);
   });
   window.addEventListener('pagehide', stopShopPlaqueCycle);
 
