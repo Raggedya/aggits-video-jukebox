@@ -105,7 +105,7 @@ def request_delivery(
     timestamp: int | None = None,
     nonce: str | None = None,
 ) -> dict[str, Any]:
-    if project.project_type not in {ProjectType.BUSINESS, ProjectType.MUSIC}:
+    if project.project_type not in {ProjectType.BUSINESS, ProjectType.MUSIC, ProjectType.TOURISM}:
         raise DeliveryError(f"Unsupported project type: {project.project_type!r}.", code="unsupported_project_type")
     if project.status != "published" or not project.published_url or not project.publication_revision:
         raise DeliveryError("The jukebox must be verified as published before its email can be sent.", code="publication_not_verified")
@@ -119,7 +119,11 @@ def request_delivery(
         "revision": project.publication_revision,
         "brand": "CRISPY BITS",
         "projectType": project.project_type.value,
-        "productName": "CRISPY BITS MUSIC" if project.project_type is ProjectType.MUSIC else "CRISPY BITS BUSINESS",
+        "productName": {
+            ProjectType.BUSINESS: "CRISPY BITS BUSINESS",
+            ProjectType.MUSIC: "CRISPY BITS MUSIC",
+            ProjectType.TOURISM: "CRISPY BITS TOURISM",
+        }[project.project_type],
     }
     body = json.dumps(payload, separators=(",", ":"), sort_keys=True, ensure_ascii=False).encode("utf-8")
     stamp = str(int(time.time() if timestamp is None else timestamp))

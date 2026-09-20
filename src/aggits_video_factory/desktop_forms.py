@@ -6,7 +6,7 @@ from typing import Iterable
 from uuid import uuid4
 
 from .config import MAX_TICKER_LENGTH
-from .models import BusinessConfig, MusicConfig, PrimaryCta, PrimaryCtaType, Project, ProjectType, utc_now
+from .models import BusinessConfig, MusicConfig, PrimaryCta, PrimaryCtaType, Project, ProjectType, TourismConfig, utc_now
 from .youtube_api import YouTubeClient
 
 
@@ -43,6 +43,8 @@ class ProjectFormValues:
     cta_label: str = DEFAULT_CTA_LABEL
     destination_url: str = ""
     custom_label: str = ""
+    more_info_url: str = ""
+    stay_url: str = ""
 
     def comparable(self) -> tuple[object, ...]:
         return (
@@ -55,6 +57,8 @@ class ProjectFormValues:
             self.cta_label,
             self.destination_url,
             self.custom_label,
+            self.more_info_url,
+            self.stay_url,
         )
 
 
@@ -67,6 +71,7 @@ class ValidatedProjectForm:
     manual_video_urls: list[str]
     business_config: BusinessConfig | None
     music_config: MusicConfig | None
+    tourism_config: TourismConfig | None
 
 
 def _clean_urls(values: Iterable[str]) -> list[str]:
@@ -101,7 +106,8 @@ def validate_project_form(values: ProjectFormValues, project_type: ProjectType |
         if project_type is ProjectType.BUSINESS:
             business_config = BusinessConfig(shop_url=values.shop_url)
             music_config = None
-        else:
+            tourism_config = None
+        elif project_type is ProjectType.MUSIC:
             cta_type = CTA_LABEL_TO_TYPE.get(values.cta_label)
             if cta_type is None:
                 raise FormValidationError("cta_type", "Select a valid Primary Call to Action.")
@@ -112,6 +118,14 @@ def validate_project_form(values: ProjectFormValues, project_type: ProjectType |
             )
             business_config = None
             music_config = MusicConfig(primary_cta=primary_cta)
+            tourism_config = None
+        else:
+            business_config = None
+            music_config = None
+            tourism_config = TourismConfig(
+                more_info_url=values.more_info_url,
+                stay_url=values.stay_url,
+            )
 
         # Project construction is the authoritative validation for shared URL
         # limits and type-specific configuration.
@@ -127,6 +141,7 @@ def validate_project_form(values: ProjectFormValues, project_type: ProjectType |
             additional_urls=additional_urls,
             business_config=business_config,
             music_config=music_config,
+            tourism_config=tourism_config,
             source_channel_url=channel_url,
             manual_video_urls=manual_urls,
         )
@@ -137,6 +152,10 @@ def validate_project_form(values: ProjectFormValues, project_type: ProjectType |
         lowered = message.casefold()
         if "shop" in lowered:
             field_name = "shop_url"
+        elif "more info" in lowered:
+            field_name = "more_info_url"
+        elif "stay" in lowered:
+            field_name = "stay_url"
         elif "custom" in lowered or "label" in lowered:
             field_name = "custom_label"
         elif "destination" in lowered or "cta" in lowered:
@@ -153,6 +172,7 @@ def validate_project_form(values: ProjectFormValues, project_type: ProjectType |
         manual_video_urls=manual_urls,
         business_config=validated.business_config,
         music_config=validated.music_config,
+        tourism_config=validated.tourism_config,
     )
 
 
@@ -168,6 +188,8 @@ def project_to_form_values(project: Project) -> ProjectFormValues:
         cta_label=CTA_TYPE_TO_LABEL.get(cta.cta_type, DEFAULT_CTA_LABEL) if cta else DEFAULT_CTA_LABEL,
         destination_url=cta.destination_url if cta else "",
         custom_label=cta.custom_label or "" if cta else "",
+        more_info_url=project.tourism_config.more_info_url or "" if project.tourism_config else "",
+        stay_url=project.tourism_config.stay_url or "" if project.tourism_config else "",
     )
 
 
@@ -193,6 +215,7 @@ def build_local_music_project(
         additional_urls=list(values.additional_urls),
         business_config=None,
         music_config=values.music_config,
+        tourism_config=None,
         source_channel_url=values.channel_url,
         manual_video_urls=list(values.manual_video_urls),
         excluded_video_ids=list(existing.excluded_video_ids) if existing else [],

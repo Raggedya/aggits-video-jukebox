@@ -21,6 +21,7 @@ class ProjectValidationError(ValueError):
 class ProjectType(str, Enum):
     BUSINESS = "business"
     MUSIC = "music"
+    TOURISM = "tourism"
 
 
 class PrimaryCtaType(str, Enum):
@@ -228,6 +229,33 @@ class MusicConfig:
 
 
 @dataclass(slots=True)
+class TourismConfig:
+    more_info_url: str | None = None
+    stay_url: str | None = None
+    extra_fields: dict[str, Any] = field(default_factory=dict, repr=False)
+
+    def __post_init__(self) -> None:
+        self.more_info_url = _optional_http_url(self.more_info_url, "More Info URL")
+        self.stay_url = _optional_http_url(self.stay_url, "Stay URL")
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            **self.extra_fields,
+            "more_info_url": self.more_info_url,
+            "stay_url": self.stay_url,
+        }
+
+    @classmethod
+    def from_dict(cls, value: dict[str, Any] | None) -> "TourismConfig":
+        source = dict(value or {})
+        return cls(
+            more_info_url=source.get("more_info_url", source.get("moreInfoUrl")),
+            stay_url=source.get("stay_url", source.get("stayUrl")),
+            extra_fields=_extra_fields(source, {"more_info_url", "moreInfoUrl", "stay_url", "stayUrl"}),
+        )
+
+
+@dataclass(slots=True)
 class Video:
     video_id: str
     title: str
@@ -292,6 +320,7 @@ class Project:
     additional_urls: list[str] = field(default_factory=list)
     business_config: BusinessConfig | None = None
     music_config: MusicConfig | None = None
+    tourism_config: TourismConfig | None = None
     source_channel_url: str = ""
     manual_video_urls: list[str] = field(default_factory=list)
     excluded_video_ids: list[str] = field(default_factory=list)
@@ -338,13 +367,17 @@ class Project:
             _optional_http_url(url, "Additional URL") or "" for url in self.additional_urls if str(url or "").strip()
         ]
         if self.project_type is ProjectType.BUSINESS:
-            if self.music_config is not None:
-                raise ProjectValidationError("A Business project cannot have active Music configuration.")
+            if self.music_config is not None or self.tourism_config is not None:
+                raise ProjectValidationError("A Business project cannot have active Music or Tourism configuration.")
             self.business_config = self.business_config or BusinessConfig()
-        else:
-            if self.business_config is not None:
-                raise ProjectValidationError("A Music project cannot have active Business configuration.")
+        elif self.project_type is ProjectType.MUSIC:
+            if self.business_config is not None or self.tourism_config is not None:
+                raise ProjectValidationError("A Music project cannot have active Business or Tourism configuration.")
             self.music_config = self.music_config or MusicConfig()
+        else:
+            if self.business_config is not None or self.music_config is not None:
+                raise ProjectValidationError("A Tourism project cannot have active Business or Music configuration.")
+            self.tourism_config = self.tourism_config or TourismConfig()
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -361,6 +394,7 @@ class Project:
             "additional_urls": list(self.additional_urls),
             "business_config": self.business_config.to_dict() if self.business_config else None,
             "music_config": self.music_config.to_dict() if self.music_config else None,
+            "tourism_config": self.tourism_config.to_dict() if self.tourism_config else None,
             "source_channel_url": self.source_channel_url,
             "manual_video_urls": list(self.manual_video_urls),
             "excluded_video_ids": list(self.excluded_video_ids),
@@ -385,7 +419,8 @@ class Project:
             "schemaVersion", "slug", "title", "ticker_text", "tickerText", "channel_url", "channelUrl",
             "channel_id", "channelId", "channel_title", "channelTitle", "channel_thumbnail", "channelThumbnail",
             "id", "project_id", "projectId", "project_type", "projectType", "additional_urls", "additionalUrls",
-            "business_config", "businessConfig", "music_config", "musicConfig", "source_channel_url", "sourceChannelUrl",
+            "business_config", "businessConfig", "music_config", "musicConfig", "tourism_config", "tourismConfig",
+            "source_channel_url", "sourceChannelUrl",
             "manual_video_urls", "manualVideoUrls", "excluded_video_ids", "excludedVideoIds", "videos", "status",
             "created_at", "createdAt", "updated_at", "updatedAt", "published_at", "publishedAt", "published_url",
             "publishedUrl", "delivery_status", "deliveryStatus", "publication_revision", "publicationRevision",
@@ -394,10 +429,13 @@ class Project:
         project_type = value.get("project_type", value.get("projectType", ProjectType.BUSINESS.value))
         business_value = value.get("business_config", value.get("businessConfig"))
         music_value = value.get("music_config", value.get("musicConfig"))
+        tourism_value = value.get("tourism_config", value.get("tourismConfig"))
         if business_value is not None and not isinstance(business_value, dict):
             raise ProjectValidationError("business_config must be an object or null.")
         if music_value is not None and not isinstance(music_value, dict):
             raise ProjectValidationError("music_config must be an object or null.")
+        if tourism_value is not None and not isinstance(tourism_value, dict):
+            raise ProjectValidationError("tourism_config must be an object or null.")
         return cls(
             slug=str(value.get("slug") or ""),
             title=str(value.get("title") or ""),
@@ -411,6 +449,7 @@ class Project:
             additional_urls=[str(item) for item in (value.get("additional_urls", value.get("additionalUrls", [])) or []) if str(item).strip()],
             business_config=BusinessConfig.from_dict(business_value) if business_value is not None else None,
             music_config=MusicConfig.from_dict(music_value) if music_value is not None else None,
+            tourism_config=TourismConfig.from_dict(tourism_value) if tourism_value is not None else None,
             source_channel_url=str(value.get("source_channel_url") or value.get("sourceChannelUrl") or value.get("channel_url") or value.get("channelUrl") or ""),
             manual_video_urls=[str(item) for item in (value.get("manual_video_urls", value.get("manualVideoUrls", [])) or []) if str(item).strip()],
             excluded_video_ids=[str(item) for item in (value.get("excluded_video_ids", value.get("excludedVideoIds", [])) or []) if str(item).strip()],

@@ -8,6 +8,7 @@ if (machine) {
   const rows = [...reel.querySelectorAll('.reel-strip > *')];
   const lever = machine.querySelector('.lever');
   const shopPlaque = machine.querySelector('[data-shop-plaque]');
+  const shopPlaqueLabel = machine.querySelector('[data-shop-plaque-prompt] span');
   const titleNode = machine.querySelector('[data-machine-title]');
   const storyWindow = machine.querySelector('[data-story-window]');
   const storyTrack = machine.querySelector('[data-story-track]');
@@ -55,6 +56,8 @@ if (machine) {
   let primaryActionDestination = '';
   let primaryActionLabel = 'SHOP NOW';
   let shopDestination = '';
+  let plaqueDestination = '';
+  let tourismMoreInfoEnabled = false;
   let activeProjectType = 'business';
   let shopPlaqueTimer = 0;
   let shopPlaqueEnabled = false;
@@ -581,7 +584,9 @@ if (machine) {
   }
 
   function openPlaqueAction() {
-    if (activeProjectType === 'music') openPrimaryAction();
+    if (activeProjectType === 'tourism') {
+      if (plaqueDestination) window.open(plaqueDestination, '_blank', 'noopener,noreferrer');
+    } else if (activeProjectType === 'music') openPrimaryAction();
     else openShop();
   }
 
@@ -605,9 +610,13 @@ if (machine) {
 
   function configureShopPlaque(shopEnabled) {
     stopShopPlaqueCycle();
-    shopPlaqueEnabled = activeProjectType === 'music'
-      ? Boolean(primaryActionDestination)
-      : shopEnabled === true && Boolean(shopDestination);
+    if (activeProjectType === 'tourism') {
+      shopPlaqueEnabled = tourismMoreInfoEnabled === true && Boolean(plaqueDestination);
+    } else {
+      shopPlaqueEnabled = activeProjectType === 'music'
+        ? Boolean(primaryActionDestination)
+        : shopEnabled === true && Boolean(shopDestination);
+    }
     shopPlaque.classList.toggle('is-shop-enabled', shopPlaqueEnabled);
     if (!shopPlaqueEnabled) {
       shopPlaque.removeAttribute('role');
@@ -621,7 +630,9 @@ if (machine) {
       'aria-label',
       activeProjectType === 'music'
         ? `${primaryActionLabel} for ${machineIdentity || 'this artist'}`
-        : `Visit ${machineIdentity || 'this business'} online shop`,
+        : activeProjectType === 'tourism'
+          ? `More information about ${machineIdentity || 'this destination'}`
+          : `Visit ${machineIdentity || 'this business'} online shop`,
     );
     scheduleShopPlaqueState('shop', SHOP_PLAQUE_TITLE_DURATION);
   }
@@ -641,7 +652,8 @@ if (machine) {
     playButton.addEventListener('click', () => { void openVideo(true); });
     shareButton.addEventListener('click', share);
     primaryActionButton.addEventListener('click', () => {
-      if (activeProjectType === 'music') openPrimaryAction();
+      if (activeProjectType === 'tourism') openPrimaryAction();
+      else if (activeProjectType === 'music') openPrimaryAction();
       else openShop();
     });
     shopPlaque.addEventListener('click', () => {
@@ -702,13 +714,24 @@ if (machine) {
       activeProjectType = String(config.projectType || 'business').trim().toLowerCase();
       const initialReelInstruction = 'PULL THE LEVER  ──────→';
       const musicPrimaryCta = activeProjectType === 'music' ? config.musicConfig?.primaryCTA : null;
+      const tourismConfig = activeProjectType === 'tourism' ? config.tourismConfig : null;
       shopDestination = String(config.customerConfig?.shopURL || '').trim();
+      if (activeProjectType !== 'business') shopDestination = '';
+      tourismMoreInfoEnabled = tourismConfig?.moreInfoEnabled === true;
       primaryActionDestination = activeProjectType === 'music'
         ? String(musicPrimaryCta?.destinationURL || '').trim()
-        : shopDestination;
+        : activeProjectType === 'tourism'
+          ? String(tourismConfig?.stayURL || '').trim()
+          : shopDestination;
       primaryActionLabel = activeProjectType === 'music'
         ? String(musicPrimaryCta?.displayLabel || '').trim()
-        : 'SHOP NOW';
+        : activeProjectType === 'tourism' ? 'STAY' : 'SHOP NOW';
+      plaqueDestination = activeProjectType === 'music'
+        ? primaryActionDestination
+        : activeProjectType === 'tourism'
+          ? String(tourismConfig?.moreInfoURL || '').trim()
+          : shopDestination;
+      if (shopPlaqueLabel) shopPlaqueLabel.textContent = activeProjectType === 'tourism' ? 'MORE INFO' : 'SHOP NOW';
       const primaryActionText = primaryActionButton.querySelector('b');
       if (primaryActionText && primaryActionLabel) primaryActionText.textContent = primaryActionLabel;
       primaryActionButton.disabled = true;

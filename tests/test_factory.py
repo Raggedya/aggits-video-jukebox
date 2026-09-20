@@ -327,7 +327,7 @@ class FactoryTests(unittest.TestCase):
                 )
                 self.assertEqual(Project.from_dict(project.to_dict()).additional_urls, urls)
         with self.assertRaises(ProjectValidationError):
-            Project.from_dict({**self.legacy_project_value(), "schemaVersion": 3, "id": "5bfd106b-90d2-43c3-bb84-d94a7d494826", "project_type": "tourism"})
+            Project.from_dict({**self.legacy_project_value(), "schemaVersion": 3, "id": "5bfd106b-90d2-43c3-bb84-d94a7d494826", "project_type": "unknown"})
         with self.assertRaises(ProjectMigrationError):
             migrate_project_dict({"schemaVersion": 99})
         with self.assertRaises(ProjectValidationError):

@@ -1,12 +1,12 @@
 # CRISPY BITS DESKTOP
 
-A standalone Windows desktop application for creating and managing CRISPY BITS BUSINESS and CRISPY BITS MUSIC projects. Both workflows share the proven YouTube analysis, review, machine generation, Library, publication, QR, delivery and recovery infrastructure.
+A standalone Windows desktop application for creating and managing CRISPY BITS BUSINESS, CRISPY BITS MUSIC and CRISPY BITS TOURISM projects. All three workflows share the proven YouTube analysis, review, machine generation, Library, publication, QR, delivery and recovery infrastructure.
 
 ## Factory workflow
 
 1. Open **Settings** once and save a YouTube Data API v3 key, Delivery Email and provisioned delivery credential.
-2. Choose **BUSINESS** or **MUSIC**, enter a title and Bio / Story, then supply a channel URL, up to 15 individual video URLs, or both.
-3. Business projects may configure a Shop URL. Music projects configure one Primary Call to Action and Destination URL.
+2. Choose **BUSINESS**, **MUSIC** or **TOURISM**, enter a title and Bio / Story, then supply a channel URL, up to 15 individual video URLs, or both.
+3. Business projects may configure a Shop URL. Music projects configure one Primary Call to Action and Destination URL. Tourism projects may configure distinct More Info and Stay URLs.
 4. Press **Analyse + Review Videos**. Explicit videos are included first; duplicates are removed and the channel fills the remaining places up to 30 public, embeddable videos.
 5. Review the resolved list, then build using only the videos you keep checked.
 6. Preview privately, then publish or unpublish from the Library.

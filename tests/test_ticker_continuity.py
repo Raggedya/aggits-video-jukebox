@@ -61,8 +61,9 @@ class TickerContinuityTests(unittest.TestCase):
             STYLES,
         )
 
-    def test_business_and_music_share_the_same_continuous_ticker_lifecycle(self):
+    def test_business_music_and_tourism_share_the_same_continuous_ticker_lifecycle(self):
         self.assertIn("activeProjectType = String(config.projectType || 'business')", SCRIPT)
+        self.assertIn("activeProjectType === 'tourism'", SCRIPT)
         self.assertEqual(SCRIPT.count("const storyTrack = machine.querySelector('[data-story-track]');"), 1)
         self.assertEqual(SCRIPT.count("storyTrack.classList.add('is-scrolling');"), 1)
 

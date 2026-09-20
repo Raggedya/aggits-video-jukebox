@@ -33,7 +33,7 @@ class UnpublishVerificationPending(PublicationVerificationPending):
 
 
 def _validate_project_type(project: Project) -> None:
-    if project.project_type not in {ProjectType.BUSINESS, ProjectType.MUSIC}:
+    if project.project_type not in {ProjectType.BUSINESS, ProjectType.MUSIC, ProjectType.TOURISM}:
         raise PublishError(f"Unsupported project type: {project.project_type!r}.")
 
 

@@ -94,6 +94,8 @@ class ProjectForm(tk.Frame):
         self.cta_var = tk.StringVar(value=DEFAULT_CTA_LABEL)
         self.destination_var = tk.StringVar()
         self.custom_label_var = tk.StringVar()
+        self.more_info_var = tk.StringVar()
+        self.stay_var = tk.StringVar()
         self.field_widgets: dict[str, tk.Widget] = {}
         row = 1
         row = self._entry_row(row, "Title", self.title_var, "title")
@@ -103,7 +105,7 @@ class ProjectForm(tk.Frame):
 
         if self.project_type is ProjectType.BUSINESS:
             row = self._entry_row(row, "Shop URL", self.shop_var, "shop_url")
-        else:
+        elif self.project_type is ProjectType.MUSIC:
             tk.Label(self, text="Primary Call to Action", bg=PANEL, fg=CREAM, anchor="e", font=("Segoe UI", 9)).grid(row=row, column=0, sticky="e", padx=(22, 12), pady=5)
             self.cta_combo = ttk.Combobox(self, textvariable=self.cta_var, values=[label for label, _ in CTA_CHOICES], state="readonly", font=("Segoe UI", 10))
             self.cta_combo.grid(row=row, column=1, sticky="ew", padx=(0, 22), pady=5, ipady=3)
@@ -113,8 +115,12 @@ class ProjectForm(tk.Frame):
             row = self._entry_row(row, "Destination URL", self.destination_var, "destination_url")
             self.custom_row = row
             row = self._entry_row(row, "Button Label", self.custom_label_var, "custom_label")
+        else:
+            row = self._entry_row(row, "More Info URL", self.more_info_var, "more_info_url")
+            row = self._entry_row(row, "Stay URL", self.stay_var, "stay_url")
 
-        tk.Label(self, text="Bio / Story Information", bg=PANEL, fg=CREAM, anchor="ne", font=("Segoe UI", 9)).grid(row=row, column=0, sticky="ne", padx=(22, 12), pady=(8, 5))
+        bio_label = "Bio / About" if self.project_type is ProjectType.TOURISM else "Bio / Story Information"
+        tk.Label(self, text=bio_label, bg=PANEL, fg=CREAM, anchor="ne", font=("Segoe UI", 9)).grid(row=row, column=0, sticky="ne", padx=(22, 12), pady=(8, 5))
         story_shell = tk.Frame(self, bg=PANEL)
         story_shell.grid(row=row, column=1, sticky="ew", padx=(0, 22), pady=(5, 3))
         story_shell.columnconfigure(0, weight=1)
@@ -222,6 +228,8 @@ class ProjectForm(tk.Frame):
             cta_label=self.cta_var.get() if self.project_type is ProjectType.MUSIC else DEFAULT_CTA_LABEL,
             destination_url=self.destination_var.get() if self.project_type is ProjectType.MUSIC else "",
             custom_label=self.custom_label_var.get() if self.project_type is ProjectType.MUSIC else "",
+            more_info_url=self.more_info_var.get() if self.project_type is ProjectType.TOURISM else "",
+            stay_url=self.stay_var.get() if self.project_type is ProjectType.TOURISM else "",
         )
 
     def set_values(self, values: ProjectFormValues) -> None:
@@ -233,6 +241,8 @@ class ProjectForm(tk.Frame):
         self.cta_var.set(values.cta_label or DEFAULT_CTA_LABEL)
         self.destination_var.set(values.destination_url)
         self.custom_label_var.set(values.custom_label)
+        self.more_info_var.set(values.more_info_url)
+        self.stay_var.set(values.stay_url)
         for variable, value in zip(self.manual_vars, [*values.manual_video_urls, *("" for _ in range(15))][:15]):
             variable.set(value)
         self.story_text.delete("1.0", "end")
@@ -245,7 +255,7 @@ class ProjectForm(tk.Frame):
     def clear_new(self) -> None:
         self.editing_project_id = None
         self.set_values(ProjectFormValues())
-        name = "BUSINESS" if self.project_type is ProjectType.BUSINESS else "MUSIC"
+        name = self.project_type.value.upper()
         self.mode_label.configure(text=f"NEW {name} PROJECT")
         if self.project_type is ProjectType.BUSINESS:
             self.submit_button.configure(text="CREATE CRISPY BITS")
@@ -274,6 +284,7 @@ class ProjectForm(tk.Frame):
             title=str(self._baseline[0]), channel_url=str(self._baseline[1]), additional_urls=list(self._baseline[2]),
             story_text=str(self._baseline[3]), manual_video_urls=list(self._baseline[4]), shop_url=str(self._baseline[5]),
             cta_label=str(self._baseline[6]), destination_url=str(self._baseline[7]), custom_label=str(self._baseline[8]),
+            more_info_url=str(self._baseline[9]), stay_url=str(self._baseline[10]),
         )
         self.set_values(values)
         self.mark_clean()
@@ -392,7 +403,7 @@ class Factory(tk.Tk):
 
         self.notebook = ttk.Notebook(self, style="Desktop.TNotebook")
         self.notebook.pack(fill="both", expand=True, padx=12, pady=(0, 10))
-        self.tab_types: list[ProjectType] = [ProjectType.BUSINESS, ProjectType.MUSIC]
+        self.tab_types: list[ProjectType] = [ProjectType.BUSINESS, ProjectType.MUSIC, ProjectType.TOURISM]
         for project_type in self.tab_types:
             page = tk.Frame(self.notebook, bg=INK)
             self.notebook.add(page, text=project_type.value.upper())

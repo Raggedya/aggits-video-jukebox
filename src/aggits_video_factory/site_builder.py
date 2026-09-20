@@ -25,7 +25,7 @@ def _story_sections(
     customer_name: str,
     project_type: ProjectType = ProjectType.BUSINESS,
 ) -> list[dict[str, str]]:
-    """No generated editorial sections: both project types render their stored Bio verbatim."""
+    """No generated editorial sections: every project type renders its stored Bio verbatim."""
     return []
 
 
@@ -171,9 +171,10 @@ def create_social_card(project: Project, destination: Path) -> None:
 
 
 def build_project_site(project: Project, destination: Path) -> Path:
-    if project.project_type not in {ProjectType.BUSINESS, ProjectType.MUSIC}:
+    if project.project_type not in {ProjectType.BUSINESS, ProjectType.MUSIC, ProjectType.TOURISM}:
         raise ValueError(f"Unsupported project type: {project.project_type!r}.")
     music_cta = project.music_config.primary_cta if project.music_config else None
+    tourism_config = project.tourism_config if project.project_type is ProjectType.TOURISM else None
     if project.project_type is ProjectType.MUSIC and music_cta is None:
         raise ValueError("A Music project requires a configured primary CTA before generation.")
     destination.mkdir(parents=True, exist_ok=True)
@@ -186,7 +187,17 @@ def build_project_site(project: Project, destination: Path) -> Path:
     social_url = f"{canonical.rstrip('/')}/social-card.jpg"
     description = f"Pull the CRISPY BITS reel and discover one of {len(project.videos)} videos from {project.title}."
     story_sections = _story_sections(project.ticker_text, project.title, project.project_type)
-    primary_action_label = music_cta.display_label if music_cta else "SHOP NOW"
+    primary_action_label = (
+        music_cta.display_label
+        if music_cta
+        else "STAY" if project.project_type is ProjectType.TOURISM else "SHOP NOW"
+    )
+    if project.project_type is ProjectType.BUSINESS:
+        primary_action_aria = "Shop unavailable"
+    elif project.project_type is ProjectType.TOURISM:
+        primary_action_aria = "View accommodation" if tourism_config and tourism_config.stay_url else "Stay unavailable"
+    else:
+        primary_action_aria = primary_action_label
     initial_reel_instruction = "PULL THE LEVER  ──────→"
     story_header_markup = ""
     story_aria_label = project.title
@@ -202,7 +213,7 @@ def build_project_site(project: Project, destination: Path) -> Path:
         "{{STORY_ARIA_LABEL}}": html.escape(story_aria_label, quote=True),
         "{{TICKER_TEXT}}": html.escape(project.ticker_text or "PULL FOR A VIDEO"),
         "{{PRIMARY_ACTION_LABEL}}": html.escape(primary_action_label),
-        "{{PRIMARY_ACTION_ARIA}}": html.escape("Shop unavailable" if project.project_type is ProjectType.BUSINESS else primary_action_label, quote=True),
+        "{{PRIMARY_ACTION_ARIA}}": html.escape(primary_action_aria, quote=True),
     }
     template = resource_path("templates/machine.html").read_text(encoding="utf-8")
     for token, value in replacements.items():
@@ -271,6 +282,15 @@ def build_project_site(project: Project, destination: Path) -> Path:
                 "displayLabel": music_cta.display_label,
                 "destinationURL": music_cta.destination_url,
             }
+        }
+    if project.project_type is ProjectType.TOURISM:
+        more_info_url = tourism_config.more_info_url if tourism_config else None
+        stay_url = tourism_config.stay_url if tourism_config else None
+        payload["tourismConfig"] = {
+            "moreInfoURL": more_info_url,
+            "moreInfoEnabled": bool(more_info_url),
+            "stayURL": stay_url,
+            "stayEnabled": bool(stay_url),
         }
     (destination / "machine.json").write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     create_qr_card(project, destination / "qr-card.png")

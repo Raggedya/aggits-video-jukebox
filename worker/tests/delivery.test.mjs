@@ -143,6 +143,20 @@ test("valid authenticated Business and Music requests are accepted and recipient
 });
 
 
+test("valid authenticated Tourism request is accepted without changing recipient security", async () => {
+  const env = environment();
+  const mock = installFetchMock({ machineProjectType: "tourism", machineTitle: "Visit Test Region" });
+  try {
+    const body = payload({ projectType: "tourism", title: "Visit Test Region", productName: "CRISPY BITS TOURISM" });
+    const response = await worker.fetch(signedRequest(body, { nonce: "aa".repeat(16) }), env);
+    assert.equal(response.status, 201);
+    const resend = mock.calls.find((call) => call.url.includes("api.resend.com"));
+    assert.deepEqual(JSON.parse(resend.init.body).to, ["listener@example.com"]);
+    assert.equal(env.DB.deliveries.size, 1);
+  } finally { mock.restore(); }
+});
+
+
 test("missing invalid modified expired and future authentication is rejected without secret disclosure", async () => {
   const now = Math.floor(Date.now() / 1000);
   const cases = [
