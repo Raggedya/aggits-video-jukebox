@@ -743,7 +743,7 @@ if (machine) {
         contentMonogram.textContent = initials;
         if (customerMonogram) customerMonogram.textContent = initials;
       }
-      contentDescription.textContent = 'Pull the lever and discover something worth watching.';
+      contentDescription.textContent = 'Pull the Lever and Discover something Amazing';
       updateStory();
       window.setTimeout(startStoryTicker, 350);
       document.fonts?.ready?.then(startStoryTicker).catch(() => {});

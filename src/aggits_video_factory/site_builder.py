@@ -7,11 +7,12 @@ import shutil
 from pathlib import Path
 
 import qrcode
-from PIL import Image, ImageDraw, ImageEnhance, ImageFilter, ImageFont, ImageOps
+from PIL import Image, ImageDraw, ImageFont
 from qrcode.constants import ERROR_CORRECT_H
 
 from .config import BRAND_NAME, PUBLIC_BASE_URL, resource_path
 from .models import Project, ProjectType, project_primary_cta
+from .social_preview import replace_social_preview, social_preview_filename
 
 
 BRASS = "#b88a4f"
@@ -149,32 +150,6 @@ def create_qr_card(project: Project, destination: Path) -> None:
     canvas.save(destination, format="PNG", optimize=True)
 
 
-def create_social_card(project: Project, destination: Path) -> None:
-    background = Image.new("RGB", (1200, 630), INK)
-    cabinet_path = resource_path("static/music-machine/aggits-cabinet.webp")
-    if cabinet_path.is_file():
-        cabinet = Image.open(cabinet_path).convert("RGB")
-        cabinet = ImageOps.fit(cabinet, (470, 705), centering=(0.5, 0.28))
-        cabinet = ImageEnhance.Color(cabinet).enhance(0.15)
-        cabinet = ImageEnhance.Contrast(cabinet).enhance(1.14)
-        cabinet = ImageEnhance.Brightness(cabinet).enhance(0.72)
-        cabinet = cabinet.filter(ImageFilter.GaussianBlur(0.25))
-        background.paste(cabinet, (40, -38))
-    draw = ImageDraw.Draw(background)
-    draw.rectangle((500, 0, 1200, 630), fill="#090806")
-    draw.line((548, 116, 1136, 116), fill=BRASS, width=3)
-    draw.text((548, 66), f"{BRAND_NAME} VIDEO JUKEBOX", font=_font(24, bold=True, serif=True), fill=BRASS)
-    title = project.title.upper()
-    font = _fit_text(draw, title, 590, 78, 42, serif=True)
-    draw.multiline_text((548, 166), title, font=font, fill=CREAM, spacing=10)
-    draw.text((548, 430), f"{len(included_project_videos(project))} VIDEOS · ONE MECHANICAL REEL", font=_font(25, bold=True), fill="#d8bd82")
-    draw.text((548, 484), "PULL · SELECT · WATCH", font=_font(22, bold=True), fill="#987044")
-    draw.rounded_rectangle((548, 544, 800, 592), radius=12, outline=BRASS, width=2)
-    draw.text((674, 568), "WATCH ON YOUTUBE", font=_font(18, bold=True), fill=CREAM, anchor="mm")
-    destination.parent.mkdir(parents=True, exist_ok=True)
-    background.save(destination, format="JPEG", quality=91, optimize=True)
-
-
 def build_project_site(project: Project, destination: Path) -> Path:
     if project.project_type not in {ProjectType.BUSINESS, ProjectType.MUSIC, ProjectType.TOURISM}:
         raise ValueError(f"Unsupported project type: {project.project_type!r}.")
@@ -189,12 +164,14 @@ def build_project_site(project: Project, destination: Path) -> Path:
         shutil.rmtree(assets)
     shutil.copytree(resource_path("static"), assets)
 
-    canonical = project.published_url or f"{PUBLIC_BASE_URL}/{project.slug}/"
-    social_url = f"{canonical.rstrip('/')}/social-card.jpg"
+    canonical = project.published_url if str(project.published_url or "").startswith("https://") else f"{PUBLIC_BASE_URL}/{project.slug}/"
+    social_filename = social_preview_filename(project.title)
+    social_url = f"{canonical.rstrip('/')}/{social_filename}"
     included_videos = included_project_videos(project)
     if not included_videos:
         raise ValueError("A project must include at least one video before generation.")
-    description = f"Pull the CRISPY BITS reel and discover one of {len(included_videos)} videos from {project.title}."
+    social_title = project.title.strip() or BRAND_NAME
+    description = f"Hit it. Discover {social_title} with Crispy Bits."
     story_sections = _story_sections(project.ticker_text, project.title, project.project_type)
     primary_action_label = primary_cta.display_label if primary_cta else "PRIMARY ACTION"
     primary_action_aria = primary_action_label if primary_cta and primary_cta.destination_url else f"{primary_action_label} unavailable"
@@ -205,7 +182,9 @@ def build_project_site(project: Project, destination: Path) -> Path:
         "{{META_DESCRIPTION}}": html.escape(description, quote=True),
         "{{CANONICAL_URL}}": html.escape(canonical, quote=True),
         "{{SOCIAL_IMAGE_URL}}": html.escape(social_url, quote=True),
-        "{{PAGE_TITLE}}": html.escape(f"{project.title} — CRISPY BITS Video Jukebox"),
+        "{{SOCIAL_IMAGE_ALT}}": html.escape(f"{social_title} — Crispy Bits social preview", quote=True),
+        "{{SOCIAL_TITLE}}": html.escape(social_title, quote=True),
+        "{{DOCUMENT_TITLE}}": html.escape(f"{social_title} | Crispy Bits"),
         "{{MACHINE_LABEL}}": html.escape(f"{project.title} CRISPY BITS Video Jukebox", quote=True),
         "{{MACHINE_TITLE}}": html.escape(project.title),
         "{{INITIAL_REEL_INSTRUCTION}}": initial_reel_instruction,
@@ -300,5 +279,5 @@ def build_project_site(project: Project, destination: Path) -> Path:
         }
     (destination / "machine.json").write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     create_qr_card(project, destination / "qr-card.png")
-    create_social_card(project, destination / "social-card.jpg")
+    replace_social_preview(project.title, destination)
     return destination / "index.html"

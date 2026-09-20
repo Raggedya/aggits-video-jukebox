@@ -188,7 +188,8 @@ class FactoryTests(unittest.TestCase):
             self.assertTrue((destination / "assets" / "music-machine" / "crispy-bits-logo-cutout-v2.png").is_file())
             self.assertTrue((destination / "assets" / "audio" / "machine" / "reel-stop-lock-mixkit-2857.mp3").is_file())
             self.assertTrue((destination / "qr-card.png").is_file())
-            self.assertTrue((destination / "social-card.jpg").is_file())
+            social_cards = list(destination.glob("social-card-v1-*.jpg"))
+            self.assertEqual(len(social_cards), 1)
 
     def test_legacy_v2_migration_is_deterministic_and_does_not_invent_cta_data(self):
         legacy = self.legacy_project_value(

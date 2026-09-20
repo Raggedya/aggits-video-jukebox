@@ -15,6 +15,7 @@ import requests
 from .config import GITHUB_REMOTE, PUBLIC_BASE_URL, PUBLIC_PATH
 from .diagnostics import get_logger
 from .models import Project, ProjectType, PublicationOperation, utc_now
+from .social_preview import social_preview_filename
 from .store import ProjectStore, slugify
 
 
@@ -107,7 +108,7 @@ def _write_library(workspace: Path, projects: list[dict[str, Any]]) -> None:
     projects = sorted(projects, key=lambda item: str(item.get("title") or "").lower())
     _library_path(workspace).write_text(json.dumps(projects, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     cards = "\n".join(
-        f'<a class="machine" href="{item["slug"]}/"><img src="{item["slug"]}/social-card.jpg" alt=""><strong>{_escape(item["title"])}</strong><span>{int(item.get("videoCount") or 0)} videos</span></a>'
+        f'<a class="machine" href="{item["slug"]}/"><img src="{item["slug"]}/{_escape(item.get("socialImage") or "social-card.jpg")}" alt="{_escape(item["title"])} — Crispy Bits preview"><strong>{_escape(item["title"])}</strong><span>{int(item.get("videoCount") or 0)} videos</span></a>'
         for item in projects
     ) or '<p class="empty">No video jukeboxes are currently published.</p>'
     index = f'''<!doctype html>
@@ -209,6 +210,7 @@ class Publisher:
                 "videoCount": len(project.videos),
                 "publishedAt": utc_now(),
                 "url": public_url,
+                "socialImage": social_preview_filename(project.title),
             })
             _write_library(workspace, library)
             _run([self.git, "add", "--", f"public/{PUBLIC_PATH}/{project.slug}", f"public/{PUBLIC_PATH}/library.json", f"public/{PUBLIC_PATH}/index.html"], cwd=workspace)
