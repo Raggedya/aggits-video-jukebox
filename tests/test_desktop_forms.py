@@ -36,7 +36,9 @@ class DesktopFormTests(unittest.TestCase):
         self.assertEqual(validated.title, "Great Alpine Caravans")
         self.assertEqual(validated.additional_urls, ["https://example.com", "https://example.com/about"])
         self.assertEqual(validated.manual_video_urls, [VIDEO])
-        self.assertEqual(validated.business_config, BusinessConfig(shop_url="https://example.com/shop"))
+        self.assertEqual(validated.business_config.shop_url, "https://example.com/shop")
+        self.assertEqual(validated.business_config.primary_cta.cta_type, PrimaryCtaType.SHOP_NOW)
+        self.assertEqual(validated.business_config.primary_cta.destination_url, "https://example.com/shop")
         self.assertIsNone(validated.music_config)
 
     def test_music_standard_cta_maps_visible_label_to_stable_type(self):
@@ -82,11 +84,17 @@ class DesktopFormTests(unittest.TestCase):
         missing_url = ProjectFormValues(
             title="Example Band",
             channel_url=CHANNEL,
-            cta_label=DEFAULT_CTA_LABEL,
+            cta_label="Custom",
+            custom_label="SUPPORT US",
         )
         with self.assertRaises(FormValidationError) as context:
             validate_project_form(missing_url, ProjectType.MUSIC)
         self.assertEqual(context.exception.field, "destination_url")
+
+        disabled_standard = validate_project_form(ProjectFormValues(
+            title="Example Band", channel_url=CHANNEL, cta_label=DEFAULT_CTA_LABEL,
+        ), ProjectType.MUSIC)
+        self.assertEqual(disabled_standard.music_config.primary_cta.destination_url, "")
 
     def test_form_validation_keeps_additional_and_manual_video_urls_separate(self):
         values = ProjectFormValues(

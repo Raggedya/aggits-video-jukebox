@@ -92,10 +92,11 @@ class BusinessShopPlaqueTests(unittest.TestCase):
         self.assertEqual(config["projectType"], "business")
         self.assertTrue(config["customerConfig"]["shopEnabled"])
         self.assertEqual(config["customerConfig"]["shopURL"], shop_url)
+        self.assertEqual(config["customerConfig"]["primaryAction"]["destinationURL"], shop_url)
         self.assertNotEqual(config["customerConfig"]["shopURL"], project.additional_urls[0])
-        self.assertIn("shopDestination = String(config.customerConfig?.shopURL || '').trim();", SCRIPT)
-        self.assertNotIn("shopDestination = String(config.channelURL", SCRIPT)
-        self.assertNotIn("shopDestination = String(config.additionalURLs", SCRIPT)
+        self.assertIn("String(config.customerConfig?.shopURL || '').trim()", SCRIPT)
+        self.assertNotIn("String(config.channelURL", SCRIPT)
+        self.assertNotIn("String(config.additionalURLs", SCRIPT)
 
     def test_plaque_defaults_to_business_title_and_cycles_at_restrained_intervals(self):
         self.assertIn('<strong data-machine-title>{{MACHINE_TITLE}}</strong>', TEMPLATE)
@@ -130,12 +131,11 @@ class BusinessShopPlaqueTests(unittest.TestCase):
         self.assertIn("if (shopPlaqueEnabled) openPlaqueAction();", SCRIPT)
         self.assertIn("shopPlaque.addEventListener('keydown'", SCRIPT)
         self.assertIn("event.key === 'Enter' || event.key === ' '", SCRIPT)
-        self.assertIn("window.open(shopDestination, '_blank', 'noopener,noreferrer');", SCRIPT)
         self.assertIn("window.open(primaryActionDestination, '_blank', 'noopener,noreferrer');", SCRIPT)
         self.assertNotIn("data-shop-plaque-state ===", SCRIPT)
         self.assertIn("shopPlaque.setAttribute('role', 'link');", SCRIPT)
         self.assertIn("shopPlaque.setAttribute('tabindex', '0');", SCRIPT)
-        self.assertIn("`Visit ${machineIdentity || 'this business'} online shop`", SCRIPT)
+        self.assertIn("`${primaryActionLabel} for ${machineIdentity || 'this project'}`", SCRIPT)
         self.assertNotIn("aria-live", TEMPLATE[TEMPLATE.index('data-shop-plaque'):TEMPLATE.index('reel-and-lever')])
 
     def test_no_shop_business_is_static_non_actionable_and_has_no_fallback(self):
@@ -143,7 +143,8 @@ class BusinessShopPlaqueTests(unittest.TestCase):
 
         self.assertFalse(config["customerConfig"]["shopEnabled"])
         self.assertIsNone(config["customerConfig"]["shopURL"])
-        self.assertIn(": shopEnabled === true && Boolean(shopDestination);", SCRIPT)
+        self.assertFalse(config["customerConfig"]["primaryAction"]["enabled"])
+        self.assertIn("shopPlaqueEnabled = Boolean(plaqueDestination);", SCRIPT)
         self.assertIn("shopPlaque.removeAttribute('role');", SCRIPT)
         self.assertIn("shopPlaque.removeAttribute('tabindex');", SCRIPT)
         self.assertIn("shopPlaque.removeAttribute('aria-label');", SCRIPT)
@@ -154,17 +155,16 @@ class BusinessShopPlaqueTests(unittest.TestCase):
         self.assertEqual(config["projectType"], "music")
         self.assertNotIn("shopURL", config["customerConfig"])
         self.assertNotIn("shopEnabled", config["customerConfig"])
-        self.assertIn("activeProjectType === 'music'", SCRIPT)
-        self.assertIn("? Boolean(primaryActionDestination)", SCRIPT)
-        self.assertNotIn("activeProjectType === 'music' && shopEnabled", SCRIPT)
-        self.assertIn("if (activeProjectType === 'music') openPrimaryAction();\n    else openShop();", SCRIPT)
-        self.assertIn("`${primaryActionLabel} for ${machineIdentity || 'this artist'}`", SCRIPT)
+        self.assertEqual(config["customerConfig"]["primaryAction"]["type"], "spotify")
+        self.assertEqual(config["customerConfig"]["primaryAction"]["destinationURL"], "https://example.com/music")
+        self.assertIn("const primaryAction = config.customerConfig?.primaryAction", SCRIPT)
+        self.assertIn("openPrimaryAction();", SCRIPT)
 
     def test_existing_bottom_shop_control_and_no_shop_state_are_unchanged(self):
         self.assertIn('data-action="shop" aria-label="{{PRIMARY_ACTION_ARIA}}" disabled', TEMPLATE)
-        self.assertIn("const shopButton = primaryActionButton;", SCRIPT)
-        self.assertIn("if (activeProjectType === 'business') shopButton.disabled = !shopDestination;", SCRIPT)
-        self.assertIn("if (activeProjectType === 'music') openPrimaryAction();\n      else openShop();", SCRIPT)
+        self.assertNotIn("const shopButton = primaryActionButton;", SCRIPT)
+        self.assertIn("primaryActionButton.disabled = !primaryActionDestination;", SCRIPT)
+        self.assertIn("primaryActionButton.addEventListener('click'", SCRIPT)
 
     def test_plaque_timer_is_independent_of_spin_re_spin_and_video_selection(self):
         spin_block = SCRIPT.split("  async function spin() {", 1)[1].split("  function resetLever", 1)[0]

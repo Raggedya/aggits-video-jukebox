@@ -25,6 +25,15 @@ class ProjectType(str, Enum):
 
 
 class PrimaryCtaType(str, Enum):
+    SHOP_NOW = "shop_now"
+    VIEW_PRODUCTS = "view_products"
+    GET_A_QUOTE = "get_a_quote"
+    ENQUIRE_NOW = "enquire_now"
+    FIND_A_STORE = "find_a_store"
+    FIND_A_DEALER = "find_a_dealer"
+    BOOK_A_DEMO = "book_a_demo"
+    CONTACT_US = "contact_us"
+    VISIT_WEBSITE = "visit_website"
     SPOTIFY = "spotify"
     BANDCAMP = "bandcamp"
     BUY_MUSIC = "buy_music"
@@ -35,6 +44,11 @@ class PrimaryCtaType(str, Enum):
     BOOK_NOW = "book_now"
     BOOK_US = "book_us"
     SOUNDCLOUD = "soundcloud"
+    MORE_INFO = "more_info"
+    STAY = "stay"
+    EXPLORE = "explore"
+    WHATS_ON = "whats_on"
+    PLAN_YOUR_VISIT = "plan_your_visit"
     CUSTOM = "custom"
 
 
@@ -120,6 +134,15 @@ class PublicationOperation:
 
 
 PRIMARY_CTA_LABELS: dict[PrimaryCtaType, str] = {
+    PrimaryCtaType.SHOP_NOW: "SHOP NOW",
+    PrimaryCtaType.VIEW_PRODUCTS: "VIEW PRODUCTS",
+    PrimaryCtaType.GET_A_QUOTE: "GET A QUOTE",
+    PrimaryCtaType.ENQUIRE_NOW: "ENQUIRE NOW",
+    PrimaryCtaType.FIND_A_STORE: "FIND A STORE",
+    PrimaryCtaType.FIND_A_DEALER: "FIND A DEALER",
+    PrimaryCtaType.BOOK_A_DEMO: "BOOK A DEMO",
+    PrimaryCtaType.CONTACT_US: "CONTACT US",
+    PrimaryCtaType.VISIT_WEBSITE: "VISIT WEBSITE",
     PrimaryCtaType.SPOTIFY: "LISTEN ON SPOTIFY",
     PrimaryCtaType.BANDCAMP: "BUY ON BANDCAMP",
     PrimaryCtaType.BUY_MUSIC: "BUY MUSIC",
@@ -130,7 +153,30 @@ PRIMARY_CTA_LABELS: dict[PrimaryCtaType, str] = {
     PrimaryCtaType.BOOK_NOW: "BOOK NOW",
     PrimaryCtaType.BOOK_US: "BOOK US",
     PrimaryCtaType.SOUNDCLOUD: "SOUNDCLOUD",
+    PrimaryCtaType.MORE_INFO: "MORE INFO",
+    PrimaryCtaType.STAY: "STAY",
+    PrimaryCtaType.EXPLORE: "EXPLORE",
+    PrimaryCtaType.WHATS_ON: "WHAT'S ON",
+    PrimaryCtaType.PLAN_YOUR_VISIT: "PLAN YOUR VISIT",
 }
+
+BUSINESS_CTA_TYPES = frozenset({
+    PrimaryCtaType.SHOP_NOW, PrimaryCtaType.VIEW_PRODUCTS, PrimaryCtaType.GET_A_QUOTE,
+    PrimaryCtaType.BOOK_NOW, PrimaryCtaType.ENQUIRE_NOW, PrimaryCtaType.FIND_A_STORE,
+    PrimaryCtaType.FIND_A_DEALER, PrimaryCtaType.BOOK_A_DEMO, PrimaryCtaType.CONTACT_US,
+    PrimaryCtaType.VISIT_WEBSITE, PrimaryCtaType.CUSTOM,
+})
+MUSIC_CTA_TYPES = frozenset({
+    PrimaryCtaType.SPOTIFY, PrimaryCtaType.BANDCAMP, PrimaryCtaType.BUY_MUSIC,
+    PrimaryCtaType.MERCH, PrimaryCtaType.TICKETS, PrimaryCtaType.APPLE_MUSIC,
+    PrimaryCtaType.OFFICIAL_WEBSITE, PrimaryCtaType.BOOK_NOW, PrimaryCtaType.BOOK_US,
+    PrimaryCtaType.SOUNDCLOUD, PrimaryCtaType.CUSTOM,
+})
+TOURISM_CTA_TYPES = frozenset({
+    PrimaryCtaType.MORE_INFO, PrimaryCtaType.STAY, PrimaryCtaType.EXPLORE,
+    PrimaryCtaType.BOOK_NOW, PrimaryCtaType.WHATS_ON, PrimaryCtaType.PLAN_YOUR_VISIT,
+    PrimaryCtaType.VISIT_WEBSITE, PrimaryCtaType.CUSTOM,
+})
 
 
 def _optional_http_url(value: object, field_name: str) -> str | None:
@@ -150,20 +196,32 @@ def _extra_fields(value: dict[str, Any], known: set[str]) -> dict[str, Any]:
 @dataclass(slots=True)
 class BusinessConfig:
     shop_url: str | None = None
+    primary_cta: "PrimaryCta | None" = None
     extra_fields: dict[str, Any] = field(default_factory=dict, repr=False)
 
     def __post_init__(self) -> None:
         self.shop_url = _optional_http_url(self.shop_url, "Business shop URL")
 
     def to_dict(self) -> dict[str, Any]:
-        return {**self.extra_fields, "shop_url": self.shop_url}
+        return {
+            **self.extra_fields,
+            "shop_url": self.shop_url,
+            "primary_cta": self.primary_cta.to_dict() if self.primary_cta else None,
+        }
 
     @classmethod
     def from_dict(cls, value: dict[str, Any] | None) -> "BusinessConfig":
         source = dict(value or {})
+        cta = source.get("primary_cta", source.get("primaryCta"))
+        if cta is not None and not isinstance(cta, dict):
+            raise ProjectValidationError("Business primary_cta must be an object or null.")
+        shop_url = source.get("shop_url", source.get("shopUrl"))
         return cls(
-            shop_url=source.get("shop_url", source.get("shopUrl")),
-            extra_fields=_extra_fields(source, {"shop_url", "shopUrl"}),
+            shop_url=shop_url,
+            primary_cta=PrimaryCta.from_dict(cta) if isinstance(cta, dict) else (
+                PrimaryCta(PrimaryCtaType.SHOP_NOW, str(shop_url)) if shop_url else None
+            ),
+            extra_fields=_extra_fields(source, {"shop_url", "shopUrl", "primary_cta", "primaryCta"}),
         )
 
 
@@ -186,11 +244,13 @@ class PrimaryCta:
         if self.cta_type is PrimaryCtaType.CUSTOM:
             if not self.custom_label:
                 raise ProjectValidationError("A custom primary CTA requires a custom label.")
+            if len(self.custom_label) > 40:
+                raise ProjectValidationError("A custom primary CTA label cannot exceed 40 characters.")
             self.display_label = self.custom_label
         else:
             self.display_label = PRIMARY_CTA_LABELS[self.cta_type]
-        if not self.destination_url:
-            raise ProjectValidationError("A configured primary CTA requires a destination URL.")
+        if self.cta_type is PrimaryCtaType.CUSTOM and not self.destination_url:
+            raise ProjectValidationError("A custom primary CTA requires a destination URL.")
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -238,6 +298,7 @@ class MusicConfig:
 class TourismConfig:
     more_info_url: str | None = None
     stay_url: str | None = None
+    primary_cta: PrimaryCta | None = None
     extra_fields: dict[str, Any] = field(default_factory=dict, repr=False)
 
     def __post_init__(self) -> None:
@@ -249,16 +310,60 @@ class TourismConfig:
             **self.extra_fields,
             "more_info_url": self.more_info_url,
             "stay_url": self.stay_url,
+            "primary_cta": self.primary_cta.to_dict() if self.primary_cta else None,
         }
 
     @classmethod
     def from_dict(cls, value: dict[str, Any] | None) -> "TourismConfig":
         source = dict(value or {})
+        more_info_url = source.get("more_info_url", source.get("moreInfoUrl"))
+        stay_url = source.get("stay_url", source.get("stayUrl"))
+        cta = source.get("primary_cta", source.get("primaryCta"))
+        if cta is not None and not isinstance(cta, dict):
+            raise ProjectValidationError("Tourism primary_cta must be an object or null.")
+        compatible_cta = None
+        if isinstance(cta, dict):
+            compatible_cta = PrimaryCta.from_dict(cta)
+        elif more_info_url:
+            compatible_cta = PrimaryCta(PrimaryCtaType.MORE_INFO, str(more_info_url))
+        elif stay_url:
+            compatible_cta = PrimaryCta(PrimaryCtaType.STAY, str(stay_url))
         return cls(
-            more_info_url=source.get("more_info_url", source.get("moreInfoUrl")),
-            stay_url=source.get("stay_url", source.get("stayUrl")),
-            extra_fields=_extra_fields(source, {"more_info_url", "moreInfoUrl", "stay_url", "stayUrl"}),
+            more_info_url=more_info_url,
+            stay_url=stay_url,
+            primary_cta=compatible_cta,
+            extra_fields=_extra_fields(source, {"more_info_url", "moreInfoUrl", "stay_url", "stayUrl", "primary_cta", "primaryCta"}),
         )
+
+
+def project_primary_cta(project: "Project") -> PrimaryCta | None:
+    """Return the one active CTA, adapting legacy URLs without mutating them."""
+    if project.project_type is ProjectType.BUSINESS:
+        config = project.business_config
+        if not config:
+            return None
+        return config.primary_cta or PrimaryCta(PrimaryCtaType.SHOP_NOW, config.shop_url or "")
+    if project.project_type is ProjectType.MUSIC:
+        return project.music_config.primary_cta if project.music_config else None
+    config = project.tourism_config
+    if not config:
+        return None
+    return config.primary_cta or (
+        PrimaryCta(PrimaryCtaType.MORE_INFO, config.more_info_url)
+        if config.more_info_url else
+        PrimaryCta(PrimaryCtaType.STAY, config.stay_url)
+        if config.stay_url else
+        PrimaryCta(PrimaryCtaType.MORE_INFO, "")
+    )
+
+
+def allowed_primary_cta_types(project_type: ProjectType | str) -> frozenset[PrimaryCtaType]:
+    kind = ProjectType(project_type)
+    if kind is ProjectType.BUSINESS:
+        return BUSINESS_CTA_TYPES
+    if kind is ProjectType.MUSIC:
+        return MUSIC_CTA_TYPES
+    return TOURISM_CTA_TYPES
 
 
 @dataclass(slots=True)
@@ -384,6 +489,11 @@ class Project:
             if self.business_config is not None or self.music_config is not None:
                 raise ProjectValidationError("A Tourism project cannot have active Business or Music configuration.")
             self.tourism_config = self.tourism_config or TourismConfig()
+        primary_cta = project_primary_cta(self)
+        if primary_cta and primary_cta.cta_type not in allowed_primary_cta_types(self.project_type):
+            raise ProjectValidationError(
+                f"Primary CTA type {primary_cta.cta_type.value!r} is not allowed for {self.project_type.value}."
+            )
 
     def to_dict(self) -> dict[str, Any]:
         return {

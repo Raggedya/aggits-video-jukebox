@@ -15,6 +15,7 @@ from aggits_video_factory.delivery import DeliveryError, request_delivery
 from aggits_video_factory.desktop_forms import ProjectFormValues, validate_project_form
 from aggits_video_factory.models import (
     PRIMARY_CTA_LABELS,
+    MUSIC_CTA_TYPES,
     BusinessConfig,
     MusicConfig,
     PrimaryCta,
@@ -133,7 +134,8 @@ class MusicWorkflowTests(unittest.TestCase):
         self.assertIn("public host", results[1].error)
 
     def test_music_cta_matrix_generates_deterministic_labels_destinations_and_button_configuration(self):
-        matrix = list(PRIMARY_CTA_LABELS.items()) + [(PrimaryCtaType.CUSTOM, "PRE-ORDER ALBUM")]
+        matrix = [item for item in PRIMARY_CTA_LABELS.items() if item[0] in MUSIC_CTA_TYPES]
+        matrix += [(PrimaryCtaType.CUSTOM, "PRE-ORDER ALBUM")]
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             for index, (cta_type, expected_label) in enumerate(matrix):

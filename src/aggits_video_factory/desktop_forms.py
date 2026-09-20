@@ -6,7 +6,10 @@ from typing import Iterable
 from uuid import uuid4
 
 from .config import MAX_TICKER_LENGTH
-from .models import BusinessConfig, MusicConfig, PrimaryCta, PrimaryCtaType, Project, ProjectType, TourismConfig, utc_now
+from .models import (
+    BusinessConfig, MusicConfig, PrimaryCta, PrimaryCtaType, Project, ProjectType,
+    TourismConfig, project_primary_cta, utc_now,
+)
 from .youtube_api import YouTubeClient
 
 
@@ -23,9 +26,40 @@ CTA_CHOICES: tuple[tuple[str, PrimaryCtaType], ...] = (
     ("SoundCloud", PrimaryCtaType.SOUNDCLOUD),
     ("Custom", PrimaryCtaType.CUSTOM),
 )
-CTA_LABEL_TO_TYPE = dict(CTA_CHOICES)
+BUSINESS_CTA_CHOICES: tuple[tuple[str, PrimaryCtaType], ...] = (
+    ("Shop Now", PrimaryCtaType.SHOP_NOW),
+    ("View Products", PrimaryCtaType.VIEW_PRODUCTS),
+    ("Get a Quote", PrimaryCtaType.GET_A_QUOTE),
+    ("Book Now", PrimaryCtaType.BOOK_NOW),
+    ("Enquire Now", PrimaryCtaType.ENQUIRE_NOW),
+    ("Find a Store", PrimaryCtaType.FIND_A_STORE),
+    ("Find a Dealer", PrimaryCtaType.FIND_A_DEALER),
+    ("Book a Demo", PrimaryCtaType.BOOK_A_DEMO),
+    ("Contact Us", PrimaryCtaType.CONTACT_US),
+    ("Visit Website", PrimaryCtaType.VISIT_WEBSITE),
+    ("Custom", PrimaryCtaType.CUSTOM),
+)
+TOURISM_CTA_CHOICES: tuple[tuple[str, PrimaryCtaType], ...] = (
+    ("More Info", PrimaryCtaType.MORE_INFO),
+    ("Stay", PrimaryCtaType.STAY),
+    ("Explore", PrimaryCtaType.EXPLORE),
+    ("Book Now", PrimaryCtaType.BOOK_NOW),
+    ("What's On", PrimaryCtaType.WHATS_ON),
+    ("Plan Your Visit", PrimaryCtaType.PLAN_YOUR_VISIT),
+    ("Visit Website", PrimaryCtaType.VISIT_WEBSITE),
+    ("Custom", PrimaryCtaType.CUSTOM),
+)
+CTA_CHOICES_BY_PROJECT = {
+    ProjectType.BUSINESS: BUSINESS_CTA_CHOICES,
+    ProjectType.MUSIC: CTA_CHOICES,
+    ProjectType.TOURISM: TOURISM_CTA_CHOICES,
+}
+CTA_LABEL_TO_TYPE_BY_PROJECT = {kind: dict(choices) for kind, choices in CTA_CHOICES_BY_PROJECT.items()}
+CTA_TYPE_TO_LABEL_BY_PROJECT = {kind: {cta_type: label for label, cta_type in choices} for kind, choices in CTA_CHOICES_BY_PROJECT.items()}
+CTA_LABEL_TO_TYPE = dict(CTA_CHOICES)  # Backward-compatible Music aliases.
 CTA_TYPE_TO_LABEL = {cta_type: label for label, cta_type in CTA_CHOICES}
 DEFAULT_CTA_LABEL = CTA_CHOICES[0][0]
+DEFAULT_CTA_LABEL_BY_PROJECT = {kind: choices[0][0] for kind, choices in CTA_CHOICES_BY_PROJECT.items()}
 DEFAULT_STORY = "PULL THE LEVER. LET THE MACHINE CHOOSE WHAT YOU WATCH NEXT."
 
 
@@ -106,28 +140,50 @@ def validate_project_form(values: ProjectFormValues, project_type: ProjectType |
         raise FormValidationError("additional_urls", "A project can contain no more than three additional URLs.")
 
     try:
+        selected_label = values.cta_label
+        # ProjectFormValues predates per-type CTA selectors and its historical
+        # default is the Music default.  Treat that untouched constructor
+        # default as "use this project's default" for compatibility.
+        if selected_label == DEFAULT_CTA_LABEL and selected_label not in CTA_LABEL_TO_TYPE_BY_PROJECT[project_type]:
+            selected_label = DEFAULT_CTA_LABEL_BY_PROJECT[project_type]
+        cta_type = CTA_LABEL_TO_TYPE_BY_PROJECT[project_type].get(selected_label)
+        if cta_type is None:
+            raise FormValidationError("cta_type", "Select a valid Primary Call to Action.")
+        destination_url = values.destination_url
+        if project_type is ProjectType.BUSINESS and cta_type is PrimaryCtaType.SHOP_NOW and not destination_url.strip():
+            destination_url = values.shop_url
+        elif project_type is ProjectType.TOURISM and not destination_url.strip():
+            if cta_type is PrimaryCtaType.MORE_INFO:
+                destination_url = values.more_info_url
+            elif cta_type is PrimaryCtaType.STAY:
+                destination_url = values.stay_url
+        primary_cta = PrimaryCta(
+            cta_type=cta_type,
+            destination_url=destination_url,
+            custom_label=values.custom_label if cta_type is PrimaryCtaType.CUSTOM else None,
+        )
         if project_type is ProjectType.BUSINESS:
-            business_config = BusinessConfig(shop_url=values.shop_url)
+            legacy_shop_url = destination_url if cta_type is PrimaryCtaType.SHOP_NOW and destination_url else values.shop_url
+            business_config = BusinessConfig(shop_url=legacy_shop_url or None, primary_cta=primary_cta)
             music_config = None
             tourism_config = None
         elif project_type is ProjectType.MUSIC:
-            cta_type = CTA_LABEL_TO_TYPE.get(values.cta_label)
-            if cta_type is None:
-                raise FormValidationError("cta_type", "Select a valid Primary Call to Action.")
-            primary_cta = PrimaryCta(
-                cta_type=cta_type,
-                destination_url=values.destination_url,
-                custom_label=values.custom_label if cta_type is PrimaryCtaType.CUSTOM else None,
-            )
             business_config = None
             music_config = MusicConfig(primary_cta=primary_cta)
             tourism_config = None
         else:
             business_config = None
             music_config = None
+            legacy_more_info_url = values.more_info_url
+            legacy_stay_url = values.stay_url
+            if cta_type is PrimaryCtaType.MORE_INFO and destination_url:
+                legacy_more_info_url = destination_url
+            elif cta_type is PrimaryCtaType.STAY and destination_url:
+                legacy_stay_url = destination_url
             tourism_config = TourismConfig(
-                more_info_url=values.more_info_url,
-                stay_url=values.stay_url,
+                more_info_url=legacy_more_info_url or None,
+                stay_url=legacy_stay_url or None,
+                primary_cta=primary_cta,
             )
 
         # Project construction is the authoritative validation for shared URL
@@ -159,9 +215,11 @@ def validate_project_form(values: ProjectFormValues, project_type: ProjectType |
             field_name = "more_info_url"
         elif "stay" in lowered:
             field_name = "stay_url"
+        elif "destination" in lowered:
+            field_name = "destination_url"
         elif "custom" in lowered or "label" in lowered:
             field_name = "custom_label"
-        elif "destination" in lowered or "cta" in lowered:
+        elif "cta" in lowered:
             field_name = "destination_url"
         else:
             field_name = "additional_urls"
@@ -180,7 +238,8 @@ def validate_project_form(values: ProjectFormValues, project_type: ProjectType |
 
 
 def project_to_form_values(project: Project) -> ProjectFormValues:
-    cta = project.music_config.primary_cta if project.music_config else None
+    cta = project_primary_cta(project)
+    default_label = DEFAULT_CTA_LABEL_BY_PROJECT[project.project_type]
     return ProjectFormValues(
         title=project.title,
         channel_url=project.source_channel_url or project.channel_url,
@@ -188,7 +247,7 @@ def project_to_form_values(project: Project) -> ProjectFormValues:
         story_text=project.ticker_text,
         manual_video_urls=list(project.manual_video_urls),
         shop_url=project.business_config.shop_url or "" if project.business_config else "",
-        cta_label=CTA_TYPE_TO_LABEL.get(cta.cta_type, DEFAULT_CTA_LABEL) if cta else DEFAULT_CTA_LABEL,
+        cta_label=CTA_TYPE_TO_LABEL_BY_PROJECT[project.project_type].get(cta.cta_type, default_label) if cta else default_label,
         destination_url=cta.destination_url if cta else "",
         custom_label=cta.custom_label or "" if cta else "",
         more_info_url=project.tourism_config.more_info_url or "" if project.tourism_config else "",

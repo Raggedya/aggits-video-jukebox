@@ -59,7 +59,10 @@ def assemble_reviewed_project(
         source_channel_url=values.channel_url,
         manual_video_urls=list(values.manual_video_urls),
         excluded_video_ids=sorted(excluded_ids),
-        videos=list(selected_videos),
+        # Persist the reviewed catalogue, not only today's included subset.
+        # Inclusion remains authoritative in excluded_video_ids so an operator
+        # can later re-enable a known video without spending API quota again.
+        videos=list(reviewed_videos),
         status="changes_pending" if changes_pending else "draft",
         created_at=existing.created_at if existing else utc_now(),
         published_at=existing.published_at if existing else None,

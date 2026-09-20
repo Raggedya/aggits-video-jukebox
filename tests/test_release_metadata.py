@@ -39,6 +39,7 @@ class ReleaseMetadataTests(unittest.TestCase):
 
         class Owner:
             _edit_selected = _preview_selected = _publish_selected = lambda self: None
+            _edit_videos_selected = lambda self: None
             _unpublish_selected = _open_live = _retry_email = lambda self: None
             _check_live_status = lambda self: None
 
@@ -56,7 +57,7 @@ class ReleaseMetadataTests(unittest.TestCase):
             root.update_idletasks()
             minimum_inner_width = 520 - 36
             buttons = list(panel.buttons.values())
-            for row in (buttons[:4], buttons[4:]):
+            for row in (buttons[:3], buttons[3:6], buttons[6:]):
                 requested_width = sum(button.winfo_reqwidth() + 7 for button in row)
                 self.assertLessEqual(requested_width, minimum_inner_width)
         finally:

@@ -32,8 +32,8 @@ from aggits_video_factory.delivery import (
 )
 from aggits_video_factory.diagnostics import configure_logging, log_directory, open_log_folder
 from aggits_video_factory.desktop_forms import (
-    CTA_CHOICES,
-    DEFAULT_CTA_LABEL,
+    CTA_CHOICES_BY_PROJECT,
+    DEFAULT_CTA_LABEL_BY_PROJECT,
     FormValidationError,
     ProjectFormValues,
     project_is_visible_in_tab,
@@ -47,6 +47,7 @@ from aggits_video_factory.site_builder import build_project_site
 from aggits_video_factory.store import ProjectStore
 from aggits_video_factory.supplementary_sources import retrieve_supplementary_sources
 from aggits_video_factory.youtube_api import YouTubeClient, YouTubeError, merge_video_selections
+from aggits_video_factory.video_editor import VideoEditError, VideoSelectionSession
 
 
 INK = "#111318"
@@ -91,7 +92,7 @@ class ProjectForm(tk.Frame):
         self.channel_var = tk.StringVar()
         self.additional_vars = [tk.StringVar() for _ in range(3)]
         self.shop_var = tk.StringVar()
-        self.cta_var = tk.StringVar(value=DEFAULT_CTA_LABEL)
+        self.cta_var = tk.StringVar(value=DEFAULT_CTA_LABEL_BY_PROJECT[self.project_type])
         self.destination_var = tk.StringVar()
         self.custom_label_var = tk.StringVar()
         self.more_info_var = tk.StringVar()
@@ -103,21 +104,19 @@ class ProjectForm(tk.Frame):
         for index, variable in enumerate(self.additional_vars, start=1):
             row = self._entry_row(row, f"Additional URL {index}", variable, "additional_urls")
 
-        if self.project_type is ProjectType.BUSINESS:
-            row = self._entry_row(row, "Shop URL", self.shop_var, "shop_url")
-        elif self.project_type is ProjectType.MUSIC:
-            tk.Label(self, text="Primary Call to Action", bg=PANEL, fg=CREAM, anchor="e", font=("Segoe UI", 9)).grid(row=row, column=0, sticky="e", padx=(22, 12), pady=5)
-            self.cta_combo = ttk.Combobox(self, textvariable=self.cta_var, values=[label for label, _ in CTA_CHOICES], state="readonly", font=("Segoe UI", 10))
-            self.cta_combo.grid(row=row, column=1, sticky="ew", padx=(0, 22), pady=5, ipady=3)
-            self.cta_combo.bind("<<ComboboxSelected>>", lambda _event: self._update_custom_visibility())
-            self.field_widgets["cta_type"] = self.cta_combo
-            row += 1
-            row = self._entry_row(row, "Destination URL", self.destination_var, "destination_url")
-            self.custom_row = row
-            row = self._entry_row(row, "Button Label", self.custom_label_var, "custom_label")
-        else:
-            row = self._entry_row(row, "More Info URL", self.more_info_var, "more_info_url")
-            row = self._entry_row(row, "Stay URL", self.stay_var, "stay_url")
+        tk.Label(self, text="Primary Call to Action", bg=PANEL, fg=CREAM, anchor="e", font=("Segoe UI", 9)).grid(row=row, column=0, sticky="e", padx=(22, 12), pady=5)
+        self.cta_combo = ttk.Combobox(
+            self, textvariable=self.cta_var,
+            values=[label for label, _ in CTA_CHOICES_BY_PROJECT[self.project_type]],
+            state="readonly", font=("Segoe UI", 10),
+        )
+        self.cta_combo.grid(row=row, column=1, sticky="ew", padx=(0, 22), pady=5, ipady=3)
+        self.cta_combo.bind("<<ComboboxSelected>>", lambda _event: self._update_custom_visibility())
+        self.field_widgets["cta_type"] = self.cta_combo
+        row += 1
+        row = self._entry_row(row, "CTA Destination URL", self.destination_var, "destination_url")
+        self.custom_row = row
+        row = self._entry_row(row, "Custom Button Label", self.custom_label_var, "custom_label")
 
         bio_label = "Bio / About" if self.project_type is ProjectType.TOURISM else "Bio / Story Information"
         tk.Label(self, text=bio_label, bg=PANEL, fg=CREAM, anchor="ne", font=("Segoe UI", 9)).grid(row=row, column=0, sticky="ne", padx=(22, 12), pady=(8, 5))
@@ -203,8 +202,6 @@ class ProjectForm(tk.Frame):
             self.manual_toggle.configure(text="▸  Individual YouTube Videos (Optional)")
 
     def _update_custom_visibility(self) -> None:
-        if self.project_type is not ProjectType.MUSIC:
-            return
         label = self.cta_var.get()
         widget = self.field_widgets["custom_label"]
         if label == "Custom":
@@ -225,11 +222,13 @@ class ProjectForm(tk.Frame):
             story_text=self.story_text.get("1.0", "end-1c"),
             manual_video_urls=[variable.get() for variable in self.manual_vars],
             shop_url=self.shop_var.get() if self.project_type is ProjectType.BUSINESS else "",
-            cta_label=self.cta_var.get() if self.project_type is ProjectType.MUSIC else DEFAULT_CTA_LABEL,
-            destination_url=self.destination_var.get() if self.project_type is ProjectType.MUSIC else "",
-            custom_label=self.custom_label_var.get() if self.project_type is ProjectType.MUSIC else "",
-            more_info_url=self.more_info_var.get() if self.project_type is ProjectType.TOURISM else "",
-            stay_url=self.stay_var.get() if self.project_type is ProjectType.TOURISM else "",
+            cta_label=self.cta_var.get(),
+            destination_url=self.destination_var.get(),
+            custom_label=self.custom_label_var.get(),
+            # Legacy compatibility values are retained in hidden variables when
+            # an existing project is edited; they are no longer active CTA inputs.
+            more_info_url=self.more_info_var.get(),
+            stay_url=self.stay_var.get(),
         )
 
     def set_values(self, values: ProjectFormValues) -> None:
@@ -238,7 +237,7 @@ class ProjectForm(tk.Frame):
         for variable, value in zip(self.additional_vars, [*values.additional_urls, "", "", ""][:3]):
             variable.set(value)
         self.shop_var.set(values.shop_url)
-        self.cta_var.set(values.cta_label or DEFAULT_CTA_LABEL)
+        self.cta_var.set(values.cta_label or DEFAULT_CTA_LABEL_BY_PROJECT[self.project_type])
         self.destination_var.set(values.destination_url)
         self.custom_label_var.set(values.custom_label)
         self.more_info_var.set(values.more_info_url)
@@ -254,7 +253,8 @@ class ProjectForm(tk.Frame):
 
     def clear_new(self) -> None:
         self.editing_project_id = None
-        self.set_values(ProjectFormValues())
+        values = ProjectFormValues(cta_label=DEFAULT_CTA_LABEL_BY_PROJECT[self.project_type])
+        self.set_values(values)
         name = self.project_type.value.upper()
         self.mode_label.configure(text=f"NEW {name} PROJECT")
         if self.project_type is ProjectType.BUSINESS:
@@ -329,6 +329,7 @@ class LibraryPanel(tk.Frame):
         self.buttons: dict[str, tk.Button] = {}
         action_specs = [
             ("edit", "EDIT", owner._edit_selected),
+            ("videos", "EDIT YOUTUBE VIDEOS", owner._edit_videos_selected),
             ("preview", "PREVIEW", owner._preview_selected),
             ("publish", "PUBLISH", owner._publish_selected),
             ("unpublish", "UNPUBLISH", owner._unpublish_selected),
@@ -336,14 +337,14 @@ class LibraryPanel(tk.Frame):
             ("email", "RETRY EMAIL", owner._retry_email),
             ("verify", "CHECK LIVE STATUS", owner._check_live_status),
         ]
-        for column in range(4):
+        for column in range(3):
             actions.grid_columnconfigure(column, weight=1)
         for index, (key, label, callback) in enumerate(action_specs):
             button = owner._button(actions, label, callback, compact=True, primary=key == "publish")
-            # Wrap seven actions across two restrained rows so the recovery
-            # action remains fully visible at the supported 1120 x 720 size.
+            # Wrap eight actions across three restrained rows so the video
+            # editor and recovery actions remain fully visible at minimum size.
             button.configure(font=("Segoe UI Semibold", 8), padx=6)
-            button.grid(row=index // 4, column=index % 4, sticky="ew", padx=(0, 7), pady=(0, 7 if index < 4 else 0))
+            button.grid(row=index // 3, column=index % 3, sticky="ew", padx=(0, 7), pady=(0, 7 if index < 6 else 0))
             self.buttons[key] = button
         self.note = tk.Label(self, text="Select a project to edit it.", bg=PANEL, fg=MUTED, anchor="w", font=("Segoe UI", 8))
         self.note.pack(fill="x", padx=18, pady=(0, 14))
@@ -501,6 +502,7 @@ class Factory(tk.Tk):
                 )
             )
             panel.buttons["edit"].configure(state="normal" if allowed and not pending else "disabled")
+            panel.buttons["videos"].configure(state="normal" if allowed and not pending else "disabled")
             panel.buttons["preview"].configure(state="normal" if allowed else "disabled")
             panel.buttons["publish"].configure(state="normal" if allowed and project.status != "published" and not pending else "disabled")
             panel.buttons["publish"].configure(text="UPDATE + REPUBLISH" if project and project.status == "changes_pending" else "PUBLISH")
@@ -516,6 +518,7 @@ class Factory(tk.Tk):
             panel.buttons["email"].configure(state="normal" if allowed and project.status == "published" and not delivered_to_current else "disabled")
             panel.buttons["verify"].configure(state="normal" if allowed and pending else "disabled")
             if project:
+                included_count = len([video for video in project.videos if video.video_id not in set(project.excluded_video_ids)])
                 status_label = {
                     "verification_pending": "Publication Verification Pending",
                     "unpublish_verification_pending": "Removal Verification Pending",
@@ -532,7 +535,7 @@ class Factory(tk.Tk):
                     if project.delivery_record and project.delivery_record.recipient and project.delivery_record.revision == (project.publication_revision or "")
                     else ""
                 )
-                panel.note.configure(text=f"{project.title} · {len(project.videos)} videos · {status_label} · {delivery_label}{recipient_detail}")
+                panel.note.configure(text=f"{project.title} · {included_count} videos · {status_label} · {delivery_label}{recipient_detail}")
             else:
                 panel.note.configure(text=f"Select a {project_type.value.title()} project to edit, preview or publish it.")
 
@@ -553,6 +556,205 @@ class Factory(tk.Tk):
             return
         form.load_project(project)
         form.field_widgets["title"].focus_set()
+
+    def _edit_videos_selected(self) -> None:
+        project = self._selected_project()
+        if not project or self.busy:
+            return
+        form = self.forms[project.project_type]
+        if form.is_dirty() and not self._resolve_unsaved(form, "edit YouTube videos"):
+            return
+        if not project.videos:
+            messagebox.showerror(DESKTOP_TITLE, "This saved project has no persisted videos to edit.")
+            return
+        self.logger.info("Video editor opened project_id=%s type=%s", project.id, project.project_type.value)
+        self._open_video_editor(project)
+
+    def _open_video_editor(self, project: Project) -> None:
+        session = VideoSelectionSession(project)
+        dialog = tk.Toplevel(self)
+        dialog.title(f"Edit YouTube Videos — {project.title}")
+        dialog.geometry("980x720")
+        dialog.minsize(760, 560)
+        dialog.configure(bg=INK)
+        dialog.transient(self)
+        dialog.grab_set()
+        initial_state = (
+            tuple((video.video_id, session.is_included(video.video_id)) for video in session.videos),
+            tuple(session.manual_video_urls),
+        )
+        resolving = False
+
+        heading = tk.Frame(dialog, bg=PANEL, highlightbackground=DEEP_BRASS, highlightthickness=1)
+        heading.pack(fill="x", padx=18, pady=(18, 10))
+        tk.Label(heading, text="EDIT YOUTUBE VIDEOS", bg=PANEL, fg=BRASS, font=("Segoe UI Semibold", 16)).pack(anchor="w", padx=20, pady=(15, 3))
+        tk.Label(heading, text=project.title, bg=PANEL, fg=MUTED, font=("Segoe UI", 9)).pack(anchor="w", padx=20, pady=(0, 14))
+
+        list_shell = tk.Frame(dialog, bg="#080706", highlightbackground=DEEP_BRASS, highlightthickness=1)
+        list_shell.pack(fill="both", expand=True, padx=18)
+        canvas = tk.Canvas(list_shell, bg="#080706", bd=0, highlightthickness=0)
+        scrollbar = ttk.Scrollbar(list_shell, orient="vertical", command=canvas.yview, style="Factory.Vertical.TScrollbar")
+        canvas.configure(yscrollcommand=scrollbar.set)
+        scrollbar.pack(side="right", fill="y")
+        canvas.pack(side="left", fill="both", expand=True)
+        rows = tk.Frame(canvas, bg="#080706")
+        canvas_window = canvas.create_window((0, 0), window=rows, anchor="nw")
+        rows.bind("<Configure>", lambda _event: canvas.configure(scrollregion=canvas.bbox("all")))
+        canvas.bind("<Configure>", lambda event: canvas.itemconfigure(canvas_window, width=event.width))
+
+        add_shell = tk.Frame(dialog, bg=PANEL)
+        add_shell.pack(fill="x", padx=18, pady=(10, 0))
+        tk.Label(add_shell, text="ADD YOUTUBE VIDEO URL", bg=PANEL, fg=CREAM, font=("Segoe UI Semibold", 8)).pack(anchor="w")
+        add_line = tk.Frame(add_shell, bg=PANEL)
+        add_line.pack(fill="x", pady=(5, 2))
+        url_var = tk.StringVar()
+        url_entry = tk.Entry(add_line, textvariable=url_var, bg="#101217", fg=PAPER, insertbackground=PAPER, relief="flat", highlightbackground=DEEP_BRASS, highlightthickness=1, font=("Segoe UI", 10))
+        url_entry.pack(side="left", fill="x", expand=True, ipady=7)
+        feedback = tk.Label(add_shell, text="", bg=PANEL, fg=MUTED, anchor="w", font=("Segoe UI", 8))
+        feedback.pack(fill="x")
+        count_label = tk.Label(add_shell, bg=PANEL, fg=CREAM, font=("Segoe UI Semibold", 9))
+        count_label.pack(anchor="e")
+
+        variables: dict[str, tk.BooleanVar] = {}
+
+        def update_count() -> None:
+            count_label.configure(text=f"{session.included_count} / {MAX_VIDEOS} INCLUDED")
+
+        def toggle(video_id: str, variable: tk.BooleanVar) -> None:
+            try:
+                session.set_included(video_id, variable.get())
+            except VideoEditError as error:
+                variable.set(session.is_included(video_id))
+                messagebox.showerror(DESKTOP_TITLE, str(error), parent=dialog)
+            update_count()
+
+        def render_rows() -> None:
+            for child in rows.winfo_children():
+                child.destroy()
+            variables.clear()
+            for index, video in enumerate(session.videos, start=1):
+                row = tk.Frame(rows, bg="#11100d" if index % 2 else "#0b0a08", height=78)
+                row.pack(fill="x", padx=4, pady=(4 if index == 1 else 0, 2))
+                row.pack_propagate(False)
+                variable = tk.BooleanVar(dialog, session.is_included(video.video_id))
+                variables[video.video_id] = variable
+                tk.Checkbutton(
+                    row, text="INCLUDE", variable=variable, command=lambda item=video.video_id, value=variable: toggle(item, value),
+                    bg=row["bg"], activebackground=row["bg"], selectcolor="#5a4328", fg=PAPER,
+                    activeforeground=PAPER, font=("Segoe UI Semibold", 8), padx=8,
+                ).pack(side="left", padx=(8, 10))
+                detail = tk.Frame(row, bg=row["bg"])
+                detail.pack(side="left", fill="both", expand=True, pady=10)
+                manual = any(YouTubeClient.video_id_from_url(item) == video.video_id for item in session.manual_video_urls)
+                tk.Label(detail, text=video.title, bg=row["bg"], fg=PAPER, anchor="w", font=("Segoe UI Semibold", 10)).pack(fill="x")
+                tk.Label(detail, text=f"{'MANUALLY ADDED' if manual else 'CHANNEL SELECTION'}  ·  {video.channel_title}", bg=row["bg"], fg=BRASS, anchor="w", font=("Segoe UI Semibold", 8)).pack(fill="x", pady=(3, 0))
+                tk.Label(detail, text=video.url, bg=row["bg"], fg=MUTED, anchor="w", font=("Segoe UI", 8)).pack(fill="x")
+            update_count()
+
+        def add_complete(result) -> None:
+            nonlocal resolving
+            resolving = False
+            add_button.configure(state="normal")
+            url_entry.configure(state="normal")
+            feedback.configure(
+                text=("Existing excluded video re-included." if result.reinstated else f"Added: {result.video.title}"),
+                fg=SUCCESS,
+            )
+            url_var.set("")
+            render_rows()
+
+        def add_failed(error: Exception) -> None:
+            nonlocal resolving
+            resolving = False
+            add_button.configure(state="normal")
+            url_entry.configure(state="normal")
+            feedback.configure(text=str(error), fg=ERROR)
+            self.logger.warning("Video resolution failed project_id=%s error=%s", project.id, error)
+
+        def add_video() -> None:
+            nonlocal resolving
+            if resolving:
+                return
+            api_key = str(self.settings.get("youtubeApiKey") or "")
+            if not api_key:
+                feedback.configure(text="A YouTube Data API key is required in Settings.", fg=ERROR)
+                return
+            resolving = True
+            add_button.configure(state="disabled")
+            url_entry.configure(state="disabled")
+            feedback.configure(text="Resolving YouTube video…", fg=BRASS)
+            requested_url = url_var.get()
+
+            def worker() -> None:
+                try:
+                    result = session.add_url(requested_url, YouTubeClient(api_key))
+                except Exception as error:
+                    dialog.after(0, lambda: add_failed(error))
+                else:
+                    dialog.after(0, lambda: add_complete(result))
+
+            threading.Thread(target=worker, daemon=True).start()
+
+        add_button = self._button(add_line, "ADD VIDEO", add_video, primary=True, compact=True)
+        add_button.pack(side="left", padx=(8, 0))
+
+        footer = tk.Frame(dialog, bg=INK)
+        footer.pack(fill="x", padx=18, pady=(10, 18))
+
+        def current_state():
+            return (
+                tuple((video.video_id, session.is_included(video.video_id)) for video in session.videos),
+                tuple(session.manual_video_urls),
+            )
+
+        def destroy_editor() -> None:
+            canvas.unbind_all("<MouseWheel>")
+            dialog.destroy()
+
+        def close_editor() -> None:
+            if resolving:
+                messagebox.showinfo(DESKTOP_TITLE, "Please wait for the current YouTube lookup to finish.", parent=dialog)
+                return
+            if current_state() != initial_state and not messagebox.askyesno("Discard video changes?", "Discard the unsaved YouTube video changes?", parent=dialog):
+                return
+            destroy_editor()
+
+        def save_changes() -> None:
+            if resolving:
+                return
+            try:
+                revised = session.revised_project()
+            except VideoEditError as error:
+                messagebox.showerror(DESKTOP_TITLE, str(error), parent=dialog)
+                return
+            destroy_editor()
+
+            def worker() -> Project:
+                build_project_site(revised, self.store.project_dir(revised.slug) / "site")
+                self.store.save_project(revised)
+                included = len([video for video in revised.videos if video.video_id not in set(revised.excluded_video_ids)])
+                self.logger.info("Project video selection saved project_id=%s included=%s", revised.id, included)
+                return revised
+
+            self._run_async("SAVING YOUTUBE VIDEO CHANGES…", worker, self._video_edit_complete)
+
+        self._button(footer, "SAVE CHANGES", save_changes, primary=True, compact=True).pack(side="right")
+        self._button(footer, "CANCEL", close_editor, compact=True).pack(side="right", padx=8)
+        dialog.protocol("WM_DELETE_WINDOW", close_editor)
+        canvas.bind("<Enter>", lambda _event: canvas.bind_all("<MouseWheel>", lambda event: canvas.yview_scroll(int(-event.delta / 120), "units")))
+        canvas.bind("<Leave>", lambda _event: canvas.unbind_all("<MouseWheel>"))
+        render_rows()
+        dialog.lift()
+        url_entry.focus_set()
+
+    def _video_edit_complete(self, project: Project) -> None:
+        self._refresh_library(project.id)
+        self.forms[project.project_type].load_project(project)
+        included_count = len([video for video in project.videos if video.video_id not in set(project.excluded_video_ids)])
+        detail = f"{project.title} now includes {included_count} YouTube videos."
+        if project.status == "changes_pending":
+            detail += "\n\nThe live jukebox is unchanged until you choose UPDATE + REPUBLISH."
+        messagebox.showinfo(DESKTOP_TITLE, detail)
 
     def _new_project(self, project_type: ProjectType) -> None:
         form = self.forms[project_type]
@@ -866,12 +1068,13 @@ class Factory(tk.Tk):
     def _create_complete(self, project: Project) -> None:
         self._refresh_library(project.id)
         editing = project.status == "changes_pending"
+        included_count = len([video for video in project.videos if video.video_id not in set(project.excluded_video_ids)])
         self.forms[project.project_type].load_project(project)
         self._open_project_preview(project)
         if editing:
-            messagebox.showinfo(DESKTOP_TITLE, f"{project.title} now has {len(project.videos)} reviewed videos and its local preview has opened.\n\nThe existing live jukebox is unchanged. Press UPDATE + REPUBLISH in the Library when you are ready.")
+            messagebox.showinfo(DESKTOP_TITLE, f"{project.title} now has {included_count} included videos and its local preview has opened.\n\nThe existing live jukebox is unchanged. Press UPDATE + REPUBLISH in the Library when you are ready.")
         else:
-            messagebox.showinfo(DESKTOP_TITLE, f"{project.title} was created with {len(project.videos)} videos and its local preview has opened.\n\nIt is private until you press PUBLISH in the Library.")
+            messagebox.showinfo(DESKTOP_TITLE, f"{project.title} was created with {included_count} videos and its local preview has opened.\n\nIt is private until you press PUBLISH in the Library.")
 
     def _open_project_preview(self, project: Project) -> bool:
         site = self.store.project_dir(project.slug) / "site"

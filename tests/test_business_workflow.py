@@ -186,8 +186,8 @@ class BusinessWorkflowTests(unittest.TestCase):
             self.assertTrue(payload["customerConfig"]["shopEnabled"])
             self.assertNotEqual(payload["customerConfig"]["shopURL"], payload["customerConfig"]["subscribeURL"])
             self.assertNotEqual(payload["customerConfig"]["shopURL"], project.additional_urls[0])
-            self.assertIn("shopDestination = String(config.customerConfig?.shopURL || '').trim()", script)
-            self.assertIn("window.open(shopDestination, '_blank', 'noopener,noreferrer')", script)
+            self.assertIn("String(config.customerConfig?.shopURL || '').trim()", script)
+            self.assertIn("window.open(primaryActionDestination, '_blank', 'noopener,noreferrer')", script)
             self.assertNotIn("sub_confirmation=1", script)
             self.assertIn('data-action="shop"', page)
             self.assertNotIn('data-action="subscribe"', page)
@@ -204,8 +204,10 @@ class BusinessWorkflowTests(unittest.TestCase):
 
             self.assertIsNone(payload["customerConfig"]["shopURL"])
             self.assertFalse(payload["customerConfig"]["shopEnabled"])
-            self.assertIn('aria-label="Shop unavailable" disabled', page)
-            self.assertIn("shopButton.disabled = !shopDestination", script)
+            self.assertIn('aria-label="SHOP NOW unavailable" disabled', page)
+            self.assertIn("primaryActionButton.disabled = !primaryActionDestination", script)
+            self.assertEqual(payload["customerConfig"]["primaryAction"]["displayLabel"], "SHOP NOW")
+            self.assertFalse(payload["customerConfig"]["primaryAction"]["enabled"])
             self.assertNotIn("current.channelId", script)
 
     def test_shop_update_and_removal_never_leave_a_stale_destination(self):

@@ -8,6 +8,7 @@ if (machine) {
   const rows = [...reel.querySelectorAll('.reel-strip > *')];
   const lever = machine.querySelector('.lever');
   const shopPlaque = machine.querySelector('[data-shop-plaque]');
+  const shopPlaquePrompt = machine.querySelector('[data-shop-plaque-prompt]');
   const shopPlaqueLabel = machine.querySelector('[data-shop-plaque-prompt] span');
   const titleNode = machine.querySelector('[data-machine-title]');
   const storyWindow = machine.querySelector('[data-story-window]');
@@ -17,7 +18,6 @@ if (machine) {
   const playButton = machine.querySelector('[data-action="play"]');
   const shareButton = machine.querySelector('[data-action="share"]');
   const primaryActionButton = machine.querySelector('[data-action="shop"]');
-  const shopButton = primaryActionButton;
   const respinButton = machine.querySelector('[data-action="spin-again"]');
   const soundButton = machine.querySelector('[data-action="sound"]');
   const soundIcon = machine.querySelector('[data-sound-icon]');
@@ -55,9 +55,7 @@ if (machine) {
   let channelThumbnail = '';
   let primaryActionDestination = '';
   let primaryActionLabel = 'SHOP NOW';
-  let shopDestination = '';
   let plaqueDestination = '';
-  let tourismMoreInfoEnabled = false;
   let activeProjectType = 'business';
   let shopPlaqueTimer = 0;
   let shopPlaqueEnabled = false;
@@ -454,8 +452,7 @@ if (machine) {
     meterMode = 'idle';
     playButton.disabled = false;
     shareButton.disabled = false;
-    if (activeProjectType === 'business') shopButton.disabled = !shopDestination;
-    else primaryActionButton.disabled = !primaryActionDestination;
+    primaryActionButton.disabled = !primaryActionDestination;
     primaryActionButton.setAttribute('aria-disabled', String(!primaryActionDestination));
     respinButton.disabled = false;
     spinning = false;
@@ -578,16 +575,8 @@ if (machine) {
     window.open(primaryActionDestination, '_blank', 'noopener,noreferrer');
   }
 
-  function openShop() {
-    if (!shopDestination) return;
-    window.open(shopDestination, '_blank', 'noopener,noreferrer');
-  }
-
   function openPlaqueAction() {
-    if (activeProjectType === 'tourism') {
-      if (plaqueDestination) window.open(plaqueDestination, '_blank', 'noopener,noreferrer');
-    } else if (activeProjectType === 'music') openPrimaryAction();
-    else openShop();
+    if (plaqueDestination) window.open(plaqueDestination, '_blank', 'noopener,noreferrer');
   }
 
   function stopShopPlaqueCycle() {
@@ -608,15 +597,9 @@ if (machine) {
     }, delay);
   }
 
-  function configureShopPlaque(shopEnabled) {
+  function configureShopPlaque() {
     stopShopPlaqueCycle();
-    if (activeProjectType === 'tourism') {
-      shopPlaqueEnabled = tourismMoreInfoEnabled === true && Boolean(plaqueDestination);
-    } else {
-      shopPlaqueEnabled = activeProjectType === 'music'
-        ? Boolean(primaryActionDestination)
-        : shopEnabled === true && Boolean(shopDestination);
-    }
+    shopPlaqueEnabled = Boolean(plaqueDestination);
     shopPlaque.classList.toggle('is-shop-enabled', shopPlaqueEnabled);
     if (!shopPlaqueEnabled) {
       shopPlaque.removeAttribute('role');
@@ -628,11 +611,7 @@ if (machine) {
     shopPlaque.setAttribute('tabindex', '0');
     shopPlaque.setAttribute(
       'aria-label',
-      activeProjectType === 'music'
-        ? `${primaryActionLabel} for ${machineIdentity || 'this artist'}`
-        : activeProjectType === 'tourism'
-          ? `More information about ${machineIdentity || 'this destination'}`
-          : `Visit ${machineIdentity || 'this business'} online shop`,
+      `${primaryActionLabel} for ${machineIdentity || 'this project'}`,
     );
     scheduleShopPlaqueState('shop', SHOP_PLAQUE_TITLE_DURATION);
   }
@@ -652,9 +631,7 @@ if (machine) {
     playButton.addEventListener('click', () => { void openVideo(true); });
     shareButton.addEventListener('click', share);
     primaryActionButton.addEventListener('click', () => {
-      if (activeProjectType === 'tourism') openPrimaryAction();
-      else if (activeProjectType === 'music') openPrimaryAction();
-      else openShop();
+      openPrimaryAction();
     });
     shopPlaque.addEventListener('click', () => {
       if (shopPlaqueEnabled) openPlaqueAction();
@@ -712,38 +689,42 @@ if (machine) {
       machineIdentity = String(config.title || config.channelTitle || '').trim();
       machineDescription = String(config.customerConfig?.customerStory || config.tickerText || '').trim();
       activeProjectType = String(config.projectType || 'business').trim().toLowerCase();
+      machine.dataset.projectType = activeProjectType;
       const initialReelInstruction = 'PULL THE LEVER  ──────→';
       const musicPrimaryCta = activeProjectType === 'music' ? config.musicConfig?.primaryCTA : null;
       const tourismConfig = activeProjectType === 'tourism' ? config.tourismConfig : null;
-      shopDestination = String(config.customerConfig?.shopURL || '').trim();
-      if (activeProjectType !== 'business') shopDestination = '';
-      tourismMoreInfoEnabled = tourismConfig?.moreInfoEnabled === true;
-      primaryActionDestination = activeProjectType === 'music'
-        ? String(musicPrimaryCta?.destinationURL || '').trim()
+      const legacyShopDestination = activeProjectType === 'business'
+        ? String(config.customerConfig?.shopURL || '').trim()
+        : '';
+      const legacyPrimaryAction = activeProjectType === 'music'
+        ? musicPrimaryCta
         : activeProjectType === 'tourism'
-          ? String(tourismConfig?.stayURL || '').trim()
-          : shopDestination;
-      primaryActionLabel = activeProjectType === 'music'
-        ? String(musicPrimaryCta?.displayLabel || '').trim()
-        : activeProjectType === 'tourism' ? 'STAY' : 'SHOP NOW';
-      plaqueDestination = activeProjectType === 'music'
-        ? primaryActionDestination
-        : activeProjectType === 'tourism'
-          ? String(tourismConfig?.moreInfoURL || '').trim()
-          : shopDestination;
-      if (shopPlaqueLabel) shopPlaqueLabel.textContent = activeProjectType === 'tourism' ? 'MORE INFO' : 'SHOP NOW';
+          ? {displayLabel: 'MORE INFO', destinationURL: tourismConfig?.moreInfoURL}
+          : {displayLabel: 'SHOP NOW', destinationURL: legacyShopDestination};
+      const primaryAction = config.customerConfig?.primaryAction || legacyPrimaryAction || {};
+      primaryActionDestination = String(primaryAction.destinationURL || '').trim();
+      primaryActionLabel = String(primaryAction.displayLabel || '').trim() || 'PRIMARY ACTION';
+      plaqueDestination = primaryActionDestination;
+      if (shopPlaqueLabel) shopPlaqueLabel.textContent = primaryActionLabel;
+      if (shopPlaquePrompt) sizeClass(shopPlaquePrompt, primaryActionLabel);
       const primaryActionText = primaryActionButton.querySelector('b');
       if (primaryActionText && primaryActionLabel) primaryActionText.textContent = primaryActionLabel;
       primaryActionButton.disabled = true;
       primaryActionButton.setAttribute('aria-disabled', 'true');
       primaryActionButton.setAttribute('aria-label', primaryActionDestination ? primaryActionLabel : `${primaryActionLabel || 'Primary action'} unavailable`);
+      primaryActionButton.dataset.ctaPlacement = 'bottom';
+      primaryActionButton.dataset.ctaType = String(primaryAction.type || '');
+      primaryActionButton.dataset.ctaLabel = primaryActionLabel;
+      shopPlaque.dataset.ctaPlacement = 'top';
+      shopPlaque.dataset.ctaType = String(primaryAction.type || '');
+      shopPlaque.dataset.ctaLabel = primaryActionLabel;
       masterStorySections = [];
       channelThumbnail = String(config.channelThumbnail || '').trim();
       catalogue = Array.isArray(config.videos) ? config.videos.filter(video => video?.videoId) : [];
       if (!catalogue.length) throw new Error('No videos');
       titleNode.textContent = config.title || 'VIDEO JUKEBOX';
       sizeClass(titleNode, titleNode.textContent);
-      configureShopPlaque(config.customerConfig?.shopEnabled);
+      configureShopPlaque();
       document.title = `${config.title || 'Video Jukebox'} — CRISPY BITS`;
       setCustomerBackdrop(catalogue[0]);
       if (channelThumbnail) {

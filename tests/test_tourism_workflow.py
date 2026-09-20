@@ -118,12 +118,15 @@ class TourismWorkflowTests(unittest.TestCase):
             more_info_url=MORE_INFO,
             stay_url=STAY,
         ), ProjectType.TOURISM)
-        self.assertEqual(valid.tourism_config, TourismConfig(MORE_INFO, STAY))
+        self.assertEqual(valid.tourism_config.more_info_url, MORE_INFO)
+        self.assertEqual(valid.tourism_config.stay_url, STAY)
+        self.assertEqual(valid.tourism_config.primary_cta.cta_type, PrimaryCtaType.MORE_INFO)
+        self.assertEqual(valid.tourism_config.primary_cta.destination_url, MORE_INFO)
         self.assertIsNone(valid.business_config)
         self.assertIsNone(valid.music_config)
 
         for field, values in (
-            ("more_info_url", {"more_info_url": "javascript:alert(1)", "stay_url": STAY}),
+            ("destination_url", {"more_info_url": "javascript:alert(1)", "stay_url": STAY}),
             ("stay_url", {"more_info_url": MORE_INFO, "stay_url": "file:///hotel"}),
         ):
             with self.subTest(field=field), self.assertRaises(FormValidationError) as caught:
@@ -183,6 +186,7 @@ class TourismWorkflowTests(unittest.TestCase):
             project_to_form_values(created),
             title="RENAMED DESTINATION",
             story_text="Edited manual tourism bio.",
+            destination_url="https://example.com/tourism-information-b",
             more_info_url="https://example.com/tourism-information-b",
             stay_url="https://example.com/accommodation-b",
         ), ProjectType.TOURISM)
@@ -232,7 +236,7 @@ class TourismWorkflowTests(unittest.TestCase):
         selected = merge_video_selections(manual, [sample_video(1), sample_video(2)], maximum=2)
         self.assertEqual([item.video_id for item in selected], ["tourismvideo02", "tourismvideo01"])
 
-    def test_tourism_machine_uses_distinct_more_info_and_stay_destinations(self):
+    def test_tourism_machine_preserves_legacy_urls_but_uses_one_primary_destination(self):
         config, page = generated(tourism_project())
         self.assertEqual(config["projectType"], "tourism")
         self.assertEqual(config["tourismConfig"], {
@@ -243,10 +247,10 @@ class TourismWorkflowTests(unittest.TestCase):
         })
         self.assertNotIn("musicConfig", config)
         self.assertNotIn("shopURL", config["customerConfig"])
-        self.assertIn(">STAY</b>", page)
-        self.assertIn("activeProjectType === 'tourism' ? 'MORE INFO' : 'SHOP NOW'", SCRIPT)
-        self.assertIn("String(tourismConfig?.moreInfoURL || '').trim()", SCRIPT)
-        self.assertIn("String(tourismConfig?.stayURL || '').trim()", SCRIPT)
+        self.assertEqual(config["customerConfig"]["primaryAction"]["displayLabel"], "MORE INFO")
+        self.assertEqual(config["customerConfig"]["primaryAction"]["destinationURL"], MORE_INFO)
+        self.assertIn(">MORE INFO</b>", page)
+        self.assertIn("const primaryAction = config.customerConfig?.primaryAction", SCRIPT)
         self.assertIn("window.open(plaqueDestination, '_blank', 'noopener,noreferrer')", SCRIPT)
         self.assertIn("window.open(primaryActionDestination, '_blank', 'noopener,noreferrer')", SCRIPT)
         self.assertNotEqual(MORE_INFO, STAY)
@@ -259,7 +263,9 @@ class TourismWorkflowTests(unittest.TestCase):
         self.assertFalse(config["tourismConfig"]["stayEnabled"])
         self.assertIsNone(config["tourismConfig"]["moreInfoURL"])
         self.assertIsNone(config["tourismConfig"]["stayURL"])
-        self.assertIn("tourismMoreInfoEnabled === true && Boolean(plaqueDestination)", SCRIPT)
+        self.assertFalse(config["customerConfig"]["primaryAction"]["enabled"])
+        self.assertEqual(config["customerConfig"]["primaryAction"]["destinationURL"], "")
+        self.assertIn("shopPlaqueEnabled = Boolean(plaqueDestination)", SCRIPT)
         self.assertIn("primaryActionButton.disabled = !primaryActionDestination", SCRIPT)
 
     def test_tourism_url_edits_and_removal_do_not_leave_stale_destinations(self):
@@ -380,8 +386,9 @@ class TourismWorkflowTests(unittest.TestCase):
             "[ProjectType.BUSINESS, ProjectType.MUSIC, ProjectType.TOURISM]",
             source,
         )
-        self.assertIn('"More Info URL"', source)
-        self.assertIn('"Stay URL"', source)
+        self.assertIn('"Primary Call to Action"', source)
+        self.assertIn('"CTA Destination URL"', source)
+        self.assertIn('"Custom Button Label"', source)
         self.assertIn('"Bio / About"', source)
 
         root = tk.Tk()
@@ -392,9 +399,11 @@ class TourismWorkflowTests(unittest.TestCase):
             assert spec.loader is not None
             spec.loader.exec_module(module)
             form = module.ProjectForm(root, ProjectType.TOURISM, lambda: None, lambda: None)
-            self.assertIn("more_info_url", form.field_widgets)
-            self.assertIn("stay_url", form.field_widgets)
-            self.assertNotIn("cta_type", form.field_widgets)
+            self.assertIn("cta_type", form.field_widgets)
+            self.assertIn("destination_url", form.field_widgets)
+            self.assertIn("custom_label", form.field_widgets)
+            self.assertNotIn("more_info_url", form.field_widgets)
+            self.assertNotIn("stay_url", form.field_widgets)
             form.destroy()
         finally:
             root.destroy()

@@ -46,7 +46,7 @@ class BusinessInitialReelInstructionTests(unittest.TestCase):
         self.assertIn("renderRows: video => renderRows(video)", spin_block)
         self.assertIn("current = winner", spin_block)
         self.assertIn("respinButton.addEventListener('click', spin);", SCRIPT)
-        self.assertIn("configureShopPlaque(config.customerConfig?.shopEnabled);", SCRIPT)
+        self.assertIn("configureShopPlaque();", SCRIPT)
 
 
 if __name__ == "__main__":
