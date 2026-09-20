@@ -168,6 +168,67 @@ class MusicWorkflowTests(unittest.TestCase):
         with self.assertRaisesRegex(ProjectValidationError, "custom label"):
             PrimaryCta(cta_type=PrimaryCtaType.CUSTOM, destination_url="https://example.com/preorder")
 
+    def test_new_standard_ctas_round_trip_through_project_store(self):
+        matrix = (
+            (PrimaryCtaType.BOOK_NOW, "BOOK NOW", "https://example.com/book-now"),
+            (PrimaryCtaType.BOOK_US, "BOOK US", "https://example.com/book-us"),
+            (PrimaryCtaType.SOUNDCLOUD, "SOUNDCLOUD", "https://example.com/soundcloud"),
+        )
+        with tempfile.TemporaryDirectory() as temporary:
+            store = ProjectStore(Path(temporary))
+            for index, (cta_type, label, destination) in enumerate(matrix):
+                with self.subTest(cta_type=cta_type.value):
+                    project = music_project(
+                        cta_type=cta_type,
+                        destination=destination,
+                        custom_label="STALE CUSTOM LABEL",
+                        slug=f"new-cta-{index}",
+                    )
+                    store.save_project(project)
+                    restored = store.load_project(project.slug)
+                    cta = restored.music_config.primary_cta
+                    self.assertEqual(cta.cta_type, cta_type)
+                    self.assertEqual(cta.display_label, label)
+                    self.assertEqual(cta.destination_url, destination)
+
+    def test_new_standard_ctas_use_existing_url_validation_without_custom_label(self):
+        cta_types = (
+            PrimaryCtaType.BOOK_NOW,
+            PrimaryCtaType.BOOK_US,
+            PrimaryCtaType.SOUNDCLOUD,
+        )
+        for cta_type in cta_types:
+            with self.subTest(cta_type=cta_type.value):
+                valid = PrimaryCta(cta_type=cta_type, destination_url=f"https://example.com/{cta_type.value}")
+                self.assertIsNone(valid.custom_label)
+                for unsafe in ("javascript:alert(1)", "data:text/html,hello", "file:///tmp/booking", "C:\\booking"):
+                    with self.assertRaises(ProjectValidationError):
+                        PrimaryCta(cta_type=cta_type, destination_url=unsafe)
+
+    def test_new_standard_cta_sites_keep_exact_distinct_destinations_and_type_isolation(self):
+        matrix = (
+            (PrimaryCtaType.BOOK_NOW, "BOOK NOW", "https://example.com/book-now"),
+            (PrimaryCtaType.BOOK_US, "BOOK US", "https://example.com/book-us"),
+            (PrimaryCtaType.SOUNDCLOUD, "SOUNDCLOUD", "https://example.com/soundcloud"),
+        )
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            for index, (cta_type, label, destination) in enumerate(matrix):
+                project = music_project(cta_type=cta_type, destination=destination, slug=f"cta-site-{index}")
+                site = root / project.slug
+                build_project_site(project, site)
+                config = json.loads((site / "machine.json").read_text(encoding="utf-8"))
+                page = (site / "index.html").read_text(encoding="utf-8")
+                cta = config["musicConfig"]["primaryCTA"]
+                self.assertEqual(cta, {
+                    "type": cta_type.value,
+                    "displayLabel": label,
+                    "destinationURL": destination,
+                })
+                self.assertIn(f"<b>{label}</b>", page)
+                self.assertNotIn("shopURL", config["customerConfig"])
+                self.assertNotIn("tourismConfig", config)
+
     def test_standard_and_custom_cta_round_trip_clears_stale_labels(self):
         standard = PrimaryCta(
             cta_type=PrimaryCtaType.BANDCAMP,

@@ -18,6 +18,9 @@ CTA_CHOICES: tuple[tuple[str, PrimaryCtaType], ...] = (
     ("Get Tickets", PrimaryCtaType.TICKETS),
     ("Apple Music", PrimaryCtaType.APPLE_MUSIC),
     ("Official Website", PrimaryCtaType.OFFICIAL_WEBSITE),
+    ("Book Now", PrimaryCtaType.BOOK_NOW),
+    ("Book Us", PrimaryCtaType.BOOK_US),
+    ("SoundCloud", PrimaryCtaType.SOUNDCLOUD),
     ("Custom", PrimaryCtaType.CUSTOM),
 )
 CTA_LABEL_TO_TYPE = dict(CTA_CHOICES)

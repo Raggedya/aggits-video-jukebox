@@ -32,6 +32,9 @@ class PrimaryCtaType(str, Enum):
     TICKETS = "tickets"
     APPLE_MUSIC = "apple_music"
     OFFICIAL_WEBSITE = "official_website"
+    BOOK_NOW = "book_now"
+    BOOK_US = "book_us"
+    SOUNDCLOUD = "soundcloud"
     CUSTOM = "custom"
 
 
@@ -124,6 +127,9 @@ PRIMARY_CTA_LABELS: dict[PrimaryCtaType, str] = {
     PrimaryCtaType.TICKETS: "GET TICKETS",
     PrimaryCtaType.APPLE_MUSIC: "APPLE MUSIC",
     PrimaryCtaType.OFFICIAL_WEBSITE: "OFFICIAL WEBSITE",
+    PrimaryCtaType.BOOK_NOW: "BOOK NOW",
+    PrimaryCtaType.BOOK_US: "BOOK US",
+    PrimaryCtaType.SOUNDCLOUD: "SOUNDCLOUD",
 }
 
 

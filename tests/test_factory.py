@@ -297,6 +297,9 @@ class FactoryTests(unittest.TestCase):
             "tickets": "GET TICKETS",
             "apple_music": "APPLE MUSIC",
             "official_website": "OFFICIAL WEBSITE",
+            "book_now": "BOOK NOW",
+            "book_us": "BOOK US",
+            "soundcloud": "SOUNDCLOUD",
         }
         for cta_type, label in expected_labels.items():
             with self.subTest(cta_type=cta_type):
