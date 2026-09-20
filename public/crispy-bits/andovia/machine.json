@@ -715,9 +715,9 @@
   ],
   "musicConfig": {
     "primaryCTA": {
-      "type": "bandcamp",
-      "displayLabel": "BUY ON BANDCAMP",
-      "destinationURL": "https://andovia.bandcamp.com/"
+      "type": "tickets",
+      "displayLabel": "GET TICKETS",
+      "destinationURL": "https://checkout.square.site/merchant/MLRQ470A8KZ6C/checkout/RP54DBUJ22O5B7KE5ML6MY5J?fbclid=PAVERFWAUSeOdwZG9mAmZkaWQWUOR7on2rzeu9krCLRnKOjcY0oPpY7WV4dG4DYWVtAjEwAHNydGMGYXBwX2lkDzEyNDAyNDU3NDI4NzQxNAABp-ezt_1LIeswiBZnf4KPOOuXS1BHydiosOTneSWbHetkgRJ7NEJIx-k81ISQ_aem_s60zS1EwHg1hIuI1QLRZ3A"
     }
   }
 }
