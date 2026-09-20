@@ -19,11 +19,11 @@ class ReleaseMetadataTests(unittest.TestCase):
     def test_version_metadata_has_one_consistent_release_identity(self):
         self.assertEqual(APP_NAME, PRODUCT_NAME)
         self.assertEqual(PRODUCT_NAME, "CRISPY BITS DESKTOP")
-        self.assertEqual(APP_VERSION, "3.2.1")
+        self.assertEqual(APP_VERSION, "3.3.0")
         self.assertEqual(aggits_video_factory.__version__, APP_VERSION)
-        self.assertEqual(WINDOWS_FILE_VERSION_STRING, "3.2.1.0")
-        self.assertEqual(EXE_FILENAME, "CRISPY BITS DESKTOP v3.2.1.exe")
-        self.assertEqual(RELEASE_TAG, "crispy-bits-desktop-v3.2.1")
+        self.assertEqual(WINDOWS_FILE_VERSION_STRING, "3.3.0.0")
+        self.assertEqual(EXE_FILENAME, "CRISPY BITS DESKTOP v3.3.0.exe")
+        self.assertEqual(RELEASE_TAG, "crispy-bits-desktop-v3.3.0")
 
     def test_legacy_localappdata_name_is_intentionally_not_versioned(self):
         from aggits_video_factory.config import application_data_root
