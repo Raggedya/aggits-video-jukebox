@@ -63,6 +63,17 @@ class TickerContinuityTests(unittest.TestCase):
             STYLES,
         )
 
+    def test_body_matches_title_size_without_inheriting_title_styling(self):
+        title_rule = STYLES.split(".story-track h3{", 1)[1].split("}", 1)[0]
+        body_rule = STYLES.split(".story-track p{", 1)[1].split("}", 1)[0]
+
+        self.assertIn("font:900 clamp(14px,3.4vw,21px)/1 var(--font-display)", title_rule)
+        self.assertIn("font:500 clamp(14px,3.4vw,21px)/1.48 var(--font-copy)", body_rule)
+        self.assertIn("color:#e8e0cd", body_rule)
+        self.assertIn("white-space:pre-line", body_rule)
+        self.assertNotIn("font:900", body_rule)
+        self.assertNotIn("var(--font-display)", body_rule)
+
     def test_business_music_and_tourism_share_the_same_continuous_ticker_lifecycle(self):
         self.assertIn("activeProjectType = String(config.projectType || 'business')", SCRIPT)
         self.assertIn("activeProjectType === 'tourism'", SCRIPT)
