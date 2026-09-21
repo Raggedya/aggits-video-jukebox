@@ -34,9 +34,7 @@ from aggits_video_factory.diagnostics import configure_logging, log_directory, o
 from aggits_video_factory.desktop_forms import (
     CTA_CHOICES_BY_PROJECT,
     DEFAULT_CTA_LABEL_BY_PROJECT,
-    DEFAULT_MACHINE_THEME_LABEL,
     FormValidationError,
-    MACHINE_THEME_CHOICES,
     ProjectFormValues,
     project_is_visible_in_tab,
     project_to_form_values,
@@ -91,7 +89,6 @@ class ProjectForm(tk.Frame):
         ).pack(side="right")
 
         self.title_var = tk.StringVar()
-        self.theme_var = tk.StringVar(value=DEFAULT_MACHINE_THEME_LABEL)
         self.channel_var = tk.StringVar()
         self.additional_vars = [tk.StringVar() for _ in range(3)]
         self.shop_var = tk.StringVar()
@@ -103,15 +100,6 @@ class ProjectForm(tk.Frame):
         self.field_widgets: dict[str, tk.Widget] = {}
         row = 1
         row = self._entry_row(row, "Title", self.title_var, "title")
-        tk.Label(self, text="Machine Theme", bg=PANEL, fg=CREAM, anchor="e", font=("Segoe UI", 9)).grid(row=row, column=0, sticky="e", padx=(22, 12), pady=5)
-        self.theme_combo = ttk.Combobox(
-            self, textvariable=self.theme_var,
-            values=[label for label, _ in MACHINE_THEME_CHOICES],
-            state="readonly", font=("Segoe UI", 10),
-        )
-        self.theme_combo.grid(row=row, column=1, sticky="ew", padx=(0, 22), pady=5, ipady=3)
-        self.field_widgets["machine_theme"] = self.theme_combo
-        row += 1
         row = self._entry_row(row, "YouTube Channel URL", self.channel_var, "channel_url")
         for index, variable in enumerate(self.additional_vars, start=1):
             row = self._entry_row(row, f"Additional URL {index}", variable, "additional_urls")
@@ -229,7 +217,6 @@ class ProjectForm(tk.Frame):
     def values(self) -> ProjectFormValues:
         return ProjectFormValues(
             title=self.title_var.get(),
-            machine_theme=self.theme_var.get(),
             channel_url=self.channel_var.get(),
             additional_urls=[variable.get() for variable in self.additional_vars],
             story_text=self.story_text.get("1.0", "end-1c"),
@@ -246,7 +233,6 @@ class ProjectForm(tk.Frame):
 
     def set_values(self, values: ProjectFormValues) -> None:
         self.title_var.set(values.title)
-        self.theme_var.set(values.machine_theme or DEFAULT_MACHINE_THEME_LABEL)
         self.channel_var.set(values.channel_url)
         for variable, value in zip(self.additional_vars, [*values.additional_urls, "", "", ""][:3]):
             variable.set(value)
@@ -295,10 +281,10 @@ class ProjectForm(tk.Frame):
 
     def restore_baseline(self) -> None:
         values = ProjectFormValues(
-            title=str(self._baseline[0]), machine_theme=str(self._baseline[1]), channel_url=str(self._baseline[2]),
-            additional_urls=list(self._baseline[3]), story_text=str(self._baseline[4]), manual_video_urls=list(self._baseline[5]),
-            shop_url=str(self._baseline[6]), cta_label=str(self._baseline[7]), destination_url=str(self._baseline[8]),
-            custom_label=str(self._baseline[9]), more_info_url=str(self._baseline[10]), stay_url=str(self._baseline[11]),
+            title=str(self._baseline[0]), channel_url=str(self._baseline[1]), additional_urls=list(self._baseline[2]),
+            story_text=str(self._baseline[3]), manual_video_urls=list(self._baseline[4]), shop_url=str(self._baseline[5]),
+            cta_label=str(self._baseline[6]), destination_url=str(self._baseline[7]), custom_label=str(self._baseline[8]),
+            more_info_url=str(self._baseline[9]), stay_url=str(self._baseline[10]),
         )
         self.set_values(values)
         self.mark_clean()

@@ -387,7 +387,6 @@ class TourismWorkflowTests(unittest.TestCase):
             source,
         )
         self.assertIn('"Primary Call to Action"', source)
-        self.assertIn('"Machine Theme"', source)
         self.assertIn('"CTA Destination URL"', source)
         self.assertIn('"Custom Button Label"', source)
         self.assertIn('"Bio / About"', source)
@@ -400,8 +399,6 @@ class TourismWorkflowTests(unittest.TestCase):
             assert spec.loader is not None
             spec.loader.exec_module(module)
             form = module.ProjectForm(root, ProjectType.TOURISM, lambda: None, lambda: None)
-            self.assertIn("machine_theme", form.field_widgets)
-            self.assertEqual(tuple(form.theme_combo.cget("values")), ("Classic", "Candy"))
             self.assertIn("cta_type", form.field_widgets)
             self.assertIn("destination_url", form.field_widgets)
             self.assertIn("custom_label", form.field_widgets)
