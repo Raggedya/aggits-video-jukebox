@@ -23,7 +23,7 @@
     "primaryAction": {
       "type": "buy_music",
       "displayLabel": "BUY MUSIC",
-      "destinationURL": "https://thehollowmen4.bandcamp.com/",
+      "destinationURL": "https://martyrhonemusic.com/shop/",
       "enabled": true
     }
   },
@@ -723,7 +723,7 @@
     "primaryCTA": {
       "type": "buy_music",
       "displayLabel": "BUY MUSIC",
-      "destinationURL": "https://thehollowmen4.bandcamp.com/"
+      "destinationURL": "https://martyrhonemusic.com/shop/"
     }
   }
 }
