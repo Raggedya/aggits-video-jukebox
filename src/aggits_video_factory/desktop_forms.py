@@ -61,6 +61,7 @@ CTA_TYPE_TO_LABEL = {cta_type: label for label, cta_type in CTA_CHOICES}
 DEFAULT_CTA_LABEL = CTA_CHOICES[0][0]
 DEFAULT_CTA_LABEL_BY_PROJECT = {kind: choices[0][0] for kind, choices in CTA_CHOICES_BY_PROJECT.items()}
 DEFAULT_STORY = "PULL THE LEVER. LET THE MACHINE CHOOSE WHAT YOU WATCH NEXT."
+MAX_INDIVIDUAL_VIDEO_URLS = 15
 
 
 class FormValidationError(ValueError):
@@ -124,20 +125,47 @@ def validate_project_form(values: ProjectFormValues, project_type: ProjectType |
         raise FormValidationError("title", "Title cannot exceed 120 characters.")
 
     channel_url = values.channel_url.strip()
+    additional_urls = _clean_urls(values.additional_urls)
+    if len(additional_urls) > 3:
+        raise FormValidationError("additional_urls", "A project can contain no more than three additional URLs.")
+
     manual_urls = _clean_urls(values.manual_video_urls)
-    if not channel_url and not manual_urls:
-        raise FormValidationError("channel_url", "Add a YouTube channel URL or at least one individual YouTube video.")
+    if project_type is ProjectType.MUSIC:
+        # Festival and multi-artist Music projects do not need a channel. If a
+        # YouTube video was pasted into an Additional Web Page field, route it
+        # into the authoritative individual-video list instead of attempting
+        # to download the YouTube watch page as supplementary prose.
+        supplementary_urls: list[str] = []
+        for url in additional_urls:
+            if YouTubeClient.video_id_from_url(url):
+                manual_urls.append(url)
+            else:
+                supplementary_urls.append(url)
+        additional_urls = supplementary_urls
+
     invalid_videos = [url for url in manual_urls if not YouTubeClient.video_id_from_url(url)]
     if invalid_videos:
         raise FormValidationError("manual_video_urls", "One or more individual YouTube video links are invalid.")
+    unique_manual_urls: list[str] = []
+    seen_video_ids: set[str] = set()
+    for url in manual_urls:
+        video_id = YouTubeClient.video_id_from_url(url)
+        if video_id in seen_video_ids:
+            continue
+        seen_video_ids.add(video_id)
+        unique_manual_urls.append(url)
+    manual_urls = unique_manual_urls
+    if len(manual_urls) > MAX_INDIVIDUAL_VIDEO_URLS:
+        raise FormValidationError(
+            "manual_video_urls",
+            f"No more than {MAX_INDIVIDUAL_VIDEO_URLS} individual YouTube videos can be added during project creation.",
+        )
+    if not channel_url and not manual_urls:
+        raise FormValidationError("channel_url", "Add a YouTube channel URL or at least one individual YouTube video.")
 
     story_text = values.story_text.strip()
     if len(story_text) > MAX_TICKER_LENGTH:
         raise FormValidationError("story_text", f"Bio / Story Information cannot exceed {MAX_TICKER_LENGTH} characters.")
-
-    additional_urls = _clean_urls(values.additional_urls)
-    if len(additional_urls) > 3:
-        raise FormValidationError("additional_urls", "A project can contain no more than three additional URLs.")
 
     try:
         selected_label = values.cta_label

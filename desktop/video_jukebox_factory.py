@@ -36,6 +36,7 @@ from aggits_video_factory.desktop_forms import (
     CTA_CHOICES_BY_PROJECT,
     DEFAULT_CTA_LABEL_BY_PROJECT,
     FormValidationError,
+    MAX_INDIVIDUAL_VIDEO_URLS,
     ProjectFormValues,
     project_is_visible_in_tab,
     project_to_form_values,
@@ -101,9 +102,10 @@ class ProjectForm(tk.Frame):
         self.field_widgets: dict[str, tk.Widget] = {}
         row = 1
         row = self._entry_row(row, "Title", self.title_var, "title")
-        row = self._entry_row(row, "YouTube Channel URL", self.channel_var, "channel_url")
+        channel_label = "YouTube Channel URL (Optional)" if self.project_type is ProjectType.MUSIC else "YouTube Channel URL"
+        row = self._entry_row(row, channel_label, self.channel_var, "channel_url")
         for index, variable in enumerate(self.additional_vars, start=1):
-            row = self._entry_row(row, f"Additional URL {index}", variable, "additional_urls")
+            row = self._entry_row(row, f"Additional Web Page {index}", variable, "additional_urls")
 
         tk.Label(self, text="Primary Call to Action", bg=PANEL, fg=CREAM, anchor="e", font=("Segoe UI", 9)).grid(row=row, column=0, sticky="e", padx=(22, 12), pady=5)
         self.cta_combo = ttk.Combobox(
@@ -132,8 +134,13 @@ class ProjectForm(tk.Frame):
         self.field_widgets["story_text"] = self.story_text
         row += 1
 
+        self.manual_toggle_label = (
+            f"Festival / Individual YouTube Videos (up to {MAX_INDIVIDUAL_VIDEO_URLS})"
+            if self.project_type is ProjectType.MUSIC
+            else f"Individual YouTube Videos (up to {MAX_INDIVIDUAL_VIDEO_URLS})"
+        )
         self.manual_toggle = tk.Button(
-            self, text="▸  Individual YouTube Videos (Optional)", command=self._toggle_manual,
+            self, text=f"▸  {self.manual_toggle_label}", command=self._toggle_manual,
             bg=PANEL_2, fg=CREAM, activebackground="#303641", activeforeground=PAPER,
             relief="flat", bd=0, anchor="w", font=("Segoe UI Semibold", 9), padx=11, pady=8, cursor="hand2",
         )
@@ -151,7 +158,7 @@ class ProjectForm(tk.Frame):
         window = canvas.create_window((0, 0), window=rows, anchor="nw")
         rows.bind("<Configure>", lambda _event: canvas.configure(scrollregion=canvas.bbox("all")))
         canvas.bind("<Configure>", lambda event: canvas.itemconfigure(window, width=event.width))
-        self.manual_vars = [tk.StringVar() for _ in range(15)]
+        self.manual_vars = [tk.StringVar() for _ in range(MAX_INDIVIDUAL_VIDEO_URLS)]
         self.manual_entries: list[tk.Entry] = []
         for index, variable in enumerate(self.manual_vars, start=1):
             item = tk.Frame(rows, bg="#12151a")
@@ -197,10 +204,10 @@ class ProjectForm(tk.Frame):
         self._manual_open = (not self._manual_open) if force is None else force
         if self._manual_open:
             self.manual_shell.grid()
-            self.manual_toggle.configure(text="▾  Individual YouTube Videos (Optional)")
+            self.manual_toggle.configure(text=f"▾  {self.manual_toggle_label}")
         else:
             self.manual_shell.grid_remove()
-            self.manual_toggle.configure(text="▸  Individual YouTube Videos (Optional)")
+            self.manual_toggle.configure(text=f"▸  {self.manual_toggle_label}")
 
     def _update_custom_visibility(self) -> None:
         label = self.cta_var.get()
@@ -243,7 +250,10 @@ class ProjectForm(tk.Frame):
         self.custom_label_var.set(values.custom_label)
         self.more_info_var.set(values.more_info_url)
         self.stay_var.set(values.stay_url)
-        for variable, value in zip(self.manual_vars, [*values.manual_video_urls, *("" for _ in range(15))][:15]):
+        for variable, value in zip(
+            self.manual_vars,
+            [*values.manual_video_urls, *("" for _ in range(MAX_INDIVIDUAL_VIDEO_URLS))][:MAX_INDIVIDUAL_VIDEO_URLS],
+        ):
             variable.set(value)
         self.story_text.delete("1.0", "end")
         self.story_text.insert("1.0", values.story_text)
@@ -258,11 +268,10 @@ class ProjectForm(tk.Frame):
         self.set_values(values)
         name = self.project_type.value.upper()
         self.mode_label.configure(text=f"NEW {name} PROJECT")
-        if self.project_type is ProjectType.BUSINESS:
-            self.submit_button.configure(text="CREATE CRISPY BITS")
-            self.stage_note.configure(text="Analyse and review videos, then build locally.")
+        self.submit_button.configure(text="CREATE CRISPY BITS")
+        if self.project_type is ProjectType.MUSIC:
+            self.stage_note.configure(text=f"Channel optional — add up to {MAX_INDIVIDUAL_VIDEO_URLS} videos from any artists.")
         else:
-            self.submit_button.configure(text="CREATE CRISPY BITS")
             self.stage_note.configure(text="Analyse and review videos, then build locally.")
         self.mark_clean()
 
@@ -928,7 +937,7 @@ class Factory(tk.Tk):
             detail = "\n".join(f"• {result.url}\n  {result.error}" for result in source_failures)
             messagebox.showwarning(
                 DESKTOP_TITLE,
-                f"One or more optional Additional URLs could not be read. You can still review and build this {project_type.value.title()} project.\n\n" + detail,
+                f"One or more optional Additional Web Pages could not be read. You can still review and build this {project_type.value.title()} project.\n\n" + detail,
                 parent=self,
             )
         dialog = tk.Toplevel(self)
