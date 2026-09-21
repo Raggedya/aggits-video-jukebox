@@ -94,6 +94,98 @@ if (machine) {
     node.classList.toggle('is-very-long', text.length > 26);
   }
 
+  const heroMeasureContext = document.createElement('canvas').getContext('2d');
+
+  function measuredHeroWidth(text, size, family) {
+    if (!heroMeasureContext) return text.length * size * .62;
+    heroMeasureContext.font = `700 ${size}px ${family}`;
+    const tracking = Math.max(0, text.length - 1) * size * .025;
+    return heroMeasureContext.measureText(text).width + tracking;
+  }
+
+  function setHeroTitleLines(lines, size) {
+    titleNode.replaceChildren();
+    lines.forEach((line, index) => {
+      if (index) titleNode.append(document.createTextNode(' '));
+      const span = document.createElement('span');
+      span.className = 'hero-title-line';
+      span.textContent = line;
+      titleNode.append(span);
+    });
+    titleNode.dataset.titleLines = String(lines.length);
+    titleNode.style.setProperty('--hero-copy-size', `${size}px`);
+  }
+
+  function fitHeroTitle(text) {
+    const value = String(text || 'VIDEO JUKEBOX').replace(/\s+/g, ' ').trim();
+    const available = Math.max(160, titleNode.parentElement?.clientWidth || shopPlaque.clientWidth * .82);
+    const compact = shopPlaque.clientWidth <= 560;
+    const family = getComputedStyle(titleNode).fontFamily || 'Georgia, serif';
+    const preferred = compact ? 36 : 56;
+    const oneLineMinimum = compact ? 29 : 43;
+
+    for (let size = preferred; size >= oneLineMinimum; size -= 1) {
+      if (measuredHeroWidth(value, size, family) <= available) {
+        setHeroTitleLines([value], size);
+        return;
+      }
+    }
+
+    const words = value.split(' ').filter(Boolean);
+    const candidates = [];
+    for (let index = 1; index < words.length; index += 1) {
+      candidates.push([words.slice(0, index).join(' '), words.slice(index).join(' ')]);
+    }
+    const twoLinePreferred = compact ? 31 : 48;
+    const twoLineMinimum = compact ? 20 : 25;
+    for (let size = twoLinePreferred; size >= twoLineMinimum; size -= 1) {
+      const fitting = candidates
+        .map(lines => {
+          const widths = lines.map(line => measuredHeroWidth(line, size, family));
+          return {lines, widths, balance: Math.abs(widths[0] - widths[1])};
+        })
+        .filter(candidate => Math.max(...candidate.widths) <= available)
+        .sort((left, right) => left.balance - right.balance || Math.max(...left.widths) - Math.max(...right.widths));
+      if (fitting.length) {
+        setHeroTitleLines(fitting[0].lines, size);
+        return;
+      }
+    }
+
+    // A single unbroken title cannot wrap at a natural word boundary. Reduce it
+    // only as far as required to keep the complete title visible and unclipped.
+    for (let size = twoLineMinimum - 1; size >= 14; size -= 1) {
+      if (measuredHeroWidth(value, size, family) <= available) {
+        setHeroTitleLines([value], size);
+        return;
+      }
+    }
+    setHeroTitleLines([value], 14);
+  }
+
+  function fitHeroCta() {
+    if (!shopPlaquePrompt || !shopPlaqueLabel) return;
+    const value = String(primaryActionLabel || 'PRIMARY ACTION').replace(/\s+/g, ' ').trim();
+    const available = Math.max(150, shopPlaquePrompt.parentElement?.clientWidth || shopPlaque.clientWidth * .82);
+    const compact = shopPlaque.clientWidth <= 560;
+    const family = getComputedStyle(shopPlaquePrompt).fontFamily || 'Georgia, serif';
+    const preferred = compact ? 34 : 50;
+    const minimum = compact ? 19 : 24;
+    for (let size = preferred; size >= minimum; size -= 1) {
+      const iconAndGap = size * 1.2;
+      if (measuredHeroWidth(value, size, family) + iconAndGap <= available) {
+        shopPlaquePrompt.style.setProperty('--hero-copy-size', `${size}px`);
+        return;
+      }
+    }
+    shopPlaquePrompt.style.setProperty('--hero-copy-size', `${minimum}px`);
+  }
+
+  function fitHeroContent() {
+    fitHeroTitle(machineIdentity || titleNode.textContent);
+    fitHeroCta();
+  }
+
   function titleOnly(video) {
     let label = String(video?.title || video?.displayTitle || 'VIDEO').replace(/\s+/g, ' ').trim();
     const identities = [machineIdentity, video?.channelTitle]
@@ -558,7 +650,7 @@ if (machine) {
   }
 
   async function share() {
-    const data = {title: document.title, text: current ? `${titleOnly(current)} — ${titleNode.textContent}` : document.title, url: current?.url || location.href};
+    const data = {title: document.title, text: current ? `${titleOnly(current)} — ${machineIdentity}` : document.title, url: current?.url || location.href};
     try {
       if (navigator.share) await navigator.share(data);
       else {
@@ -723,7 +815,7 @@ if (machine) {
       catalogue = Array.isArray(config.videos) ? config.videos.filter(video => video?.videoId) : [];
       if (!catalogue.length) throw new Error('No videos');
       titleNode.textContent = config.title || 'VIDEO JUKEBOX';
-      sizeClass(titleNode, titleNode.textContent);
+      fitHeroContent();
       configureShopPlaque();
       document.title = `${config.title || 'Video Jukebox'} — CRISPY BITS`;
       setCustomerBackdrop(catalogue[0]);
@@ -746,7 +838,10 @@ if (machine) {
       contentDescription.textContent = 'Pull the Lever and Discover something Amazing';
       updateStory();
       window.setTimeout(startStoryTicker, 350);
-      document.fonts?.ready?.then(startStoryTicker).catch(() => {});
+      document.fonts?.ready?.then(() => {
+        fitHeroContent();
+        startStoryTicker();
+      }).catch(() => {});
       renderRows({videoId: '__pull_to_discover__', shortTitle: initialReelInstruction});
       setState('IDLE', 'Pull the lever or press Re-Spin to select a video.');
       respinButton.disabled = false;
@@ -758,6 +853,7 @@ if (machine) {
 
   load();
   window.addEventListener('resize', () => {
+    fitHeroContent();
     startStoryTicker(true);
   });
   window.addEventListener('pagehide', stopShopPlaqueCycle);

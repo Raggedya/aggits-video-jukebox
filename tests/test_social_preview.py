@@ -7,7 +7,6 @@ import unittest
 from html.parser import HTMLParser
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from unittest.mock import patch
 from urllib.request import urlopen
 
 from PIL import Image, ImageDraw
@@ -26,9 +25,12 @@ from aggits_video_factory.site_builder import build_project_site
 from aggits_video_factory.publisher import _write_library
 from aggits_video_factory.social_preview import (
     SOCIAL_PREVIEW_SIZE,
+    SOCIAL_PREVIEW_VERSION,
     TITLE_SAFE_REGION,
+    TOUCH_ICON_BOUNDS,
     create_social_preview,
     fit_social_title,
+    normalise_social_title,
     social_preview_filename,
 )
 
@@ -111,7 +113,7 @@ class UniversalSocialPreviewTests(unittest.TestCase):
             ("WRAITH", 1),
             ("UNCLE MUNGO'S", 2),
             ("CAPRI APARTMENTS MERIMBULA", 2),
-            ("THE EXTRAORDINARILY LONG CRISPY BITS TEST BUSINESS", 3),
+            ("THE EXTRAORDINARILY LONG MIDNIGHT TEST BUSINESS", 2),
         )
         left, top, right, bottom = TITLE_SAFE_REGION
         for title, maximum_lines in cases:
@@ -124,9 +126,13 @@ class UniversalSocialPreviewTests(unittest.TestCase):
                 self.assertLessEqual(layout.bounds[3], bottom)
                 self.assertEqual(" ".join(layout.lines), title)
 
+        mixed_case = "Good Night Out."
+        self.assertEqual(normalise_social_title(mixed_case), mixed_case)
+        self.assertEqual(" ".join(fit_social_title(draw, mixed_case).lines), mixed_case)
+
         unbroken = "X" * 120
         layout = fit_social_title(draw, unbroken)
-        self.assertLessEqual(len(layout.lines), 3)
+        self.assertLessEqual(len(layout.lines), 2)
         self.assertEqual("".join(layout.lines), unbroken)
         self.assertGreaterEqual(layout.bounds[0], left)
         self.assertLessEqual(layout.bounds[2], right)
@@ -167,6 +173,44 @@ class UniversalSocialPreviewTests(unittest.TestCase):
                     self.assertEqual(image.size, SOCIAL_PREVIEW_SIZE)
                     self.assertEqual(image.format, "JPEG")
 
+    def test_minimal_card_is_title_only_and_independent_of_project_content(self):
+        rendered_cards: list[bytes] = []
+        for project_type in ProjectType:
+            with self.subTest(project_type=project_type.value), tempfile.TemporaryDirectory() as temporary:
+                destination = Path(temporary)
+                project = project_for(project_type, "SHARED PROJECT TITLE")
+                project.channel_thumbnail = f"https://example.com/{project_type.value}-customer-logo.png"
+                project.ticker_text = f"Unique {project_type.value} Bio content that must not affect the card."
+                build_project_site(project, destination)
+                image_path = destination / social_preview_filename(project.title)
+                rendered_cards.append(image_path.read_bytes())
+
+        self.assertEqual(SOCIAL_PREVIEW_VERSION, "v2")
+        self.assertTrue(all(card == rendered_cards[0] for card in rendered_cards[1:]))
+        renderer_source = Path(create_social_preview.__code__.co_filename).read_text(encoding="utf-8")
+        self.assertNotIn("crispy-bits-social-preview-template.png", renderer_source)
+        self.assertNotIn('"PRESS"', renderer_source)
+        self.assertNotIn('"HIT IT"', renderer_source)
+
+    def test_dark_navy_vignette_and_small_touch_icon_are_rendered(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            destination = Path(temporary) / social_preview_filename(None)
+            layout = create_social_preview(None, destination)
+            self.assertEqual(layout.lines, ())
+            with Image.open(destination) as image:
+                image = image.convert("RGB")
+                corner = image.getpixel((8, 8))
+                centre = image.getpixel((image.width // 2, image.height // 2))
+                self.assertGreater(sum(centre), sum(corner) + 30)
+                self.assertGreater(centre[2], centre[0])
+
+                left, top, right, bottom = TOUCH_ICON_BOUNDS
+                self.assertLess(right - left, image.width // 10)
+                self.assertLess(bottom - top, image.height // 5)
+                icon_point = image.getpixel(((left + right) // 2, top + 20))
+                background_control = image.getpixel((left - 80, top + 20))
+                self.assertGreater(sum(icon_point), sum(background_control) + 250)
+
     def test_title_edit_busts_cache_and_prunes_old_generated_card(self):
         with tempfile.TemporaryDirectory() as temporary:
             destination = Path(temporary)
@@ -194,12 +238,11 @@ class UniversalSocialPreviewTests(unittest.TestCase):
             self.assertIn('legacy/social-card.jpg', index)
             self.assertIn(f'wraith/{versioned}', index)
 
-    def test_missing_title_and_missing_template_produce_valid_generic_preview(self):
+    def test_missing_title_produces_valid_unbranded_preview(self):
         with tempfile.TemporaryDirectory() as temporary:
             destination = Path(temporary) / social_preview_filename(None)
-            with patch("aggits_video_factory.social_preview.resource_path", return_value=Path(temporary) / "missing.png"):
-                layout = create_social_preview(None, destination)
-            self.assertEqual(layout.lines, ("CRISPY BITS",))
+            layout = create_social_preview(None, destination)
+            self.assertEqual(layout.lines, ())
             with Image.open(destination) as image:
                 self.assertEqual(image.size, SOCIAL_PREVIEW_SIZE)
                 self.assertEqual(image.format, "JPEG")

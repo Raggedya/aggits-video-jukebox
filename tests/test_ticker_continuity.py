@@ -45,7 +45,9 @@ class TickerContinuityTests(unittest.TestCase):
         self.assertIn("storyTickerStarted = true;", ticker_start)
         self.assertIn("storyTickerStarting = false;", ticker_start)
         self.assertIn("window.setTimeout(startStoryTicker, 350);", SCRIPT)
-        self.assertIn("document.fonts?.ready?.then(startStoryTicker)", SCRIPT)
+        fonts_ready = SCRIPT.split("document.fonts?.ready?.then(() => {", 1)[1].split("}).catch", 1)[0]
+        self.assertIn("fitHeroContent();", fonts_ready)
+        self.assertIn("startStoryTicker();", fonts_ready)
         self.assertIn("startStoryTicker(true);", SCRIPT)
         self.assertEqual(SCRIPT.count("startStoryTicker(true);"), 1)
 

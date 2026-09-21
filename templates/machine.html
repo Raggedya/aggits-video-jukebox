@@ -36,15 +36,8 @@
         <button type="button" data-action="sound" aria-pressed="true"><span data-sound-icon aria-hidden="true">♪</span><b data-sound-label>SOUND ON</b></button>
       </nav>
 
-      <header class="brand-masthead">
-        <h1 class="visually-hidden">CRISPY BITS</h1>
-        <img src="assets/music-machine/crispy-bits-logo-cutout-v2.png" alt="CRISPY BITS" width="2172" height="724">
-        <p aria-hidden="true">&nbsp;</p>
-      </header>
-
-      <section class="discovery-zone" aria-label="Video discovery reel">
-        <div class="customer-identity" data-shop-plaque>
-          <span class="customer-identity-copy">
+      <header class="customer-identity" data-shop-plaque>
+          <h1 class="customer-identity-copy">
             <strong data-machine-title>{{MACHINE_TITLE}}</strong>
             <strong class="customer-identity-shop" data-shop-plaque-prompt aria-hidden="true">
               <span>SHOP NOW</span>
@@ -54,9 +47,10 @@
                 <path class="customer-identity-touch-hand" d="M11 9.5v10.1l-2.5-2.4c-1-.9-2.5-.8-3.3.2-.7.9-.7 2.1 0 3l4.6 5.7c.8 1 2 1.5 3.3 1.5h6.2c2.4 0 4.3-1.9 4.3-4.3v-7.1c0-1.2-.9-2.1-2.1-2.1-.6 0-1.1.2-1.5.6-.3-1.1-1.3-1.9-2.5-1.9-.7 0-1.3.3-1.8.7-.4-1-1.3-1.6-2.4-1.6-.5 0-1 .2-1.4.4V9.5c0-1.2-.9-2.1-2.1-2.1S11 8.3 11 9.5z"></path>
               </svg>
             </strong>
-          </span>
-          <span class="customer-identity-subtitle" aria-hidden="true">&nbsp;</span>
-        </div>
+          </h1>
+      </header>
+
+      <section class="discovery-zone" aria-label="Video discovery reel">
         <div class="reel-and-lever">
           <i class="payline-arrow payline-arrow--left" aria-hidden="true"></i>
           <div class="reel-bank" aria-label="Single cylindrical video discovery reel" aria-live="polite">
@@ -105,6 +99,10 @@
         </div>
         <p class="story-pause-status" data-story-status>Tap the story to pause</p>
       </section>
+
+      <footer class="brand-signature" aria-label="CRISPY BITS">
+        <img src="assets/music-machine/crispy-bits-logo-cutout-v2.png" alt="CRISPY BITS" width="2172" height="724">
+      </footer>
     </div>
     <p id="machine-instructions" class="visually-hidden">Pull the lever or press Re-Spin. The reel lands on a video, then reveals its official YouTube player.</p>
     <p class="machine-status visually-hidden" role="status" aria-live="assertive">Loading the Crispy Bits video discovery machine.</p>

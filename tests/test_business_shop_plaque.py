@@ -119,8 +119,8 @@ class BusinessShopPlaqueTests(unittest.TestCase):
 
         self.assertNotIn("customer-identity-touch", title_markup)
         self.assertEqual(prompt_markup.count('class="customer-identity-touch"'), 1)
-        self.assertIn(".customer-identity-shop{display:flex", STYLES)
-        self.assertIn("opacity:0", STYLES.split(".customer-identity-shop{", 1)[1].split("}", 1)[0])
+        self.assertIn(".customer-identity-copy>.customer-identity-shop{display:flex", STYLES)
+        self.assertIn("opacity:0", STYLES.split(".customer-identity-copy>.customer-identity-shop{", 1)[1].split("}", 1)[0])
         self.assertIn(
             '.customer-identity[data-shop-plaque-state="shop"] .customer-identity-shop{opacity:1',
             STYLES,
@@ -173,7 +173,7 @@ class BusinessShopPlaqueTests(unittest.TestCase):
         self.assertIn("respinButton.addEventListener('click', spin);", SCRIPT)
         self.assertIn("window.addEventListener('pagehide', stopShopPlaqueCycle);", SCRIPT)
 
-    def test_layout_responsive_focus_and_reduced_motion_rules_preserve_plaque_geometry(self):
+    def test_layout_responsive_focus_and_reduced_motion_rules_preserve_hero_geometry(self):
         self.assertIn(".customer-identity-copy{display:grid", STYLES)
         self.assertIn("grid-area:1/1", STYLES)
         self.assertIn('.customer-identity[data-shop-plaque-state="shop"]', STYLES)
@@ -181,8 +181,10 @@ class BusinessShopPlaqueTests(unittest.TestCase):
         self.assertIn(".customer-identity.is-shop-enabled:focus-visible", STYLES)
         self.assertIn("@media (prefers-reduced-motion:reduce)", STYLES)
         self.assertIn(".customer-identity-copy>strong{transition-duration:.01ms!important;transform:none!important;filter:none!important}", STYLES)
-        self.assertIn(".customer-identity{min-height:56px;margin:0 3% 5px;padding:7px 10px 8px}", STYLES)
-        self.assertIn(".customer-identity-copy>strong.is-very-long", STYLES)
+        self.assertIn(".customer-identity{min-height:108px;padding:43px 8% 10px}", STYLES)
+        self.assertIn(".customer-identity-copy>strong>span.hero-title-line{display:block;white-space:nowrap}", STYLES)
+        self.assertNotIn("customer-identity-subtitle", TEMPLATE)
+        self.assertNotIn("brand-masthead", TEMPLATE)
 
 
 if __name__ == "__main__":
