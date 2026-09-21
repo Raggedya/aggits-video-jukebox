@@ -7,7 +7,7 @@ from uuid import uuid4
 
 from .config import MAX_TICKER_LENGTH
 from .models import (
-    BusinessConfig, MusicConfig, PrimaryCta, PrimaryCtaType, Project, ProjectType,
+    BusinessConfig, MachineTheme, MusicConfig, PrimaryCta, PrimaryCtaType, Project, ProjectType,
     TourismConfig, project_primary_cta, utc_now,
 )
 from .youtube_api import YouTubeClient
@@ -60,6 +60,13 @@ CTA_LABEL_TO_TYPE = dict(CTA_CHOICES)  # Backward-compatible Music aliases.
 CTA_TYPE_TO_LABEL = {cta_type: label for label, cta_type in CTA_CHOICES}
 DEFAULT_CTA_LABEL = CTA_CHOICES[0][0]
 DEFAULT_CTA_LABEL_BY_PROJECT = {kind: choices[0][0] for kind, choices in CTA_CHOICES_BY_PROJECT.items()}
+MACHINE_THEME_CHOICES: tuple[tuple[str, MachineTheme], ...] = (
+    ("Classic", MachineTheme.CLASSIC),
+    ("Candy", MachineTheme.CANDY),
+)
+MACHINE_THEME_LABEL_TO_VALUE = dict(MACHINE_THEME_CHOICES)
+MACHINE_THEME_VALUE_TO_LABEL = {value: label for label, value in MACHINE_THEME_CHOICES}
+DEFAULT_MACHINE_THEME_LABEL = MACHINE_THEME_CHOICES[0][0]
 DEFAULT_STORY = "PULL THE LEVER. LET THE MACHINE CHOOSE WHAT YOU WATCH NEXT."
 
 
@@ -72,6 +79,7 @@ class FormValidationError(ValueError):
 @dataclass(slots=True)
 class ProjectFormValues:
     title: str = ""
+    machine_theme: str = DEFAULT_MACHINE_THEME_LABEL
     channel_url: str = ""
     additional_urls: list[str] = field(default_factory=list)
     story_text: str = DEFAULT_STORY
@@ -86,6 +94,7 @@ class ProjectFormValues:
     def comparable(self) -> tuple[object, ...]:
         return (
             self.title,
+            self.machine_theme,
             self.channel_url,
             tuple(self.additional_urls),
             self.story_text,
@@ -102,6 +111,7 @@ class ProjectFormValues:
 @dataclass(frozen=True, slots=True)
 class ValidatedProjectForm:
     title: str
+    machine_theme: MachineTheme
     channel_url: str
     additional_urls: list[str]
     story_text: str
@@ -122,6 +132,10 @@ def validate_project_form(values: ProjectFormValues, project_type: ProjectType |
         raise FormValidationError("title", "Title is required.")
     if len(title) > 120:
         raise FormValidationError("title", "Title cannot exceed 120 characters.")
+
+    machine_theme = MACHINE_THEME_LABEL_TO_VALUE.get(values.machine_theme)
+    if machine_theme is None:
+        raise FormValidationError("machine_theme", "Select a valid Machine Theme.")
 
     channel_url = values.channel_url.strip()
     manual_urls = _clean_urls(values.manual_video_urls)
@@ -191,6 +205,7 @@ def validate_project_form(values: ProjectFormValues, project_type: ProjectType |
         validated = Project(
             slug="form-validation",
             title=title,
+            machine_theme=machine_theme,
             ticker_text=story_text,
             channel_url=channel_url,
             channel_id="",
@@ -227,6 +242,7 @@ def validate_project_form(values: ProjectFormValues, project_type: ProjectType |
 
     return ValidatedProjectForm(
         title=validated.title,
+        machine_theme=validated.machine_theme,
         channel_url=channel_url,
         additional_urls=list(validated.additional_urls),
         story_text=validated.ticker_text,
@@ -242,6 +258,7 @@ def project_to_form_values(project: Project) -> ProjectFormValues:
     default_label = DEFAULT_CTA_LABEL_BY_PROJECT[project.project_type]
     return ProjectFormValues(
         title=project.title,
+        machine_theme=MACHINE_THEME_VALUE_TO_LABEL[project.machine_theme],
         channel_url=project.source_channel_url or project.channel_url,
         additional_urls=list(project.additional_urls),
         story_text=project.ticker_text,
@@ -274,6 +291,7 @@ def build_local_music_project(
         channel_thumbnail=existing.channel_thumbnail if existing else "",
         id=existing.id if existing else str(uuid4()),
         project_type=ProjectType.MUSIC,
+        machine_theme=values.machine_theme,
         additional_urls=list(values.additional_urls),
         business_config=None,
         music_config=values.music_config,

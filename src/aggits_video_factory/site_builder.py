@@ -178,7 +178,10 @@ def build_project_site(project: Project, destination: Path) -> Path:
     initial_reel_instruction = "PULL THE LEVER  ──────→"
     story_header_markup = ""
     story_aria_label = project.title
+    machine_theme = project.machine_theme.value
+    theme_color = "#b20b55" if machine_theme == "candy" else "#061712"
     replacements = {
+        "{{THEME_COLOR}}": theme_color,
         "{{META_DESCRIPTION}}": html.escape(description, quote=True),
         "{{CANONICAL_URL}}": html.escape(canonical, quote=True),
         "{{SOCIAL_IMAGE_URL}}": html.escape(social_url, quote=True),
@@ -186,6 +189,7 @@ def build_project_site(project: Project, destination: Path) -> Path:
         "{{SOCIAL_TITLE}}": html.escape(social_title, quote=True),
         "{{DOCUMENT_TITLE}}": html.escape(f"{social_title} | Crispy Bits"),
         "{{MACHINE_LABEL}}": html.escape(f"{project.title} CRISPY BITS Video Jukebox", quote=True),
+        "{{MACHINE_THEME}}": machine_theme,
         "{{MACHINE_TITLE}}": html.escape(project.title),
         "{{INITIAL_REEL_INSTRUCTION}}": initial_reel_instruction,
         "{{STORY_HEADER_MARKUP}}": story_header_markup,
@@ -203,7 +207,7 @@ def build_project_site(project: Project, destination: Path) -> Path:
     customer_config = {
         "customerName": project.title,
         "customerLogo": project.channel_thumbnail,
-        "customerTheme": "cinematic-customer",
+        "customerTheme": machine_theme,
         "tagline": project.ticker_text,
         "customerTagline": "MORE STORIES • MORE TO DISCOVER",
         "customerStory": project.ticker_text,
@@ -224,6 +228,7 @@ def build_project_site(project: Project, destination: Path) -> Path:
     payload = {
         "schemaVersion": 2,
         "projectType": project.project_type.value,
+        "machineTheme": machine_theme,
         "slug": project.slug,
         "title": project.title,
         "tickerText": project.ticker_text,

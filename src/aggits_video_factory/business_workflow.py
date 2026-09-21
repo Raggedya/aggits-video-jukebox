@@ -52,6 +52,7 @@ def assemble_reviewed_project(
         channel_thumbnail=catalogue.channel_thumbnail,
         id=existing.id if existing else str(uuid4()),
         project_type=project_type,
+        machine_theme=values.machine_theme,
         additional_urls=list(values.additional_urls),
         business_config=values.business_config if project_type is ProjectType.BUSINESS else None,
         music_config=values.music_config if project_type is ProjectType.MUSIC else None,

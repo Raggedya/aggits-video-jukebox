@@ -24,6 +24,11 @@ class ProjectType(str, Enum):
     TOURISM = "tourism"
 
 
+class MachineTheme(str, Enum):
+    CLASSIC = "classic"
+    CANDY = "candy"
+
+
 class PrimaryCtaType(str, Enum):
     SHOP_NOW = "shop_now"
     VIEW_PRODUCTS = "view_products"
@@ -428,6 +433,7 @@ class Project:
     channel_thumbnail: str
     id: str = field(default_factory=lambda: str(uuid4()))
     project_type: ProjectType | str = ProjectType.BUSINESS
+    machine_theme: MachineTheme | str = MachineTheme.CLASSIC
     additional_urls: list[str] = field(default_factory=list)
     business_config: BusinessConfig | None = None
     music_config: MusicConfig | None = None
@@ -472,6 +478,10 @@ class Project:
             self.project_type = ProjectType(self.project_type)
         except ValueError as error:
             raise ProjectValidationError(f"Unsupported project type: {self.project_type!r}.") from error
+        try:
+            self.machine_theme = MachineTheme(self.machine_theme)
+        except ValueError as error:
+            raise ProjectValidationError(f"Unsupported machine theme: {self.machine_theme!r}.") from error
         if len(self.additional_urls) > 3:
             raise ProjectValidationError("A project can contain no more than three additional URLs.")
         self.additional_urls = [
@@ -507,6 +517,7 @@ class Project:
             "channel_thumbnail": self.channel_thumbnail,
             "id": self.id,
             "project_type": self.project_type.value,
+            "machine_theme": self.machine_theme.value,
             "additional_urls": list(self.additional_urls),
             "business_config": self.business_config.to_dict() if self.business_config else None,
             "music_config": self.music_config.to_dict() if self.music_config else None,
@@ -535,6 +546,7 @@ class Project:
             "schemaVersion", "slug", "title", "ticker_text", "tickerText", "channel_url", "channelUrl",
             "channel_id", "channelId", "channel_title", "channelTitle", "channel_thumbnail", "channelThumbnail",
             "id", "project_id", "projectId", "project_type", "projectType", "additional_urls", "additionalUrls",
+            "machine_theme", "machineTheme",
             "business_config", "businessConfig", "music_config", "musicConfig", "tourism_config", "tourismConfig",
             "source_channel_url", "sourceChannelUrl",
             "manual_video_urls", "manualVideoUrls", "excluded_video_ids", "excludedVideoIds", "videos", "status",
@@ -562,6 +574,7 @@ class Project:
             channel_thumbnail=str(value.get("channel_thumbnail") or value.get("channelThumbnail") or ""),
             id=str(value.get("id") or value.get("project_id") or value.get("projectId") or ""),
             project_type=project_type,
+            machine_theme=value.get("machine_theme", value.get("machineTheme", MachineTheme.CLASSIC.value)),
             additional_urls=[str(item) for item in (value.get("additional_urls", value.get("additionalUrls", [])) or []) if str(item).strip()],
             business_config=BusinessConfig.from_dict(business_value) if business_value is not None else None,
             music_config=MusicConfig.from_dict(music_value) if music_value is not None else None,

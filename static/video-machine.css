@@ -115,6 +115,51 @@ button:focus-visible,a:focus-visible{outline:3px solid #fff0b3;outline-offset:3p
 .brand-signature{display:grid;place-items:center;padding:0 0 13px;background:transparent}
 .brand-signature img{display:block;width:min(28%,190px);height:auto;max-height:58px;object-fit:contain;filter:drop-shadow(0 3px 3px #000) drop-shadow(0 0 6px rgba(255,191,77,.14));opacity:.84;user-select:none}
 
+/* Shared visual skins. Classic remains the unmodified default; Candy changes
+   colour, surface and decorative treatment without changing machine geometry. */
+.music-machine[data-machine-theme="candy"]{
+  --candy-cream:#fff4e8;
+  --candy-blush:#ffd5e4;
+  --candy-pink:#f02c82;
+  --candy-berry:#a8064f;
+  --candy-cyan:#18bfc7;
+  --candy-orange:#f59a16;
+  --candy-yellow:#ffd65c;
+  --candy-ink:#4b1031;
+  background:#ffb4d2;
+}
+.music-machine[data-machine-theme="candy"] .customer-backdrop{background:radial-gradient(circle at 50% 15%,#fff9f7 0,#ffd7e6 31%,#ee5a9d 66%,#8e0b4d 100%)}
+.music-machine[data-machine-theme="candy"] .customer-backdrop::before{background-image:radial-gradient(circle at 8% 14%,#ffd75c 0 7px,transparent 8px),radial-gradient(circle at 91% 23%,#21cad0 0 9px,transparent 10px),radial-gradient(circle at 17% 74%,#f53b89 0 8px,transparent 9px),radial-gradient(circle at 84% 82%,#ff8e18 0 7px,transparent 8px);background-size:180px 170px;filter:none;transform:none;opacity:.72}
+.music-machine[data-machine-theme="candy"] .customer-backdrop::after{background:linear-gradient(180deg,rgba(255,255,255,.12),rgba(255,191,216,.2) 54%,rgba(106,3,53,.44))}
+.music-machine[data-machine-theme="candy"] .experience-frame{border-color:#ffec9e;background:radial-gradient(circle at 6% 9%,#ffd65c 0 4px,transparent 5px),radial-gradient(circle at 94% 15%,#20c6ce 0 5px,transparent 6px),radial-gradient(circle at 7% 78%,#f13485 0 5px,transparent 6px),radial-gradient(circle at 92% 88%,#f7a018 0 5px,transparent 6px),linear-gradient(180deg,#fff6f2,#ffc4db 53%,#f35b9c);box-shadow:0 20px 70px rgba(83,0,41,.58),inset 0 0 0 2px #9f0950,inset 0 0 0 4px rgba(255,241,174,.72)}
+.music-machine[data-machine-theme="candy"] .experience-frame::before{background:repeating-linear-gradient(135deg,rgba(255,255,255,.72) 0 8px,rgba(240,44,130,.2) 8px 16px,rgba(24,191,199,.18) 16px 24px,rgba(255,214,92,.2) 24px 32px)}
+.music-machine[data-machine-theme="candy"] .utility-controls button{border-color:#fff0ad;color:#fff9ea;background:linear-gradient(#f63a8c,#a60750 76%);box-shadow:inset 0 1px 0 rgba(255,255,255,.72),0 0 0 2px #8c0645,0 3px 8px rgba(89,0,42,.5)}
+.music-machine[data-machine-theme="candy"] .customer-identity{border-color:#fff0a8;color:#fff8e8;background:linear-gradient(180deg,#fb438e,#aa0753 78%);box-shadow:inset 0 1px rgba(255,255,255,.56),inset 0 -4px 8px rgba(91,0,43,.55),0 0 0 2px #8f0647,0 3px 7px rgba(94,0,42,.45)}
+.music-machine[data-machine-theme="candy"] .customer-identity-copy>strong{color:#fff7df;text-shadow:0 2px 2px #72023a,0 0 5px rgba(255,255,255,.18)}
+.music-machine[data-machine-theme="candy"] .customer-identity-subtitle::before{background:linear-gradient(90deg,transparent,rgba(255,244,197,.9))}.music-machine[data-machine-theme="candy"] .customer-identity-subtitle::after{background:linear-gradient(90deg,rgba(255,244,197,.9),transparent)}
+.music-machine[data-machine-theme="candy"] .customer-identity.is-shop-enabled:hover{border-color:#fff7cf;box-shadow:inset 0 1px rgba(255,255,255,.66),inset 0 -4px 8px rgba(91,0,43,.5),0 0 0 2px #8f0647,0 3px 7px rgba(94,0,42,.45),0 0 13px rgba(255,255,255,.58)}
+.music-machine[data-machine-theme="candy"] .customer-identity.is-shop-enabled:focus-visible{outline-color:#fff5be}
+.music-machine[data-machine-theme="candy"] .reel-bank{border-color:#940449;background:repeating-linear-gradient(135deg,#ef2d82 0 9px,#fff5df 9px 18px,#1dc2c9 18px 27px,#fff5df 27px 36px);box-shadow:inset 0 0 0 2px rgba(255,255,255,.72),inset 0 9px 14px rgba(97,0,43,.32),inset 0 -8px 12px rgba(97,0,43,.35),0 0 0 3px #f8bd2e,0 7px 13px rgba(83,0,39,.48)}
+.music-machine[data-machine-theme="candy"] .reel{color:#b00a58;background:linear-gradient(180deg,rgba(102,0,45,.2),transparent 20% 80%,rgba(102,0,45,.2)),linear-gradient(90deg,#e91e75 0 7%,#ff9ac1 7% 11%,#fff6e9 11% 89%,#ff9ac1 89% 93%,#e91e75 93%);box-shadow:inset 0 7px 11px rgba(112,0,48,.25),inset 0 -7px 11px rgba(112,0,48,.22),0 0 0 2px #8d0648}
+.music-machine[data-machine-theme="candy"] .reel::before{background:linear-gradient(rgba(126,0,54,.52),transparent)}.music-machine[data-machine-theme="candy"] .reel::after{background:linear-gradient(transparent,rgba(126,0,54,.52))}
+.music-machine[data-machine-theme="candy"] .reel-strip strong{color:#fff6df;text-shadow:0 2px 2px #840043}.music-machine[data-machine-theme="candy"] .reel-strip strong::before{border-color:rgba(255,244,193,.82);background:linear-gradient(90deg,#b30859,#f23786 48%,#ac0753);box-shadow:inset 0 1px 2px rgba(255,255,255,.7),inset 0 -2px 4px rgba(94,0,40,.34),0 0 7px rgba(242,55,134,.42)}
+.music-machine[data-machine-theme="candy"] .payline{background:linear-gradient(90deg,transparent,#ffefb2 8%,#fff 50%,#ffefb2 92%,transparent);box-shadow:0 0 7px #ee2f83}.music-machine[data-machine-theme="candy"] .payline-arrow{filter:drop-shadow(0 0 4px #ef2d82)}.music-machine[data-machine-theme="candy"] .payline-arrow--left{border-right-color:#f72c83}.music-machine[data-machine-theme="candy"] .payline-arrow--right{border-left-color:#f72c83}
+.music-machine[data-machine-theme="candy"] .lever img{filter:hue-rotate(302deg) saturate(1.42) brightness(1.12) contrast(1.05)}
+.music-machine[data-machine-theme="candy"] .video-stage-frame{border-color:#97064d;box-shadow:inset 0 0 0 2px rgba(255,255,255,.5),0 0 0 3px #f5bd31,0 9px 18px rgba(92,0,41,.48)}
+.music-machine[data-machine-theme="candy"] .video-shutter{background:linear-gradient(90deg,#a30852,#f13b87 44%,#a0074f);box-shadow:inset 0 0 18px rgba(87,0,39,.72),0 0 0 2px #ffdc69}
+.music-machine[data-machine-theme="candy"] .content-card{border-color:#ef2c81;background:linear-gradient(145deg,rgba(255,249,240,.98),rgba(255,214,228,.98));box-shadow:inset 0 1px rgba(255,255,255,.84),0 4px 9px rgba(92,0,41,.35)}
+.music-machine[data-machine-theme="candy"] .content-logo-shell{border-color:#ee2d82;color:#a70852;background:linear-gradient(145deg,#fff7ea,#ffb7d2);box-shadow:inset 0 0 0 2px rgba(255,255,255,.58),0 2px 5px rgba(102,0,45,.34)}
+.music-machine[data-machine-theme="candy"] .content-copy h2{color:#b00757;text-shadow:none}.music-machine[data-machine-theme="candy"] .content-meta{color:#e12879}.music-machine[data-machine-theme="candy"] .content-description{color:#53102f}.music-machine[data-machine-theme="candy"] .youtube-cta{border-color:#fff0a4;color:#fff8e8;background:linear-gradient(#ed3a87,#a40750);box-shadow:inset 0 1px rgba(255,255,255,.5),0 0 0 2px #8b0645,0 3px 7px rgba(91,0,41,.42)}
+.music-machine[data-machine-theme="candy"] .machine-controls{border-color:#95064b;background:repeating-linear-gradient(135deg,#ed2d80 0 8px,#fff3df 8px 16px,#1dbec6 16px 24px,#fff3df 24px 32px);box-shadow:inset 0 0 0 2px rgba(255,255,255,.74),0 0 0 3px #f7c239,0 4px 8px rgba(91,0,40,.45)}
+.music-machine[data-machine-theme="candy"] .control-button{border-color:#fff2b2;color:#fff8e8;background:linear-gradient(155deg,#20c7cd,#087b91 76%);box-shadow:inset 0 1px rgba(255,255,255,.66),inset 0 -5px 9px rgba(0,69,82,.5),0 0 0 2px #087080,0 2px 5px rgba(74,0,34,.38)}
+.music-machine[data-machine-theme="candy"] .control-button:nth-child(2){background:linear-gradient(155deg,#f23786,#a50650 76%);box-shadow:inset 0 1px rgba(255,255,255,.66),inset 0 -5px 9px rgba(91,0,43,.5),0 0 0 2px #910648,0 2px 5px rgba(74,0,34,.38)}
+.music-machine[data-machine-theme="candy"] .control-button:nth-child(4){background:linear-gradient(155deg,#ffb52e,#e56c00 76%);box-shadow:inset 0 1px rgba(255,255,255,.66),inset 0 -5px 9px rgba(125,52,0,.38),0 0 0 2px #b65200,0 2px 5px rgba(74,0,34,.38)}
+.music-machine[data-machine-theme="candy"] .control-button--primary:not(:disabled){border-color:#fff4c0;background:radial-gradient(circle at 50% 32%,#ff5a9c,#b30759 64%,#760238);box-shadow:inset 0 1px rgba(255,255,255,.68),inset 0 -6px 10px rgba(77,0,34,.46),0 0 0 2px #8f0648,0 0 0 4px #ffd858,0 0 16px rgba(242,47,132,.56)}
+.music-machine[data-machine-theme="candy"] .customer-story{border-color:#97064d;background:repeating-linear-gradient(135deg,#ed2d80 0 8px,#fff2dd 8px 16px,#1fc1c8 16px 24px,#fff2dd 24px 32px);box-shadow:inset 0 0 0 2px rgba(255,255,255,.7),0 0 0 2px #f7c33e,0 6px 12px rgba(92,0,42,.45)}
+.music-machine[data-machine-theme="candy"] .customer-story::before,.music-machine[data-machine-theme="candy"] .customer-story::after{color:#fff1ad}.music-machine[data-machine-theme="candy"] .story-window{border-color:rgba(237,45,129,.55);background:radial-gradient(ellipse at 50% 46%,#fff8ee,#ffd6e4 73%);box-shadow:inset 0 8px 15px rgba(150,0,64,.16),inset 0 -8px 14px rgba(150,0,64,.16)}
+.music-machine[data-machine-theme="candy"] .story-track h3{color:#b30759}.music-machine[data-machine-theme="candy"] .story-track p{color:#53102f}.music-machine[data-machine-theme="candy"] .story-pause-status{color:#8b2857}
+.music-machine[data-machine-theme="candy"] .brand-signature img{filter:drop-shadow(0 3px 3px rgba(83,0,39,.45)) drop-shadow(0 0 6px rgba(255,255,255,.34))}
+
 @media (max-width:560px){
   .music-machine{padding-left:0;padding-right:0;padding-top:0}
   .experience-frame{border-radius:0;border-left:0;border-right:0}
