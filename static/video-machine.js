@@ -96,10 +96,10 @@ if (machine) {
 
   const heroMeasureContext = document.createElement('canvas').getContext('2d');
 
-  function measuredHeroWidth(text, size, family, weight = 700) {
+  function measuredHeroWidth(text, size, family, weight = 950) {
     if (!heroMeasureContext) return text.length * size * .62;
     heroMeasureContext.font = `${weight} ${size}px ${family}`;
-    const tracking = Math.max(0, text.length - 1) * size * .045;
+    const tracking = Math.max(0, text.length - 1) * size * .035;
     return heroMeasureContext.measureText(text).width + tracking;
   }
 
@@ -120,12 +120,12 @@ if (machine) {
     const value = String(text || 'VIDEO JUKEBOX').replace(/\s+/g, ' ').trim();
     const available = Math.max(160, titleNode.parentElement?.clientWidth || shopPlaque.clientWidth * .82);
     const compact = shopPlaque.clientWidth <= 560;
-    const family = getComputedStyle(titleNode).fontFamily || 'Georgia, serif';
-    const preferred = compact ? 28 : 40;
-    const oneLineMinimum = compact ? 20 : 27;
+    const family = getComputedStyle(titleNode).fontFamily || 'Arial Narrow, Impact, sans-serif';
+    const preferred = compact ? 25 : 32;
+    const oneLineMinimum = compact ? 15 : 18;
 
     for (let size = preferred; size >= oneLineMinimum; size -= 1) {
-      if (measuredHeroWidth(value, size, family, 500) <= available) {
+      if (measuredHeroWidth(value, size, family) <= available) {
         setHeroTitleLines([value], size);
         return;
       }
@@ -136,12 +136,12 @@ if (machine) {
     for (let index = 1; index < words.length; index += 1) {
       candidates.push([words.slice(0, index).join(' '), words.slice(index).join(' ')]);
     }
-    const twoLinePreferred = compact ? 25 : 32;
-    const twoLineMinimum = compact ? 18 : 23;
+    const twoLinePreferred = compact ? 21 : 28;
+    const twoLineMinimum = compact ? 14 : 16;
     for (let size = twoLinePreferred; size >= twoLineMinimum; size -= 1) {
       const fitting = candidates
         .map(lines => {
-          const widths = lines.map(line => measuredHeroWidth(line, size, family, 500));
+          const widths = lines.map(line => measuredHeroWidth(line, size, family));
           return {lines, widths, balance: Math.abs(widths[0] - widths[1])};
         })
         .filter(candidate => Math.max(...candidate.widths) <= available)
@@ -155,7 +155,7 @@ if (machine) {
     // A single unbroken title cannot wrap at a natural word boundary. Reduce it
     // only as far as required to keep the complete title visible and unclipped.
     for (let size = twoLineMinimum - 1; size >= 14; size -= 1) {
-      if (measuredHeroWidth(value, size, family, 500) <= available) {
+      if (measuredHeroWidth(value, size, family) <= available) {
         setHeroTitleLines([value], size);
         return;
       }
@@ -168,9 +168,9 @@ if (machine) {
     const value = String(primaryActionLabel || 'PRIMARY ACTION').replace(/\s+/g, ' ').trim();
     const available = Math.max(150, shopPlaquePrompt.parentElement?.clientWidth || shopPlaque.clientWidth * .82);
     const compact = shopPlaque.clientWidth <= 560;
-    const family = getComputedStyle(shopPlaquePrompt).fontFamily || 'Georgia, serif';
-    const preferred = compact ? 34 : 50;
-    const minimum = compact ? 19 : 24;
+    const family = getComputedStyle(shopPlaquePrompt).fontFamily || 'Arial Narrow, Impact, sans-serif';
+    const preferred = compact ? 25 : 32;
+    const minimum = compact ? 14 : 17;
     for (let size = preferred; size >= minimum; size -= 1) {
       const iconAndGap = size * 1.2;
       if (measuredHeroWidth(value, size, family) + iconAndGap <= available) {

@@ -79,7 +79,7 @@ def project_for(project_type: ProjectType) -> Project:
 class MachineBrandHierarchyTests(unittest.TestCase):
     def test_project_hero_retains_current_brand_hierarchy_and_restores_plaque(self):
         self.assertNotIn('class="brand-masthead"', TEMPLATE)
-        self.assertNotIn("customer-identity-subtitle", TEMPLATE)
+        self.assertIn('class="customer-identity-subtitle" aria-hidden="true">&nbsp;</span>', TEMPLATE)
         self.assertNotIn("SPIN • DISCOVER • WATCH", TEMPLATE[TEMPLATE.index('data-shop-plaque'):TEMPLATE.index('discovery-zone')])
         self.assertLess(TEMPLATE.index('class="customer-identity"'), TEMPLATE.index('class="discovery-zone"'))
         self.assertIn('<h1 class="customer-identity-copy">', TEMPLATE)
@@ -90,26 +90,32 @@ class MachineBrandHierarchyTests(unittest.TestCase):
         self.assertIn("inset 0 1px rgba(255,236,187,.2)", hero_rule)
         self.assertIn("0 0 0 2px #24170c", hero_rule)
 
-    def test_title_is_smaller_lighter_and_distinct_from_cta_typography(self):
-        title_rule = STYLES.split(".customer-identity-copy>[data-machine-title]{", 1)[1].split("}", 1)[0]
+    def test_title_and_cta_use_the_canonical_condensed_plaque_typography(self):
+        title_rule = STYLES.split(".customer-identity-copy>strong{", 1)[1].split("}", 1)[0]
         cta_rule = STYLES.split(".customer-identity-copy>.customer-identity-shop{", 1)[1].split("}", 1)[0]
-        self.assertIn("font:500", title_rule)
-        self.assertIn("clamp(26px,4.6vw,40px)", title_rule)
-        self.assertIn("letter-spacing:.045em", title_rule)
-        self.assertIn("font:700", cta_rule)
-        self.assertIn("clamp(34px,6vw,50px)", cta_rule)
-        self.assertIn("const preferred = compact ? 28 : 40;", SCRIPT)
-        self.assertIn("const oneLineMinimum = compact ? 20 : 27;", SCRIPT)
+        self.assertIn("font:950", title_rule)
+        self.assertIn("clamp(19px,4.3vw,32px)", title_rule)
+        self.assertIn("var(--font-display)", title_rule)
+        self.assertIn("letter-spacing:.035em", title_rule)
+        self.assertNotIn("font:", cta_rule)
+        self.assertIn("const preferred = compact ? 25 : 32;", SCRIPT)
+        self.assertIn("const oneLineMinimum = compact ? 15 : 18;", SCRIPT)
 
-    def test_live_hero_and_social_card_share_exact_palette(self):
+    def test_canonical_decorative_lines_are_restored_beneath_the_content(self):
+        line_rule = STYLES.split(".customer-identity-subtitle{", 1)[1].split("}", 1)[0]
+        self.assertIn("width:min(78%,450px)", line_rule)
+        self.assertIn("margin-top:5px", line_rule)
+        self.assertIn("gap:9px", line_rule)
+        self.assertIn(".customer-identity-subtitle::before,.customer-identity-subtitle::after", STYLES)
+        self.assertIn("linear-gradient(90deg,transparent,rgba(231,193,117,.72))", STYLES)
+
+    def test_social_palette_is_retained_while_plaque_uses_canonical_green(self):
         self.assertIn(f"--hero-midnight:{VIGNETTE_CENTER}", STYLES)
         self.assertIn(f"--hero-near-black:{VIGNETTE_EDGE}", STYLES)
         self.assertIn(f"--hero-ivory:{TITLE_FILL}", STYLES)
         self.assertIn(f"--hero-gold:{TITLE_EDGE}", STYLES)
         hero_rule = STYLES.split(".customer-identity{", 1)[1].split("}", 1)[0]
-        self.assertIn("radial-gradient", hero_rule)
-        self.assertIn("var(--hero-midnight)", hero_rule)
-        self.assertIn("var(--hero-near-black)", hero_rule)
+        self.assertIn("linear-gradient(180deg,#0c332c,#020907 76%)", hero_rule)
 
     def test_title_fitter_uses_one_or_two_natural_lines_only(self):
         self.assertIn("function fitHeroTitle(text)", SCRIPT)
@@ -148,7 +154,7 @@ class MachineBrandHierarchyTests(unittest.TestCase):
                 self.assertEqual(page.count('class="customer-identity"'), 1)
                 self.assertEqual(page.count('class="brand-signature"'), 1)
                 self.assertNotIn('class="brand-masthead"', page)
-                self.assertNotIn("customer-identity-subtitle", page)
+                self.assertIn("customer-identity-subtitle", page)
 
 
 if __name__ == "__main__":
