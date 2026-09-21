@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import queue
 import re
 import sys
 import threading
@@ -367,6 +368,8 @@ class Factory(tk.Tk):
         self.preview_server = PreviewServer()
         self.settings = self.store.load_settings()
         self.busy = False
+        self._async_results: queue.Queue[tuple[str, object, object | None]] = queue.Queue()
+        self._async_poll_id: str | None = None
         self.projects: dict[str, Project] = {}
         self.forms: dict[ProjectType, ProjectForm] = {}
         self.libraries: dict[ProjectType, LibraryPanel] = {}
@@ -376,6 +379,7 @@ class Factory(tk.Tk):
         self._configure_styles()
         self._build()
         self._refresh_library()
+        self._async_poll_id = self.after(50, self._drain_async_results)
         self.protocol("WM_DELETE_WINDOW", self._close)
 
     def _configure_styles(self) -> None:
@@ -802,16 +806,35 @@ class Factory(tk.Tk):
         if self.busy:
             return
         self._set_busy(True, message)
+        self.logger.info("Background operation started status=%s", message)
 
         def execute() -> None:
             try:
                 result = worker()
             except Exception as error:
-                self.after(0, lambda: self._async_failed(error))
+                self._async_results.put(("error", error, None))
             else:
-                self.after(0, lambda: self._async_complete(result, complete))
+                self._async_results.put(("complete", result, complete))
 
         threading.Thread(target=execute, daemon=True).start()
+
+    def _drain_async_results(self) -> None:
+        """Deliver worker results from Tk's main thread.
+
+        Tk calls, including ``after``, are deliberately excluded from worker
+        threads. A failed cross-thread ``after`` previously left the desktop
+        permanently busy even after the YouTube worker had finished.
+        """
+        while True:
+            try:
+                outcome, payload, complete = self._async_results.get_nowait()
+            except queue.Empty:
+                break
+            if outcome == "error":
+                self._async_failed(payload)
+            else:
+                self._async_complete(payload, complete)
+        self._async_poll_id = self.after(50, self._drain_async_results)
 
     def _async_failed(self, error: Exception) -> None:
         self._set_busy(False, "OPERATION PAUSED")
@@ -1295,6 +1318,9 @@ class Factory(tk.Tk):
             if form.is_dirty() and not self._resolve_unsaved(form, "close the application"):
                 return
         self.preview_server.stop()
+        if self._async_poll_id is not None:
+            self.after_cancel(self._async_poll_id)
+            self._async_poll_id = None
         self.destroy()
 
 
