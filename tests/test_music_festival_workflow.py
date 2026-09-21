@@ -20,11 +20,11 @@ def video_url(index: int) -> str:
 
 
 class MusicFestivalWorkflowTests(unittest.TestCase):
-    def test_music_accepts_fifteen_mixed_artist_videos_without_a_channel(self):
+    def test_music_accepts_twenty_five_mixed_artist_videos_without_a_channel(self):
         values = ProjectFormValues(
             title="Festival Fixture",
             channel_url="",
-            manual_video_urls=[video_url(index) for index in range(1, 16)],
+            manual_video_urls=[video_url(index) for index in range(1, 26)],
             cta_label="Get Tickets",
             destination_url="https://example.com/tickets",
         )
@@ -50,17 +50,17 @@ class MusicFestivalWorkflowTests(unittest.TestCase):
         self.assertEqual(validated.manual_video_urls, [first, second])
         self.assertEqual(validated.additional_urls, ["https://example.com/festival"])
 
-    def test_music_blocks_more_than_fifteen_unique_individual_videos(self):
+    def test_music_blocks_more_than_twenty_five_unique_individual_videos(self):
         with self.assertRaises(FormValidationError) as context:
             validate_project_form(ProjectFormValues(
                 title="Oversized Festival",
-                manual_video_urls=[video_url(index) for index in range(1, 17)],
+                manual_video_urls=[video_url(index) for index in range(1, 27)],
                 cta_label="Get Tickets",
                 destination_url="https://example.com/tickets",
             ), ProjectType.MUSIC)
 
         self.assertEqual(context.exception.field, "manual_video_urls")
-        self.assertIn("No more than 15", str(context.exception))
+        self.assertIn("No more than 25", str(context.exception))
 
     def test_music_form_makes_the_festival_workflow_explicit(self):
         self.assertIn('"YouTube Channel URL (Optional)"', DESKTOP_SOURCE)
