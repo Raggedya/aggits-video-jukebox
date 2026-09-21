@@ -96,10 +96,10 @@ if (machine) {
 
   const heroMeasureContext = document.createElement('canvas').getContext('2d');
 
-  function measuredHeroWidth(text, size, family) {
+  function measuredHeroWidth(text, size, family, weight = 700) {
     if (!heroMeasureContext) return text.length * size * .62;
-    heroMeasureContext.font = `700 ${size}px ${family}`;
-    const tracking = Math.max(0, text.length - 1) * size * .025;
+    heroMeasureContext.font = `${weight} ${size}px ${family}`;
+    const tracking = Math.max(0, text.length - 1) * size * .045;
     return heroMeasureContext.measureText(text).width + tracking;
   }
 
@@ -121,11 +121,11 @@ if (machine) {
     const available = Math.max(160, titleNode.parentElement?.clientWidth || shopPlaque.clientWidth * .82);
     const compact = shopPlaque.clientWidth <= 560;
     const family = getComputedStyle(titleNode).fontFamily || 'Georgia, serif';
-    const preferred = compact ? 36 : 56;
-    const oneLineMinimum = compact ? 29 : 43;
+    const preferred = compact ? 28 : 40;
+    const oneLineMinimum = compact ? 20 : 27;
 
     for (let size = preferred; size >= oneLineMinimum; size -= 1) {
-      if (measuredHeroWidth(value, size, family) <= available) {
+      if (measuredHeroWidth(value, size, family, 500) <= available) {
         setHeroTitleLines([value], size);
         return;
       }
@@ -136,12 +136,12 @@ if (machine) {
     for (let index = 1; index < words.length; index += 1) {
       candidates.push([words.slice(0, index).join(' '), words.slice(index).join(' ')]);
     }
-    const twoLinePreferred = compact ? 31 : 48;
-    const twoLineMinimum = compact ? 20 : 25;
+    const twoLinePreferred = compact ? 25 : 32;
+    const twoLineMinimum = compact ? 18 : 23;
     for (let size = twoLinePreferred; size >= twoLineMinimum; size -= 1) {
       const fitting = candidates
         .map(lines => {
-          const widths = lines.map(line => measuredHeroWidth(line, size, family));
+          const widths = lines.map(line => measuredHeroWidth(line, size, family, 500));
           return {lines, widths, balance: Math.abs(widths[0] - widths[1])};
         })
         .filter(candidate => Math.max(...candidate.widths) <= available)
@@ -155,7 +155,7 @@ if (machine) {
     // A single unbroken title cannot wrap at a natural word boundary. Reduce it
     // only as far as required to keep the complete title visible and unclipped.
     for (let size = twoLineMinimum - 1; size >= 14; size -= 1) {
-      if (measuredHeroWidth(value, size, family) <= available) {
+      if (measuredHeroWidth(value, size, family, 500) <= available) {
         setHeroTitleLines([value], size);
         return;
       }

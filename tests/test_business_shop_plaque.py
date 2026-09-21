@@ -181,7 +181,7 @@ class BusinessShopPlaqueTests(unittest.TestCase):
         self.assertIn(".customer-identity.is-shop-enabled:focus-visible", STYLES)
         self.assertIn("@media (prefers-reduced-motion:reduce)", STYLES)
         self.assertIn(".customer-identity-copy>strong{transition-duration:.01ms!important;transform:none!important;filter:none!important}", STYLES)
-        self.assertIn(".customer-identity{min-height:108px;padding:43px 8% 10px}", STYLES)
+        self.assertIn(".customer-identity{min-height:66px;margin:40px 3% 5px;padding:7px 10px 8px}", STYLES)
         self.assertIn(".customer-identity-copy>strong>span.hero-title-line{display:block;white-space:nowrap}", STYLES)
         self.assertNotIn("customer-identity-subtitle", TEMPLATE)
         self.assertNotIn("brand-masthead", TEMPLATE)

@@ -77,7 +77,7 @@ def project_for(project_type: ProjectType) -> Project:
 
 
 class MachineBrandHierarchyTests(unittest.TestCase):
-    def test_project_hero_replaces_top_brand_and_old_plaque(self):
+    def test_project_hero_retains_current_brand_hierarchy_and_restores_plaque(self):
         self.assertNotIn('class="brand-masthead"', TEMPLATE)
         self.assertNotIn("customer-identity-subtitle", TEMPLATE)
         self.assertNotIn("SPIN • DISCOVER • WATCH", TEMPLATE[TEMPLATE.index('data-shop-plaque'):TEMPLATE.index('discovery-zone')])
@@ -85,8 +85,21 @@ class MachineBrandHierarchyTests(unittest.TestCase):
         self.assertIn('<h1 class="customer-identity-copy">', TEMPLATE)
         self.assertIn('<strong data-machine-title>{{MACHINE_TITLE}}</strong>', TEMPLATE)
         hero_rule = STYLES.split(".customer-identity{", 1)[1].split("}", 1)[0]
-        self.assertNotIn("border:", hero_rule)
-        self.assertNotIn("border-radius", hero_rule)
+        self.assertIn("border:1px solid rgba(215,170,89,.72)", hero_rule)
+        self.assertIn("border-radius:10px", hero_rule)
+        self.assertIn("inset 0 1px rgba(255,236,187,.2)", hero_rule)
+        self.assertIn("0 0 0 2px #24170c", hero_rule)
+
+    def test_title_is_smaller_lighter_and_distinct_from_cta_typography(self):
+        title_rule = STYLES.split(".customer-identity-copy>[data-machine-title]{", 1)[1].split("}", 1)[0]
+        cta_rule = STYLES.split(".customer-identity-copy>.customer-identity-shop{", 1)[1].split("}", 1)[0]
+        self.assertIn("font:500", title_rule)
+        self.assertIn("clamp(26px,4.6vw,40px)", title_rule)
+        self.assertIn("letter-spacing:.045em", title_rule)
+        self.assertIn("font:700", cta_rule)
+        self.assertIn("clamp(34px,6vw,50px)", cta_rule)
+        self.assertIn("const preferred = compact ? 28 : 40;", SCRIPT)
+        self.assertIn("const oneLineMinimum = compact ? 20 : 27;", SCRIPT)
 
     def test_live_hero_and_social_card_share_exact_palette(self):
         self.assertIn(f"--hero-midnight:{VIGNETTE_CENTER}", STYLES)
