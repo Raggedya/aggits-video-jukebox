@@ -695,7 +695,7 @@
       }
     ],
     "sponsor": {
-      "active": true,
+      "active": false,
       "title": "The Age",
       "url": "https://www.theage.com.au/",
       "logoAssetUrl": "",
