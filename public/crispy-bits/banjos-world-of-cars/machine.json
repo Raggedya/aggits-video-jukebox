@@ -689,9 +689,9 @@
       }
     ],
     "sponsor": {
-      "active": false,
-      "title": "",
-      "url": "",
+      "active": true,
+      "title": "The Age",
+      "url": "https://www.theage.com.au/",
       "normalDiscoveriesRequired": 5,
       "creatives": []
     }
