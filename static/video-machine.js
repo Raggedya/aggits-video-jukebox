@@ -36,6 +36,8 @@ if (machine) {
   const banjoSubmissionCloseButtons = [...machine.querySelectorAll('[data-banjo-submission-close]')];
   const banjoHeaderTicker = machine.querySelector('[data-banjo-header-ticker]');
   const banjoHeaderTickerCopy = machine.querySelector('[data-banjo-header-ticker-copy]');
+  const channelMasterHeaderTicker = machine.querySelector('[data-channel-master-header-ticker]');
+  const channelMasterHeaderTickerCopy = machine.querySelector('[data-channel-master-header-ticker-copy]');
   const banjoSponsorArea = machine.querySelector('[data-banjo-sponsor-area]');
   const banjoSponsorButton = machine.querySelector('[data-banjo-sponsor-button]');
   const banjoSponsorLogo = machine.querySelector('[data-banjo-sponsor-logo]');
@@ -56,6 +58,7 @@ if (machine) {
   const SHOP_PLAQUE_TITLE_DURATION = 10000;
   const SHOP_PLAQUE_PROMPT_DURATION = 3500;
   const BANJO_TICKER_DELAY = 10000;
+  const CHANNEL_MASTER_TICKER_DELAY = 10000;
 
   let catalogue = [];
   let current = null;
@@ -78,6 +81,8 @@ if (machine) {
   let banjoSubmissionReturnFocus = null;
   let banjoHeaderTickerStarted = false;
   let banjoHeaderTickerTimer = 0;
+  let channelMasterHeaderTickerStarted = false;
+  let channelMasterHeaderTickerTimer = 0;
   let banjoSessionKey = '';
   let banjoSession = {normalDiscoveries: 0, nextCreativeIndex: 0, lastWasSponsor: false};
   let sponsorPlaybackMilestones = new Set();
@@ -433,7 +438,7 @@ if (machine) {
       ? `Sponsored content from ${banjoConfig.sponsor.title}.`
       : video.description || `A closer look at ${label} from ${video.channelTitle || machineIdentity}.`;
     const logoSource = channelThumbnail || video.thumbnailUrl;
-    if (!isSponsor && logoSource) {
+    if (!isSponsor && logoSource && activeProjectType !== 'channel_master') {
       contentLogo.src = logoSource;
       contentLogo.alt = `${video.channelTitle || machineIdentity} logo`;
       contentLogo.hidden = false;
@@ -453,7 +458,14 @@ if (machine) {
     primaryActionDestination = activeProjectType === 'banjo' ? '' : primaryActionDestination;
     const primaryText = primaryActionButton.querySelector('b');
     if (activeProjectType === 'banjo' && primaryText) primaryText.textContent = 'SHOW BANJO';
-    primaryActionButton.setAttribute('aria-label', activeProjectType === 'banjo' ? 'Show Banjo your car' : 'Contextual action unavailable');
+    primaryActionButton.setAttribute(
+      'aria-label',
+      activeProjectType === 'banjo'
+        ? 'Show Banjo your car'
+        : activeProjectType === 'channel_master'
+          ? primaryActionDestination ? primaryActionLabel : `${primaryActionLabel || 'Primary action'} unavailable`
+          : 'Contextual action unavailable',
+    );
   }
 
   function showBanjoChoiceAward(video) {
@@ -984,7 +996,7 @@ if (machine) {
 
   function configureShopPlaque() {
     stopShopPlaqueCycle();
-    if (activeProjectType === 'banjo') {
+    if (activeProjectType === 'banjo' || activeProjectType === 'channel_master') {
       shopPlaqueEnabled = false;
       shopPlaque.classList.remove('is-shop-enabled');
       shopPlaque.removeAttribute('role');
@@ -1018,6 +1030,17 @@ if (machine) {
       const travel = Math.max(360, shopPlaque.clientWidth + banjoHeaderTickerCopy.scrollWidth);
       banjoHeaderTicker.style.setProperty('--banjo-ticker-duration', `${Math.max(14, travel / 42).toFixed(2)}s`);
     }, BANJO_TICKER_DELAY);
+  }
+
+  function startChannelMasterHeaderTicker() {
+    if (activeProjectType !== 'channel_master' || channelMasterHeaderTickerStarted || !channelMasterHeaderTicker || !channelMasterHeaderTickerCopy?.textContent?.trim()) return;
+    channelMasterHeaderTickerStarted = true;
+    channelMasterHeaderTickerTimer = window.setTimeout(() => {
+      shopPlaque.dataset.shopPlaqueState = 'channel-master-ticker';
+      channelMasterHeaderTicker.hidden = false;
+      const travel = Math.max(360, shopPlaque.clientWidth + channelMasterHeaderTickerCopy.scrollWidth);
+      channelMasterHeaderTicker.style.setProperty('--channel-master-ticker-duration', `${Math.max(14, travel / 42).toFixed(2)}s`);
+    }, CHANNEL_MASTER_TICKER_DELAY);
   }
 
   function observeBanjoSponsorArea() {
@@ -1205,6 +1228,7 @@ if (machine) {
         ? 'SHOW BANJO'
         : String(primaryAction.displayLabel || '').trim() || 'PRIMARY ACTION';
       plaqueDestination = primaryActionDestination;
+      if (activeProjectType === 'channel_master') plaqueDestination = '';
       if (shopPlaqueLabel) shopPlaqueLabel.textContent = primaryActionLabel;
       if (shopPlaquePrompt) sizeClass(shopPlaquePrompt, primaryActionLabel);
       const primaryActionText = primaryActionButton.querySelector('b');
@@ -1221,8 +1245,8 @@ if (machine) {
       primaryActionButton.dataset.ctaType = activeProjectType === 'banjo' ? 'show_banjo' : String(primaryAction.type || '');
       primaryActionButton.dataset.ctaLabel = primaryActionLabel;
       shopPlaque.dataset.ctaPlacement = 'top';
-      shopPlaque.dataset.ctaType = activeProjectType === 'banjo' ? 'editorial_ticker' : String(primaryAction.type || '');
-      shopPlaque.dataset.ctaLabel = primaryActionLabel;
+      shopPlaque.dataset.ctaType = ['banjo', 'channel_master'].includes(activeProjectType) ? 'editorial_ticker' : String(primaryAction.type || '');
+      shopPlaque.dataset.ctaLabel = activeProjectType === 'channel_master' ? machineIdentity : primaryActionLabel;
       masterStorySections = [];
       channelThumbnail = String(config.channelThumbnail || '').trim();
       catalogue = Array.isArray(config.videos) ? config.videos.filter(video => video?.videoId) : [];
@@ -1231,10 +1255,15 @@ if (machine) {
       fitHeroContent();
       configureShopPlaque();
       startBanjoHeaderTicker();
+      startChannelMasterHeaderTicker();
       observeBanjoSponsorArea();
-      document.title = activeProjectType === 'banjo' ? "BANJO'S WORLD OF CARS" : `${config.title || 'Video Jukebox'} — CRISPY BITS`;
+      document.title = activeProjectType === 'banjo'
+        ? "BANJO'S WORLD OF CARS"
+        : activeProjectType === 'channel_master'
+          ? String(config.title || 'CHANNEL MASTER')
+          : `${config.title || 'Video Jukebox'} — CRISPY BITS`;
       setCustomerBackdrop(catalogue[0]);
-      if (channelThumbnail) {
+      if (channelThumbnail && activeProjectType !== 'channel_master') {
         contentLogo.src = channelThumbnail;
         contentLogo.alt = `${config.channelTitle || config.title} logo`;
         contentLogo.hidden = false;
@@ -1273,6 +1302,7 @@ if (machine) {
   });
   window.addEventListener('pagehide', stopShopPlaqueCycle);
   window.addEventListener('pagehide', () => window.clearTimeout(banjoHeaderTickerTimer));
+  window.addEventListener('pagehide', () => window.clearTimeout(channelMasterHeaderTickerTimer));
 
   window.CrispyBitsMachine = Object.freeze({
     spin,

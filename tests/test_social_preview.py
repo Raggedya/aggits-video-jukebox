@@ -15,6 +15,7 @@ from PIL import Image, ImageDraw
 from aggits_video_factory.models import (
     BusinessConfig,
     BanjoConfig,
+    ChannelMasterConfig,
     MusicConfig,
     PrimaryCta,
     PrimaryCtaType,
@@ -112,6 +113,13 @@ def project_for(project_type: ProjectType, title: str = "WRAITH") -> Project:
         )
     if project_type is ProjectType.TOURISM:
         return Project(**common, tourism_config=TourismConfig())
+    if project_type is ProjectType.CHANNEL_MASTER:
+        return Project(
+            **common,
+            channel_master_config=ChannelMasterConfig(
+                primary_cta=PrimaryCta(PrimaryCtaType.VISIT_WEBSITE, "https://example.com"),
+            ),
+        )
     return Project(**common, banjo_config=BanjoConfig())
 
 
@@ -159,8 +167,14 @@ class UniversalSocialPreviewTests(unittest.TestCase):
                 expected_url = project.published_url
                 filename = social_preview_filename(project.title, project.project_type)
                 expected_image = f"{expected_url}{filename}"
-                expected_description = f"Hit it. Discover {project.title} with Crispy Bits."
-                self.assertEqual(parser.title, f"{project.title} | Crispy Bits")
+                expected_description = (
+                    f"Hit it. Discover {project.title}." if project_type is ProjectType.CHANNEL_MASTER
+                    else f"Hit it. Discover {project.title} with Crispy Bits."
+                )
+                self.assertEqual(
+                    parser.title,
+                    project.title if project_type is ProjectType.CHANNEL_MASTER else f"{project.title} | Crispy Bits",
+                )
                 self.assertEqual(parser.canonical, expected_url)
                 self.assertEqual(parser.meta["og:type"], "website")
                 self.assertEqual(parser.meta["og:title"], project.title)

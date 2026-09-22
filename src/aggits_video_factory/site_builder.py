@@ -168,12 +168,16 @@ def create_qr_card(project: Project, destination: Path) -> None:
 
 
 def build_project_site(project: Project, destination: Path) -> Path:
-    if project.project_type not in {ProjectType.BUSINESS, ProjectType.MUSIC, ProjectType.TOURISM, ProjectType.BANJO}:
+    if project.project_type not in {
+        ProjectType.BUSINESS, ProjectType.MUSIC, ProjectType.TOURISM,
+        ProjectType.BANJO, ProjectType.CHANNEL_MASTER,
+    }:
         raise ValueError(f"Unsupported project type: {project.project_type!r}.")
     primary_cta = project_primary_cta(project)
     music_cta = project.music_config.primary_cta if project.music_config else None
     tourism_config = project.tourism_config if project.project_type is ProjectType.TOURISM else None
     banjo_config = project.banjo_config if project.project_type is ProjectType.BANJO else None
+    channel_master_config = project.channel_master_config if project.project_type is ProjectType.CHANNEL_MASTER else None
     if project.project_type is ProjectType.MUSIC and primary_cta is None:
         raise ValueError("A Music project requires a configured primary CTA before generation.")
     destination.mkdir(parents=True, exist_ok=True)
@@ -206,7 +210,10 @@ def build_project_site(project: Project, destination: Path) -> Path:
     if not included_videos:
         raise ValueError("A project must include at least one video before generation.")
     social_title = project.title.strip() or BRAND_NAME
-    description = f"Hit it. Discover {social_title} with Crispy Bits."
+    description = (
+        f"Hit it. Discover {social_title}." if project.project_type is ProjectType.CHANNEL_MASTER
+        else f"Hit it. Discover {social_title} with Crispy Bits."
+    )
     if project.project_type is ProjectType.BANJO:
         social_image_type = "image/png"
         social_image_width, social_image_height = BANJO_SOCIAL_PREVIEW_SIZE
@@ -217,6 +224,7 @@ def build_project_site(project: Project, destination: Path) -> Path:
         social_image_alt = f"{social_title} — Crispy Bits social preview"
     story_sections = _story_sections(project.ticker_text, project.title, project.project_type)
     banjo_ticker = _banjo_ticker_text(project.ticker_text) if project.project_type is ProjectType.BANJO else ""
+    channel_master_ticker = _banjo_ticker_text(project.ticker_text) if project.project_type is ProjectType.CHANNEL_MASTER else ""
     primary_action_label = primary_cta.display_label if primary_cta else ("SHOW BANJO" if project.project_type is ProjectType.BANJO else "PRIMARY ACTION")
     primary_action_aria = (
         "Show Banjo your car"
@@ -249,6 +257,22 @@ def build_project_site(project: Project, destination: Path) -> Path:
                 f'<a class="banjo-sponsor-button" data-banjo-sponsor-button data-banjo-sponsor-mode="inquiry" href="{BANJO_SPONSOR_CONTACT_HREF}">EMAIL BANJO</a>'
                 '</section>'
             )
+    channel_master_contact_markup = ""
+    if channel_master_config and channel_master_config.contact_url:
+        contact_url = html.escape(channel_master_config.contact_url, quote=True)
+        channel_master_contact_markup = (
+            '<section class="channel-master-contact" data-channel-master-contact>'
+            f'<a href="{contact_url}" target="_blank" rel="noopener noreferrer">CONTACT US</a></section>'
+        )
+    machine_theme_attribute = ""
+    if channel_master_config:
+        machine_theme_attribute = (
+            ' style="'
+            f'--theme-primary:{channel_master_config.resolved_primary};'
+            f'--theme-secondary:{channel_master_config.resolved_secondary};'
+            f'--theme-accent:{channel_master_config.resolved_accent}'
+            '"'
+        )
     replacements = {
         "{{META_DESCRIPTION}}": html.escape(description, quote=True),
         "{{CANONICAL_URL}}": html.escape(canonical, quote=True),
@@ -258,11 +282,16 @@ def build_project_site(project: Project, destination: Path) -> Path:
         "{{SOCIAL_IMAGE_HEIGHT}}": str(social_image_height),
         "{{SOCIAL_IMAGE_ALT}}": html.escape(social_image_alt, quote=True),
         "{{SOCIAL_TITLE}}": html.escape(social_title, quote=True),
-        "{{DOCUMENT_TITLE}}": html.escape(f"{social_title} | Crispy Bits"),
-        "{{MACHINE_LABEL}}": html.escape(BANJO_TITLE if project.project_type is ProjectType.BANJO else f"{project.title} CRISPY BITS Video Jukebox", quote=True),
+        "{{DOCUMENT_TITLE}}": html.escape(social_title if project.project_type is ProjectType.CHANNEL_MASTER else f"{social_title} | Crispy Bits"),
+        "{{MACHINE_LABEL}}": html.escape(
+            project.title if project.project_type is ProjectType.CHANNEL_MASTER
+            else BANJO_TITLE if project.project_type is ProjectType.BANJO
+            else f"{project.title} CRISPY BITS Video Jukebox", quote=True
+        ),
         "{{PROJECT_TYPE}}": project.project_type.value,
+        "{{MACHINE_THEME_ATTRIBUTE}}": machine_theme_attribute,
         "{{UTILITY_CONTROLS_MARKUP}}": (
-            "" if project.project_type is ProjectType.BANJO else
+            "" if project.project_type in {ProjectType.BANJO, ProjectType.CHANNEL_MASTER} else
             '<nav class="utility-controls" aria-label="Machine controls">'
             '<button type="button" data-action="home"><span aria-hidden="true">⌂</span><b>HOME</b></button>'
             '<button type="button" data-action="sound" aria-pressed="true"><span data-sound-icon aria-hidden="true">♪</span><b data-sound-label>SOUND ON</b></button>'
@@ -287,6 +316,12 @@ def build_project_site(project: Project, destination: Path) -> Path:
             f'<span data-banjo-header-ticker-copy>{html.escape(banjo_ticker)}</span></div>'
             f'<span class="visually-hidden" data-banjo-ticker-accessible>{html.escape(banjo_ticker)}</span>'
             if banjo_ticker else ""
+        ),
+        "{{CHANNEL_MASTER_HEADER_TICKER_MARKUP}}": (
+            '<div class="channel-master-header-ticker" data-channel-master-header-ticker aria-hidden="true" hidden>'
+            f'<span data-channel-master-header-ticker-copy>{html.escape(channel_master_ticker)}</span></div>'
+            f'<span class="visually-hidden" data-channel-master-ticker-accessible>{html.escape(channel_master_ticker)}</span>'
+            if channel_master_ticker else ""
         ),
         "{{BANJO_SUBMISSION_MARKUP}}": (
             '<section class="banjo-submission-backdrop" data-banjo-submission-modal hidden>'
@@ -320,6 +355,7 @@ def build_project_site(project: Project, destination: Path) -> Path:
             if project.project_type is ProjectType.BANJO else ""
         ),
         "{{BANJO_SPONSOR_AREA_MARKUP}}": banjo_sponsor_area_markup,
+        "{{CHANNEL_MASTER_CONTACT_MARKUP}}": channel_master_contact_markup,
         "{{MACHINE_TITLE}}": html.escape(project.title),
         "{{INITIAL_REEL_INSTRUCTION}}": initial_reel_instruction,
         "{{STORY_HEADER_MARKUP}}": story_header_markup,
@@ -331,6 +367,29 @@ def build_project_site(project: Project, destination: Path) -> Path:
     template = resource_path("templates/machine.html").read_text(encoding="utf-8")
     for token, value in replacements.items():
         template = template.replace(token, value)
+    if project.project_type is ProjectType.CHANNEL_MASTER:
+        template = re.sub(
+            r'\s*<strong class="customer-identity-shop".*?</strong>', "", template,
+            count=1, flags=re.DOTALL,
+        )
+        template = re.sub(
+            r'\s*<section class="customer-story".*?</section>\s*(?=<footer class="brand-signature")', "", template,
+            count=1, flags=re.DOTALL,
+        )
+        template = re.sub(
+            r'\s*<footer class="brand-signature".*?</footer>', "", template,
+            count=1, flags=re.DOTALL,
+        )
+        template = template.replace(
+            '<meta property="og:site_name" content="CRISPY BITS Video Discovery">',
+            f'<meta property="og:site_name" content="{html.escape(social_title, quote=True)}">',
+        )
+        template = template.replace(
+            '  <link rel="preload" as="image" href="assets/music-machine/crispy-bits-logo-cutout-v2.png">\n', "",
+        )
+        template = template.replace(
+            "Loading the Crispy Bits video discovery machine.", "Loading the video discovery machine.",
+        )
     (destination / "index.html").write_text(template, encoding="utf-8")
 
     shop_url = project.business_config.shop_url if project.business_config else None
@@ -454,6 +513,29 @@ def build_project_site(project: Project, destination: Path) -> Path:
                     }
                     for item in (sponsor.creatives if sponsor else [])
                 ],
+            },
+        }
+    if project.project_type is ProjectType.CHANNEL_MASTER and channel_master_config:
+        cta = channel_master_config.primary_cta
+        payload["channelMasterConfig"] = {
+            "tickerText": channel_master_ticker,
+            "palette": {
+                "name": channel_master_config.palette,
+                "customPrimary": channel_master_config.custom_primary,
+                "customAccent": channel_master_config.custom_accent,
+                "resolvedPrimary": channel_master_config.resolved_primary,
+                "resolvedSecondary": channel_master_config.resolved_secondary,
+                "resolvedAccent": channel_master_config.resolved_accent,
+            },
+            "primaryAction": {
+                "type": cta.cta_type.value if cta else None,
+                "displayLabel": cta.display_label if cta else "PRIMARY ACTION",
+                "destinationURL": cta.destination_url if cta else "",
+                "enabled": bool(cta and cta.destination_url),
+            } | ({"customLabel": cta.custom_label} if cta and cta.cta_type.value == "custom" else {}),
+            "contact": {
+                "url": channel_master_config.contact_url or "",
+                "enabled": bool(channel_master_config.contact_url),
             },
         }
     (destination / "machine.json").write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")

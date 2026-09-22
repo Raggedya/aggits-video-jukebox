@@ -171,6 +171,20 @@ test("valid authenticated Banjo request is accepted without weakening recipient 
 });
 
 
+test("valid authenticated Channel Master request reuses the protected delivery contract", async () => {
+  const env = environment();
+  const mock = installFetchMock({ machineProjectType: "channel_master", machineTitle: "Channel Master Fixture" });
+  try {
+    const body = payload({ projectType: "channel_master", title: "Channel Master Fixture", productName: "CRISPY BITS CHANNEL MASTER" });
+    const response = await worker.fetch(signedRequest(body, { nonce: "ac".repeat(16) }), env);
+    assert.equal(response.status, 201);
+    const resend = mock.calls.find((call) => call.url.includes("api.resend.com"));
+    assert.deepEqual(JSON.parse(resend.init.body).to, ["listener@example.com"]);
+    assert.equal(env.DB.deliveries.size, 1);
+  } finally { mock.restore(); }
+});
+
+
 test("missing invalid modified expired and future authentication is rejected without secret disclosure", async () => {
   const now = Math.floor(Date.now() / 1000);
   const cases = [

@@ -7,9 +7,9 @@ from typing import Iterable
 from uuid import uuid4
 
 from .banjo import BANJO_TITLE, validate_sponsor_logo, validate_sponsor_mp4
-from .config import MAX_BANJO_VIDEOS, ticker_limit_for_project_type
+from .config import MAX_BANJO_VIDEOS, MAX_CHANNEL_MASTER_VIDEOS, ticker_limit_for_project_type
 from .models import (
-    BusinessConfig, MusicConfig, PrimaryCta, PrimaryCtaType, Project, ProjectType,
+    BusinessConfig, ChannelMasterConfig, MusicConfig, PrimaryCta, PrimaryCtaType, Project, ProjectType,
     TourismConfig, project_primary_cta, utc_now,
 )
 from .youtube_api import YouTubeClient
@@ -51,11 +51,32 @@ TOURISM_CTA_CHOICES: tuple[tuple[str, PrimaryCtaType], ...] = (
     ("Visit Website", PrimaryCtaType.VISIT_WEBSITE),
     ("Custom", PrimaryCtaType.CUSTOM),
 )
+
+
+def _channel_master_cta_choices() -> tuple[tuple[str, PrimaryCtaType], ...]:
+    """Controlled current-head union; first approved display order wins."""
+    result: list[tuple[str, PrimaryCtaType]] = []
+    seen: set[PrimaryCtaType] = set()
+    custom_choice: tuple[str, PrimaryCtaType] | None = None
+    for choice in (*BUSINESS_CTA_CHOICES, *CTA_CHOICES, *TOURISM_CTA_CHOICES):
+        if choice[1] is PrimaryCtaType.CUSTOM:
+            custom_choice = custom_choice or choice
+            continue
+        if choice[1] not in seen:
+            result.append(choice)
+            seen.add(choice[1])
+    if custom_choice:
+        result.append(custom_choice)
+    return tuple(result)
+
+
+CHANNEL_MASTER_CTA_CHOICES = _channel_master_cta_choices()
 CTA_CHOICES_BY_PROJECT = {
     ProjectType.BUSINESS: BUSINESS_CTA_CHOICES,
     ProjectType.MUSIC: CTA_CHOICES,
     ProjectType.TOURISM: TOURISM_CTA_CHOICES,
     ProjectType.BANJO: (),
+    ProjectType.CHANNEL_MASTER: CHANNEL_MASTER_CTA_CHOICES,
 }
 CTA_LABEL_TO_TYPE_BY_PROJECT = {kind: dict(choices) for kind, choices in CTA_CHOICES_BY_PROJECT.items()}
 CTA_TYPE_TO_LABEL_BY_PROJECT = {kind: {cta_type: label for label, cta_type in choices} for kind, choices in CTA_CHOICES_BY_PROJECT.items()}
@@ -68,7 +89,12 @@ MAX_INDIVIDUAL_VIDEO_URLS = 25
 
 
 def manual_url_limit_for_project_type(project_type: ProjectType | str) -> int:
-    return MAX_BANJO_VIDEOS if ProjectType(project_type) is ProjectType.BANJO else MAX_INDIVIDUAL_VIDEO_URLS
+    kind = ProjectType(project_type)
+    if kind is ProjectType.BANJO:
+        return MAX_BANJO_VIDEOS
+    if kind is ProjectType.CHANNEL_MASTER:
+        return MAX_CHANNEL_MASTER_VIDEOS
+    return MAX_INDIVIDUAL_VIDEO_URLS
 
 
 class FormValidationError(ValueError):
@@ -99,6 +125,10 @@ class ProjectFormValues:
     sponsor_logo_path: str = ""
     sponsor_creative_paths: list[str] = field(default_factory=list)
     sponsor_creative_active: list[bool] = field(default_factory=list)
+    palette: str = "MIDNIGHT"
+    custom_primary: str = "#172033"
+    custom_accent: str = "#6D80AF"
+    contact_url: str = ""
 
     def comparable(self) -> tuple[object, ...]:
         return (
@@ -122,6 +152,10 @@ class ProjectFormValues:
             self.sponsor_logo_path,
             tuple(self.sponsor_creative_paths),
             tuple(self.sponsor_creative_active),
+            self.palette,
+            self.custom_primary,
+            self.custom_accent,
+            self.contact_url,
         )
 
 
@@ -135,6 +169,7 @@ class ValidatedProjectForm:
     business_config: BusinessConfig | None
     music_config: MusicConfig | None
     tourism_config: TourismConfig | None
+    channel_master_config: ChannelMasterConfig | None = None
     banjo_choice_urls: list[str] = field(default_factory=list)
     banjo_choice_titles: list[str] = field(default_factory=list)
     banjo_choice_active: list[bool] = field(default_factory=list)
@@ -245,13 +280,19 @@ def validate_project_form(values: ProjectFormValues, project_type: ProjectType |
     if not channel_url and not manual_urls and not choice_rows:
         raise FormValidationError(
             "channel_url",
-            "Add a YouTube channel URL, an individual YouTube video, or a Banjo's Choice video.",
+            "Add a YouTube channel URL or an individual YouTube video."
+            if project_type is ProjectType.CHANNEL_MASTER
+            else "Add a YouTube channel URL, an individual YouTube video, or a Banjo's Choice video.",
         )
 
     story_text = values.story_text.strip()
     ticker_limit = ticker_limit_for_project_type(project_type)
     if len(story_text) > ticker_limit:
-        label = "Banjo Ticker Text" if project_type is ProjectType.BANJO else "Bio / Story Information"
+        label = (
+            "Banjo Ticker Text" if project_type is ProjectType.BANJO
+            else "Ticker Text" if project_type is ProjectType.CHANNEL_MASTER
+            else "Bio / Story Information"
+        )
         raise FormValidationError("story_text", f"{label} cannot exceed {ticker_limit} characters.")
 
     if project_type is ProjectType.BANJO:
@@ -326,6 +367,7 @@ def validate_project_form(values: ProjectFormValues, project_type: ProjectType |
             destination_url=destination_url,
             custom_label=values.custom_label if cta_type is PrimaryCtaType.CUSTOM else None,
         )
+        channel_master_config = None
         if project_type is ProjectType.BUSINESS:
             legacy_shop_url = destination_url if cta_type is PrimaryCtaType.SHOP_NOW and destination_url else values.shop_url
             business_config = BusinessConfig(shop_url=legacy_shop_url or None, primary_cta=primary_cta)
@@ -335,7 +377,7 @@ def validate_project_form(values: ProjectFormValues, project_type: ProjectType |
             business_config = None
             music_config = MusicConfig(primary_cta=primary_cta)
             tourism_config = None
-        else:
+        elif project_type is ProjectType.TOURISM:
             business_config = None
             music_config = None
             legacy_more_info_url = values.more_info_url
@@ -348,6 +390,17 @@ def validate_project_form(values: ProjectFormValues, project_type: ProjectType |
                 more_info_url=legacy_more_info_url or None,
                 stay_url=legacy_stay_url or None,
                 primary_cta=primary_cta,
+            )
+        else:
+            business_config = None
+            music_config = None
+            tourism_config = None
+            channel_master_config = ChannelMasterConfig(
+                palette=values.palette,
+                custom_primary=values.custom_primary,
+                custom_accent=values.custom_accent,
+                primary_cta=primary_cta,
+                contact_url=values.contact_url,
             )
 
         # Project construction is the authoritative validation for shared URL
@@ -365,6 +418,7 @@ def validate_project_form(values: ProjectFormValues, project_type: ProjectType |
             business_config=business_config,
             music_config=music_config,
             tourism_config=tourism_config,
+            channel_master_config=channel_master_config,
             source_channel_url=channel_url,
             manual_video_urls=manual_urls,
         )
@@ -381,6 +435,14 @@ def validate_project_form(values: ProjectFormValues, project_type: ProjectType |
             field_name = "stay_url"
         elif "destination" in lowered:
             field_name = "destination_url"
+        elif "contact url" in lowered:
+            field_name = "contact_url"
+        elif "primary colour" in lowered:
+            field_name = "custom_primary"
+        elif "accent colour" in lowered:
+            field_name = "custom_accent"
+        elif "palette" in lowered:
+            field_name = "palette"
         elif "custom" in lowered or "label" in lowered:
             field_name = "custom_label"
         elif "cta" in lowered:
@@ -398,6 +460,7 @@ def validate_project_form(values: ProjectFormValues, project_type: ProjectType |
         business_config=validated.business_config,
         music_config=validated.music_config,
         tourism_config=validated.tourism_config,
+        channel_master_config=validated.channel_master_config,
     )
 
 
@@ -425,6 +488,7 @@ def project_to_form_values(project: Project) -> ProjectFormValues:
         )
     cta = project_primary_cta(project)
     default_label = DEFAULT_CTA_LABEL_BY_PROJECT[project.project_type]
+    channel_master = project.channel_master_config if project.project_type is ProjectType.CHANNEL_MASTER else None
     return ProjectFormValues(
         title=project.title,
         channel_url=project.source_channel_url or project.channel_url,
@@ -437,6 +501,10 @@ def project_to_form_values(project: Project) -> ProjectFormValues:
         custom_label=cta.custom_label or "" if cta else "",
         more_info_url=project.tourism_config.more_info_url or "" if project.tourism_config else "",
         stay_url=project.tourism_config.stay_url or "" if project.tourism_config else "",
+        palette=channel_master.palette if channel_master else "MIDNIGHT",
+        custom_primary=channel_master.custom_primary or "#172033" if channel_master else "#172033",
+        custom_accent=channel_master.custom_accent or "#6D80AF" if channel_master else "#6D80AF",
+        contact_url=channel_master.contact_url or "" if channel_master else "",
     )
 
 

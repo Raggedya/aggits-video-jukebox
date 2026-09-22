@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
+import re
 from typing import Any
 from urllib.parse import urlparse
 from uuid import UUID, uuid4
@@ -25,6 +26,7 @@ class ProjectType(str, Enum):
     MUSIC = "music"
     TOURISM = "tourism"
     BANJO = "banjo"
+    CHANNEL_MASTER = "channel_master"
 
 
 class PrimaryCtaType(str, Enum):
@@ -180,6 +182,41 @@ TOURISM_CTA_TYPES = frozenset({
     PrimaryCtaType.BOOK_NOW, PrimaryCtaType.WHATS_ON, PrimaryCtaType.PLAN_YOUR_VISIT,
     PrimaryCtaType.VISIT_WEBSITE, PrimaryCtaType.CUSTOM,
 })
+CHANNEL_MASTER_CTA_TYPES = BUSINESS_CTA_TYPES | MUSIC_CTA_TYPES | TOURISM_CTA_TYPES
+
+
+CHANNEL_MASTER_PALETTES: dict[str, tuple[str, str, str]] = {
+    "MIDNIGHT": ("#172033", "#080B12", "#6D80AF"),
+    "BURGUNDY": ("#4B1724", "#17070C", "#A85769"),
+    "OCEAN": ("#123E52", "#06151C", "#3E91AE"),
+    "FOREST": ("#164233", "#07160F", "#4D9471"),
+    "CHARCOAL": ("#30343B", "#0E1013", "#777E89"),
+    "AUBERGINE": ("#41203F", "#140A14", "#90618E"),
+}
+
+
+def _hex_colour(value: object, field_name: str) -> str:
+    cleaned = str(value or "").strip().upper()
+    if not re.fullmatch(r"#[0-9A-F]{6}", cleaned):
+        raise ProjectValidationError(f"{field_name} must be a six-digit hex colour such as #172033.")
+    return cleaned
+
+
+def _shade_colour(value: str, factor: float) -> str:
+    channels = [int(value[index:index + 2], 16) for index in (1, 3, 5)]
+    return "#" + "".join(f"{round(channel * factor):02X}" for channel in channels)
+
+
+def _safe_dark_primary(value: str) -> str:
+    channels = [int(value[index:index + 2], 16) for index in (1, 3, 5)]
+    luminance = sum(weight * channel for weight, channel in zip((0.2126, 0.7152, 0.0722), channels)) / 255
+    return value if luminance <= 0.32 else _shade_colour(value, 0.32 / luminance)
+
+
+def _safe_accent(value: str) -> str:
+    channels = [int(value[index:index + 2], 16) for index in (1, 3, 5)]
+    luminance = sum(weight * channel for weight, channel in zip((0.2126, 0.7152, 0.0722), channels)) / 255
+    return value if luminance <= 0.72 else _shade_colour(value, 0.72 / luminance)
 
 
 def _optional_http_url(value: object, field_name: str) -> str | None:
@@ -336,6 +373,87 @@ class TourismConfig:
             stay_url=stay_url,
             primary_cta=compatible_cta,
             extra_fields=_extra_fields(source, {"more_info_url", "moreInfoUrl", "stay_url", "stayUrl", "primary_cta", "primaryCta"}),
+        )
+
+
+@dataclass(slots=True)
+class ChannelMasterConfig:
+    """Channel Master presentation and actions, isolated from industry configs."""
+
+    palette: str = "MIDNIGHT"
+    custom_primary: str | None = None
+    custom_accent: str | None = None
+    resolved_primary: str = ""
+    resolved_secondary: str = ""
+    resolved_accent: str = ""
+    primary_cta: PrimaryCta | None = None
+    contact_url: str | None = None
+    extra_fields: dict[str, Any] = field(default_factory=dict, repr=False)
+
+    def __post_init__(self) -> None:
+        self.palette = str(self.palette or "MIDNIGHT").strip().upper()
+        if self.palette not in {*CHANNEL_MASTER_PALETTES, "CUSTOM"}:
+            raise ProjectValidationError("Select a valid Channel Master colour palette.")
+        stored_resolved = all(
+            str(value or "").strip()
+            for value in (self.resolved_primary, self.resolved_secondary, self.resolved_accent)
+        )
+        if self.palette == "CUSTOM":
+            self.custom_primary = _hex_colour(self.custom_primary, "Custom Primary colour")
+            self.custom_accent = _hex_colour(self.custom_accent, "Custom Accent colour")
+            primary = _safe_dark_primary(self.custom_primary)
+            secondary = _shade_colour(primary, 0.42)
+            accent = _safe_accent(self.custom_accent)
+        else:
+            self.custom_primary = None
+            self.custom_accent = None
+            primary, secondary, accent = CHANNEL_MASTER_PALETTES[self.palette]
+        if stored_resolved:
+            # Published colourways remain stable if preset definitions evolve.
+            # Persisted values still pass the same strict structured validation
+            # and large-surface brightness constraints as newly resolved values.
+            primary = _safe_dark_primary(_hex_colour(self.resolved_primary, "Resolved Primary colour"))
+            secondary = _safe_dark_primary(_hex_colour(self.resolved_secondary, "Resolved Secondary colour"))
+            accent = _safe_accent(_hex_colour(self.resolved_accent, "Resolved Accent colour"))
+        self.resolved_primary = primary
+        self.resolved_secondary = secondary
+        self.resolved_accent = accent
+        self.contact_url = _optional_http_url(self.contact_url, "Contact URL")
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            **self.extra_fields,
+            "palette": self.palette,
+            "custom_primary": self.custom_primary,
+            "custom_accent": self.custom_accent,
+            "resolved_primary": self.resolved_primary,
+            "resolved_secondary": self.resolved_secondary,
+            "resolved_accent": self.resolved_accent,
+            "primary_cta": self.primary_cta.to_dict() if self.primary_cta else None,
+            "contact_url": self.contact_url,
+        }
+
+    @classmethod
+    def from_dict(cls, value: dict[str, Any] | None) -> "ChannelMasterConfig":
+        source = dict(value or {})
+        cta = source.get("primary_cta", source.get("primaryCta"))
+        if cta is not None and not isinstance(cta, dict):
+            raise ProjectValidationError("Channel Master primary_cta must be an object or null.")
+        known = {
+            "palette", "custom_primary", "customPrimary", "custom_accent", "customAccent",
+            "resolved_primary", "resolvedPrimary", "resolved_secondary", "resolvedSecondary",
+            "resolved_accent", "resolvedAccent", "primary_cta", "primaryCta", "contact_url", "contactUrl",
+        }
+        return cls(
+            palette=str(source.get("palette") or "MIDNIGHT"),
+            custom_primary=source.get("custom_primary", source.get("customPrimary")),
+            custom_accent=source.get("custom_accent", source.get("customAccent")),
+            resolved_primary=str(source.get("resolved_primary", source.get("resolvedPrimary")) or ""),
+            resolved_secondary=str(source.get("resolved_secondary", source.get("resolvedSecondary")) or ""),
+            resolved_accent=str(source.get("resolved_accent", source.get("resolvedAccent")) or ""),
+            primary_cta=PrimaryCta.from_dict(cta) if isinstance(cta, dict) else None,
+            contact_url=source.get("contact_url", source.get("contactUrl")),
+            extra_fields=_extra_fields(source, known),
         )
 
 
@@ -502,6 +620,8 @@ def project_primary_cta(project: "Project") -> PrimaryCta | None:
         return project.music_config.primary_cta if project.music_config else None
     if project.project_type is ProjectType.BANJO:
         return None
+    if project.project_type is ProjectType.CHANNEL_MASTER:
+        return project.channel_master_config.primary_cta if project.channel_master_config else None
     config = project.tourism_config
     if not config:
         return None
@@ -522,6 +642,8 @@ def allowed_primary_cta_types(project_type: ProjectType | str) -> frozenset[Prim
         return MUSIC_CTA_TYPES
     if kind is ProjectType.TOURISM:
         return TOURISM_CTA_TYPES
+    if kind is ProjectType.CHANNEL_MASTER:
+        return CHANNEL_MASTER_CTA_TYPES
     return frozenset()
 
 
@@ -592,6 +714,7 @@ class Project:
     music_config: MusicConfig | None = None
     tourism_config: TourismConfig | None = None
     banjo_config: BanjoConfig | None = None
+    channel_master_config: ChannelMasterConfig | None = None
     source_channel_url: str = ""
     manual_video_urls: list[str] = field(default_factory=list)
     excluded_video_ids: list[str] = field(default_factory=list)
@@ -635,7 +758,11 @@ class Project:
         self.ticker_text = str(self.ticker_text or "").strip()
         ticker_limit = ticker_limit_for_project_type(self.project_type)
         if len(self.ticker_text) > ticker_limit:
-            label = "Banjo Ticker Text" if self.project_type is ProjectType.BANJO else "Bio / Story Information"
+            label = (
+                "Banjo Ticker Text" if self.project_type is ProjectType.BANJO
+                else "Ticker Text" if self.project_type is ProjectType.CHANNEL_MASTER
+                else "Bio / Story Information"
+            )
             raise ProjectValidationError(f"{label} cannot exceed {ticker_limit} characters.")
         if len(self.additional_urls) > 3:
             raise ProjectValidationError("A project can contain no more than three additional URLs.")
@@ -643,19 +770,19 @@ class Project:
             _optional_http_url(url, "Additional URL") or "" for url in self.additional_urls if str(url or "").strip()
         ]
         if self.project_type is ProjectType.BUSINESS:
-            if self.music_config is not None or self.tourism_config is not None or self.banjo_config is not None:
+            if self.music_config is not None or self.tourism_config is not None or self.banjo_config is not None or self.channel_master_config is not None:
                 raise ProjectValidationError("A Business project cannot have another project type's configuration.")
             self.business_config = self.business_config or BusinessConfig()
         elif self.project_type is ProjectType.MUSIC:
-            if self.business_config is not None or self.tourism_config is not None or self.banjo_config is not None:
+            if self.business_config is not None or self.tourism_config is not None or self.banjo_config is not None or self.channel_master_config is not None:
                 raise ProjectValidationError("A Music project cannot have another project type's configuration.")
             self.music_config = self.music_config or MusicConfig()
         elif self.project_type is ProjectType.TOURISM:
-            if self.business_config is not None or self.music_config is not None or self.banjo_config is not None:
+            if self.business_config is not None or self.music_config is not None or self.banjo_config is not None or self.channel_master_config is not None:
                 raise ProjectValidationError("A Tourism project cannot have another project type's configuration.")
             self.tourism_config = self.tourism_config or TourismConfig()
-        else:
-            if self.business_config is not None or self.music_config is not None or self.tourism_config is not None:
+        elif self.project_type is ProjectType.BANJO:
+            if self.business_config is not None or self.music_config is not None or self.tourism_config is not None or self.channel_master_config is not None:
                 raise ProjectValidationError("A Banjo project cannot have Business, Music or Tourism configuration.")
             if self.title != "BANJO'S WORLD OF CARS":
                 raise ProjectValidationError("Banjo project title must be exactly BANJO'S WORLD OF CARS.")
@@ -664,6 +791,12 @@ class Project:
             for choice in self.banjo_config.banjos_choice:
                 if known_ids and choice.video_id not in known_ids:
                     raise ProjectValidationError("Banjo's Choice must reference a video in the Banjo YouTube catalogue.")
+        else:
+            if self.business_config is not None or self.music_config is not None or self.tourism_config is not None or self.banjo_config is not None:
+                raise ProjectValidationError("A Channel Master project cannot have another project type's configuration.")
+            self.channel_master_config = self.channel_master_config or ChannelMasterConfig()
+            if not self.channel_master_config.primary_cta or not self.channel_master_config.primary_cta.destination_url:
+                raise ProjectValidationError("Channel Master Primary CTA URL is required.")
         primary_cta = project_primary_cta(self)
         if primary_cta and primary_cta.cta_type not in allowed_primary_cta_types(self.project_type):
             raise ProjectValidationError(
@@ -691,6 +824,7 @@ class Project:
             "music_config": self.music_config.to_dict() if self.music_config else None,
             "tourism_config": self.tourism_config.to_dict() if self.tourism_config else None,
             "banjo_config": self.banjo_config.to_dict() if self.banjo_config else None,
+            "channel_master_config": self.channel_master_config.to_dict() if self.channel_master_config else None,
             "source_channel_url": self.source_channel_url,
             "manual_video_urls": list(self.manual_video_urls),
             "excluded_video_ids": list(self.excluded_video_ids),
@@ -715,7 +849,7 @@ class Project:
             "schemaVersion", "slug", "title", "ticker_text", "tickerText", "channel_url", "channelUrl",
             "channel_id", "channelId", "channel_title", "channelTitle", "channel_thumbnail", "channelThumbnail",
             "id", "project_id", "projectId", "project_type", "projectType", "additional_urls", "additionalUrls",
-            "business_config", "businessConfig", "music_config", "musicConfig", "tourism_config", "tourismConfig", "banjo_config", "banjoConfig",
+            "business_config", "businessConfig", "music_config", "musicConfig", "tourism_config", "tourismConfig", "banjo_config", "banjoConfig", "channel_master_config", "channelMasterConfig",
             "source_channel_url", "sourceChannelUrl",
             "manual_video_urls", "manualVideoUrls", "excluded_video_ids", "excludedVideoIds", "videos", "status",
             "created_at", "createdAt", "updated_at", "updatedAt", "published_at", "publishedAt", "published_url",
@@ -727,6 +861,7 @@ class Project:
         music_value = value.get("music_config", value.get("musicConfig"))
         tourism_value = value.get("tourism_config", value.get("tourismConfig"))
         banjo_value = value.get("banjo_config", value.get("banjoConfig"))
+        channel_master_value = value.get("channel_master_config", value.get("channelMasterConfig"))
         if business_value is not None and not isinstance(business_value, dict):
             raise ProjectValidationError("business_config must be an object or null.")
         if music_value is not None and not isinstance(music_value, dict):
@@ -735,6 +870,8 @@ class Project:
             raise ProjectValidationError("tourism_config must be an object or null.")
         if banjo_value is not None and not isinstance(banjo_value, dict):
             raise ProjectValidationError("banjo_config must be an object or null.")
+        if channel_master_value is not None and not isinstance(channel_master_value, dict):
+            raise ProjectValidationError("channel_master_config must be an object or null.")
         return cls(
             slug=str(value.get("slug") or ""),
             title=str(value.get("title") or ""),
@@ -750,6 +887,7 @@ class Project:
             music_config=MusicConfig.from_dict(music_value) if music_value is not None else None,
             tourism_config=TourismConfig.from_dict(tourism_value) if tourism_value is not None else None,
             banjo_config=BanjoConfig.from_dict(banjo_value) if banjo_value is not None else None,
+            channel_master_config=ChannelMasterConfig.from_dict(channel_master_value) if channel_master_value is not None else None,
             source_channel_url=str(value.get("source_channel_url") or value.get("sourceChannelUrl") or value.get("channel_url") or value.get("channelUrl") or ""),
             manual_video_urls=[str(item) for item in (value.get("manual_video_urls", value.get("manualVideoUrls", [])) or []) if str(item).strip()],
             excluded_video_ids=[str(item) for item in (value.get("excluded_video_ids", value.get("excludedVideoIds", [])) or []) if str(item).strip()],

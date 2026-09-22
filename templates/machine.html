@@ -28,7 +28,7 @@
   <title>{{DOCUMENT_TITLE}}</title>
 </head>
 <body>
-  <main class="music-machine video-discovery" data-machine-state="BOOT" data-machine-platform="youtube" data-video-open="false" data-project-type="{{PROJECT_TYPE}}" aria-label="{{MACHINE_LABEL}}">
+  <main class="music-machine video-discovery" data-machine-state="BOOT" data-machine-platform="youtube" data-video-open="false" data-project-type="{{PROJECT_TYPE}}"{{MACHINE_THEME_ATTRIBUTE}} aria-label="{{MACHINE_LABEL}}">
     <div class="customer-backdrop" aria-hidden="true"></div>
     <div class="experience-frame">
       {{UTILITY_CONTROLS_MARKUP}}
@@ -47,6 +47,7 @@
             </strong>
           </h1>
           {{BANJO_HEADER_TICKER_MARKUP}}
+          {{CHANNEL_MASTER_HEADER_TICKER_MARKUP}}
           <span class="customer-identity-subtitle" aria-hidden="true">&nbsp;</span>
       </header>
 
@@ -94,6 +95,8 @@
         <button type="button" class="control-button" data-action="shop" aria-label="{{PRIMARY_ACTION_ARIA}}" disabled><span class="control-icon" aria-hidden="true">♙+</span><b>{{PRIMARY_ACTION_LABEL}}</b></button>
         <button type="button" class="control-button" data-action="spin-again" disabled><span class="control-icon" aria-hidden="true">↻</span><b>RE-SPIN</b></button>
       </section>
+
+      {{CHANNEL_MASTER_CONTACT_MARKUP}}
 
       {{BANJO_SPONSOR_AREA_MARKUP}}
 

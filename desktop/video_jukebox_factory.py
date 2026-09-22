@@ -10,7 +10,7 @@ from concurrent.futures import ThreadPoolExecutor
 from io import BytesIO
 from pathlib import Path
 import tkinter as tk
-from tkinter import filedialog, messagebox, ttk
+from tkinter import colorchooser, filedialog, messagebox, ttk
 
 import requests
 from PIL import Image, ImageOps, ImageTk
@@ -22,7 +22,7 @@ if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
 from aggits_video_factory.banjo import BANJO_DEFAULT_SLUG, BANJO_TITLE, materialize_banjo_config, sponsor_media_summary
-from aggits_video_factory.config import APP_NAME, APP_VERSION, resource_path, ticker_limit_for_project_type, video_limit_for_project_type
+from aggits_video_factory.config import APP_NAME, APP_VERSION, MAX_CHANNEL_MASTER_REVIEW_VIDEOS, resource_path, ticker_limit_for_project_type, video_limit_for_project_type
 from aggits_video_factory.business_workflow import assemble_reviewed_project
 from aggits_video_factory.delivery import (
     DeliveryError,
@@ -46,6 +46,7 @@ from aggits_video_factory.desktop_forms import (
     youtube_urls_for_project_review,
 )
 from aggits_video_factory.models import Project, ProjectType, utc_now
+from aggits_video_factory.models import CHANNEL_MASTER_PALETTES, ChannelMasterConfig
 from aggits_video_factory.preview import PreviewServer
 from aggits_video_factory.publisher import PublicationVerificationPending, PublishError, Publisher, UnpublishVerificationPending
 from aggits_video_factory.site_builder import build_project_site
@@ -111,19 +112,25 @@ class ProjectForm(tk.Frame):
         self.sponsor_logo_var = tk.StringVar()
         self.sponsor_path_vars = [tk.StringVar() for _ in range(4)]
         self.sponsor_creative_active_vars = [tk.BooleanVar(value=False) for _ in range(4)]
+        self.palette_var = tk.StringVar(value="MIDNIGHT")
+        self.custom_primary_var = tk.StringVar(value="#172033")
+        self.custom_accent_var = tk.StringVar(value="#6D80AF")
+        self.contact_url_var = tk.StringVar()
         self.field_widgets: dict[str, tk.Widget] = {}
         row = 1
         row = self._entry_row(row, "Title", self.title_var, "title")
         if self.project_type is ProjectType.BANJO:
             self.field_widgets["title"].configure(state="readonly", readonlybackground="#101217")
-        channel_label = "YouTube Channel URL (Optional)" if self.project_type in {ProjectType.MUSIC, ProjectType.BANJO} else "YouTube Channel URL"
+        channel_label = "YouTube Channel URL (Optional)" if self.project_type in {ProjectType.MUSIC, ProjectType.BANJO, ProjectType.CHANNEL_MASTER} else "YouTube Channel URL"
         row = self._entry_row(row, channel_label, self.channel_var, "channel_url")
         self.ticker_limit = ticker_limit_for_project_type(self.project_type)
         if self.project_type is not ProjectType.BANJO:
             for index, variable in enumerate(self.additional_vars, start=1):
-                row = self._entry_row(row, f"Additional Web Page {index}", variable, "additional_urls")
+                label = f"Additional URL {index}" if self.project_type is ProjectType.CHANNEL_MASTER else f"Additional Web Page {index}"
+                row = self._entry_row(row, label, variable, "additional_urls")
 
-            tk.Label(self, text="Primary Call to Action", bg=PANEL, fg=CREAM, anchor="e", font=("Segoe UI", 9)).grid(row=row, column=0, sticky="e", padx=(22, 12), pady=5)
+            cta_heading = "Primary CTA" if self.project_type is ProjectType.CHANNEL_MASTER else "Primary Call to Action"
+            tk.Label(self, text=cta_heading, bg=PANEL, fg=CREAM, anchor="e", font=("Segoe UI", 9)).grid(row=row, column=0, sticky="e", padx=(22, 12), pady=5)
             self.cta_combo = ttk.Combobox(
                 self, textvariable=self.cta_var,
                 values=[label for label, _ in CTA_CHOICES_BY_PROJECT[self.project_type]],
@@ -133,11 +140,17 @@ class ProjectForm(tk.Frame):
             self.cta_combo.bind("<<ComboboxSelected>>", lambda _event: self._update_custom_visibility())
             self.field_widgets["cta_type"] = self.cta_combo
             row += 1
-            row = self._entry_row(row, "CTA Destination URL", self.destination_var, "destination_url")
+            destination_label = "Primary CTA URL" if self.project_type is ProjectType.CHANNEL_MASTER else "CTA Destination URL"
+            row = self._entry_row(row, destination_label, self.destination_var, "destination_url")
             self.custom_row = row
-            row = self._entry_row(row, "Custom Button Label", self.custom_label_var, "custom_label")
+            custom_label = "Custom CTA Label" if self.project_type is ProjectType.CHANNEL_MASTER else "Custom Button Label"
+            row = self._entry_row(row, custom_label, self.custom_label_var, "custom_label")
 
-            bio_label = "Bio / About" if self.project_type is ProjectType.TOURISM else "Bio / Story Information"
+            bio_label = (
+                "Ticker Text" if self.project_type is ProjectType.CHANNEL_MASTER
+                else "Bio / About" if self.project_type is ProjectType.TOURISM
+                else "Bio / Story Information"
+            )
             tk.Label(self, text=bio_label, bg=PANEL, fg=CREAM, anchor="ne", font=("Segoe UI", 9)).grid(row=row, column=0, sticky="ne", padx=(22, 12), pady=(8, 5))
             story_shell = tk.Frame(self, bg=PANEL)
             story_shell.grid(row=row, column=1, sticky="ew", padx=(0, 22), pady=(5, 3))
@@ -149,6 +162,8 @@ class ProjectForm(tk.Frame):
             self.story_count.grid(row=1, column=0, sticky="e", pady=(3, 0))
             self.field_widgets["story_text"] = self.story_text
             row += 1
+            if self.project_type is ProjectType.CHANNEL_MASTER:
+                row = self._build_channel_master_fields(row)
         else:
             self.custom_row = -1
             tk.Label(self, text="Banjo Ticker Text", bg=PANEL, fg=CREAM, anchor="ne", font=("Segoe UI", 9)).grid(row=row, column=0, sticky="ne", padx=(22, 12), pady=(8, 5))
@@ -217,6 +232,70 @@ class ProjectForm(tk.Frame):
         self.stage_note.pack(side="left", padx=14)
         self._toggle_manual(force=False)
         self._update_custom_visibility()
+
+    def _build_channel_master_fields(self, row: int) -> int:
+        tk.Label(self, text="CHANNEL MASTER APPEARANCE + CONTACT", bg=PANEL_2, fg=BRASS, anchor="w", font=("Segoe UI Semibold", 10), padx=11, pady=8).grid(row=row, column=0, columnspan=2, sticky="ew", padx=22, pady=(10, 5))
+        row += 1
+        tk.Label(self, text="Colour Palette", bg=PANEL, fg=CREAM, anchor="e", font=("Segoe UI", 9)).grid(row=row, column=0, sticky="e", padx=(22, 12), pady=5)
+        self.palette_combo = ttk.Combobox(
+            self, textvariable=self.palette_var,
+            values=[*CHANNEL_MASTER_PALETTES, "CUSTOM"], state="readonly", font=("Segoe UI", 10),
+        )
+        self.palette_combo.grid(row=row, column=1, sticky="ew", padx=(0, 22), pady=5, ipady=3)
+        self.palette_combo.bind("<<ComboboxSelected>>", lambda _event: self._update_palette_preview())
+        self.field_widgets["palette"] = self.palette_combo
+        row += 1
+
+        def colour_row(label: str, variable: tk.StringVar, field_name: str) -> None:
+            nonlocal row
+            tk.Label(self, text=label, bg=PANEL, fg=CREAM, anchor="e", font=("Segoe UI", 9)).grid(row=row, column=0, sticky="e", padx=(22, 12), pady=5)
+            shell = tk.Frame(self, bg=PANEL)
+            shell.grid(row=row, column=1, sticky="ew", padx=(0, 22), pady=5)
+            shell.columnconfigure(0, weight=1)
+            entry = tk.Entry(shell, textvariable=variable, bg="#101217", fg=PAPER, insertbackground=PAPER, relief="flat", highlightbackground=DEEP_BRASS, highlightthickness=1, font=("Segoe UI", 10))
+            entry.grid(row=0, column=0, sticky="ew", ipady=7)
+            entry.bind("<KeyRelease>", lambda _event: self._update_palette_preview())
+
+            def choose() -> None:
+                selected = colorchooser.askcolor(color=variable.get(), parent=self, title=label)[1]
+                if selected:
+                    variable.set(selected.upper())
+                    self._update_palette_preview()
+
+            tk.Button(shell, text="CHOOSE", command=choose, bg=PANEL_2, fg=CREAM, activebackground="#303641", activeforeground=PAPER, relief="flat", bd=0, font=("Segoe UI Semibold", 8), padx=8, pady=7).grid(row=0, column=1, padx=(7, 0))
+            self.field_widgets[field_name] = entry
+            row += 1
+
+        colour_row("Custom Primary", self.custom_primary_var, "custom_primary")
+        colour_row("Custom Accent", self.custom_accent_var, "custom_accent")
+        preview = tk.Frame(self, bg=PANEL)
+        preview.grid(row=row, column=0, columnspan=2, sticky="ew", padx=22, pady=(2, 7))
+        tk.Label(preview, text="RESOLVED PALETTE", bg=PANEL, fg=MUTED, font=("Segoe UI Semibold", 8)).pack(side="left", padx=(0, 10))
+        self.palette_swatches = [tk.Label(preview, width=8, height=1, relief="flat") for _ in range(3)]
+        for swatch in self.palette_swatches:
+            swatch.pack(side="left", padx=2)
+        row += 1
+        row = self._entry_row(row, "Contact URL", self.contact_url_var, "contact_url")
+        self._update_palette_preview()
+        return row
+
+    def _update_palette_preview(self) -> None:
+        if self.project_type is not ProjectType.CHANNEL_MASTER or not hasattr(self, "palette_swatches"):
+            return
+        custom = self.palette_var.get() == "CUSTOM"
+        for field_name in ("custom_primary", "custom_accent"):
+            self.field_widgets[field_name].configure(state="normal" if custom else "disabled")
+        try:
+            config = ChannelMasterConfig(
+                palette=self.palette_var.get(),
+                custom_primary=self.custom_primary_var.get(),
+                custom_accent=self.custom_accent_var.get(),
+            )
+            colours = (config.resolved_primary, config.resolved_secondary, config.resolved_accent)
+        except ValueError:
+            colours = (PANEL_2, INK, BRASS)
+        for swatch, colour in zip(self.palette_swatches, colours):
+            swatch.configure(bg=colour)
 
     def _build_banjo_fields(self, row: int) -> int:
         heading = tk.Label(self, text="BANJO'S CHOICE AWARDS — MAXIMUM 4", bg=PANEL_2, fg=BRASS, anchor="w", font=("Segoe UI Semibold", 10), padx=11, pady=8)
@@ -347,6 +426,10 @@ class ProjectForm(tk.Frame):
             sponsor_logo_path=self.sponsor_logo_var.get(),
             sponsor_creative_paths=[variable.get() for variable in self.sponsor_path_vars],
             sponsor_creative_active=[variable.get() for variable in self.sponsor_creative_active_vars],
+            palette=self.palette_var.get(),
+            custom_primary=self.custom_primary_var.get(),
+            custom_accent=self.custom_accent_var.get(),
+            contact_url=self.contact_url_var.get(),
         )
 
     def set_values(self, values: ProjectFormValues) -> None:
@@ -379,28 +462,35 @@ class ProjectForm(tk.Frame):
             variable.set(value)
         for variable, value in zip(self.sponsor_creative_active_vars, [*values.sponsor_creative_active, False, False, False, False][:4]):
             variable.set(value)
+        self.palette_var.set(values.palette)
+        self.custom_primary_var.set(values.custom_primary)
+        self.custom_accent_var.set(values.custom_accent)
+        self.contact_url_var.set(values.contact_url)
         self.story_text.delete("1.0", "end")
         self.story_text.insert("1.0", values.story_text)
         self._story_changed()
         self._toggle_manual(force=bool([url for url in values.manual_video_urls if url]))
         self._update_custom_visibility()
+        self._update_palette_preview()
         self.clear_validation()
 
     def clear_new(self) -> None:
         self.editing_project_id = None
         values = ProjectFormValues(
             title=BANJO_TITLE if self.project_type is ProjectType.BANJO else "",
-            story_text="" if self.project_type is ProjectType.BANJO else ProjectFormValues().story_text,
+            story_text="" if self.project_type in {ProjectType.BANJO, ProjectType.CHANNEL_MASTER} else ProjectFormValues().story_text,
             cta_label=DEFAULT_CTA_LABEL_BY_PROJECT[self.project_type],
         )
         self.set_values(values)
-        name = self.project_type.value.upper()
+        name = self.project_type.value.replace("_", " ").upper()
         self.mode_label.configure(text=f"NEW {name} PROJECT")
         self.submit_button.configure(text="CREATE CRISPY BITS")
         if self.project_type is ProjectType.MUSIC:
             self.stage_note.configure(text=f"Channel optional — add up to {MAX_INDIVIDUAL_VIDEO_URLS} videos from any artists.")
         elif self.project_type is ProjectType.BANJO:
             self.stage_note.configure(text="Channel optional · 40 YouTube videos · 4 awards · 4 sponsor MP4s.")
+        elif self.project_type is ProjectType.CHANNEL_MASTER:
+            self.stage_note.configure(text="Channel optional · up to 50 YouTube videos · title, ticker, palette and actions.")
         else:
             self.stage_note.configure(text="Analyse and review videos, then build locally.")
         self.mark_clean()
@@ -408,7 +498,7 @@ class ProjectForm(tk.Frame):
     def load_project(self, project: Project) -> None:
         self.editing_project_id = project.id
         self.set_values(project_to_form_values(project))
-        self.mode_label.configure(text=f"EDIT {project.project_type.value.upper()} PROJECT")
+        self.mode_label.configure(text=f"EDIT {project.project_type.value.replace('_', ' ').upper()} PROJECT")
         self.submit_button.configure(text="SAVE CHANGES")
         self.stage_note.configure(text="Reviewed changes remain private until Update + Republish.")
         self.mark_clean()
@@ -430,6 +520,8 @@ class ProjectForm(tk.Frame):
             sponsor_title=str(self._baseline[15]), sponsor_url=str(self._baseline[16]),
             sponsor_logo_path=str(self._baseline[17]), sponsor_creative_paths=list(self._baseline[18]),
             sponsor_creative_active=list(self._baseline[19]),
+            palette=str(self._baseline[20]), custom_primary=str(self._baseline[21]),
+            custom_accent=str(self._baseline[22]), contact_url=str(self._baseline[23]),
         )
         self.set_values(values)
         self.mark_clean()
@@ -552,10 +644,13 @@ class Factory(tk.Tk):
 
         self.notebook = ttk.Notebook(self, style="Desktop.TNotebook")
         self.notebook.pack(fill="both", expand=True, padx=12, pady=(0, 10))
-        self.tab_types: list[ProjectType] = [ProjectType.BUSINESS, ProjectType.MUSIC, ProjectType.TOURISM, ProjectType.BANJO]
+        self.tab_types: list[ProjectType] = [
+            ProjectType.BUSINESS, ProjectType.MUSIC, ProjectType.TOURISM,
+            ProjectType.BANJO, ProjectType.CHANNEL_MASTER,
+        ]
         for project_type in self.tab_types:
             page = tk.Frame(self.notebook, bg=INK)
-            self.notebook.add(page, text=project_type.value.upper())
+            self.notebook.add(page, text=project_type.value.replace("_", " ").upper())
             body = tk.PanedWindow(page, orient="horizontal", bg=INK, sashwidth=7, sashrelief="flat", bd=0)
             body.pack(fill="both", expand=True, padx=7, pady=10)
             form_shell = tk.Frame(body, bg=PANEL, highlightbackground=DEEP_BRASS, highlightthickness=1)
@@ -1016,16 +1111,17 @@ class Factory(tk.Tk):
             return False
         slug = existing.slug if existing else self.store.allocate_slug(BANJO_DEFAULT_SLUG if project_type is ProjectType.BANJO else values.title)
         video_limit = video_limit_for_project_type(project_type)
+        review_limit = MAX_CHANNEL_MASTER_REVIEW_VIDEOS if project_type is ProjectType.CHANNEL_MASTER else video_limit
 
         def worker() -> dict[str, object]:
             client = YouTubeClient(api_key)
             review_urls = youtube_urls_for_project_review(values, project_type)
             manual_catalogue = client.fetch_videos(review_urls) if review_urls else None
-            channel_catalogue = client.fetch_catalogue(values.channel_url, video_limit) if values.channel_url else None
+            channel_catalogue = client.fetch_catalogue(values.channel_url, review_limit) if values.channel_url else None
             videos = merge_video_selections(
                 manual_catalogue.videos if manual_catalogue else [],
                 channel_catalogue.videos if channel_catalogue else [],
-                video_limit,
+                review_limit,
             )
             catalogue = channel_catalogue or manual_catalogue
             if catalogue is None or not videos:

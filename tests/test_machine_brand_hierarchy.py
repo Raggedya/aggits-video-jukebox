@@ -7,6 +7,7 @@ from pathlib import Path
 from aggits_video_factory.models import (
     BusinessConfig,
     BanjoConfig,
+    ChannelMasterConfig,
     MusicConfig,
     PrimaryCta,
     PrimaryCtaType,
@@ -52,6 +53,7 @@ def project_for(project_type: ProjectType) -> Project:
             ProjectType.MUSIC: "WRAITH",
             ProjectType.TOURISM: "VISIT MERIMBULA",
             ProjectType.BANJO: "BANJO'S WORLD OF CARS",
+            ProjectType.CHANNEL_MASTER: "CHANNEL MASTER FIXTURE",
         }[project_type],
         ticker_text="Fixture Bio remains below the machine controls.",
         channel_url="https://www.youtube.com/channel/UChero",
@@ -76,6 +78,13 @@ def project_for(project_type: ProjectType) -> Project:
             more_info_url="https://example.com/info",
             stay_url="https://example.com/stay",
         ),
+        )
+    if project_type is ProjectType.CHANNEL_MASTER:
+        return Project(
+            **common,
+            channel_master_config=ChannelMasterConfig(
+                primary_cta=PrimaryCta(PrimaryCtaType.VISIT_WEBSITE, "https://example.com/master")
+            ),
         )
     return Project(**common, banjo_config=BanjoConfig())
 
@@ -156,7 +165,7 @@ class MachineBrandHierarchyTests(unittest.TestCase):
                 build_project_site(project_for(project_type), destination)
                 page = (destination / "index.html").read_text(encoding="utf-8")
                 self.assertEqual(page.count('class="customer-identity"'), 1)
-                self.assertEqual(page.count('class="brand-signature"'), 1)
+                self.assertEqual(page.count('class="brand-signature"'), 0 if project_type is ProjectType.CHANNEL_MASTER else 1)
                 self.assertNotIn('class="brand-masthead"', page)
                 self.assertIn("customer-identity-subtitle", page)
                 if project_type is ProjectType.BANJO:

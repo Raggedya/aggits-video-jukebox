@@ -33,6 +33,11 @@ def assemble_reviewed_project(
     elif project_type is ProjectType.BANJO:
         if banjo_config is None or values.business_config is not None or values.music_config is not None or values.tourism_config is not None:
             raise ValueError("Validated Banjo configuration is required.")
+    elif project_type is ProjectType.CHANNEL_MASTER:
+        if values.channel_master_config is None or any(
+            config is not None for config in (values.business_config, values.music_config, values.tourism_config)
+        ):
+            raise ValueError("Validated Channel Master configuration is required.")
     else:
         raise ValueError(f"Unsupported project type: {project_type!r}.")
     if existing and existing.project_type is not project_type:
@@ -61,6 +66,7 @@ def assemble_reviewed_project(
         music_config=values.music_config if project_type is ProjectType.MUSIC else None,
         tourism_config=values.tourism_config if project_type is ProjectType.TOURISM else None,
         banjo_config=banjo_config if project_type is ProjectType.BANJO else None,
+        channel_master_config=values.channel_master_config if project_type is ProjectType.CHANNEL_MASTER else None,
         source_channel_url=values.channel_url,
         manual_video_urls=list(values.manual_video_urls),
         excluded_video_ids=sorted(excluded_ids),
@@ -98,3 +104,8 @@ def assemble_tourism_project(**kwargs) -> Project:
 def assemble_banjo_project(**kwargs) -> Project:
     """Banjo adapter over the shared reviewed-project assembly service."""
     return assemble_reviewed_project(project_type=ProjectType.BANJO, **kwargs)
+
+
+def assemble_channel_master_project(**kwargs) -> Project:
+    """Channel Master adapter over the shared reviewed-project assembly service."""
+    return assemble_reviewed_project(project_type=ProjectType.CHANNEL_MASTER, **kwargs)
