@@ -2,15 +2,22 @@ from __future__ import annotations
 
 import hashlib
 import re
+import shutil
 from dataclasses import dataclass
 from itertools import combinations
 from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont, ImageOps
 
+from .config import resource_path
+
 
 SOCIAL_PREVIEW_SIZE = (1200, 630)
 SOCIAL_PREVIEW_VERSION = "v2"
+BANJO_SOCIAL_PREVIEW_SIZE = (1731, 909)
+BANJO_SOCIAL_PREVIEW_VERSION = "banjo-v1"
+BANJO_SOCIAL_PREVIEW_RESOURCE = "templates/social-preview/banjo-world-of-cars-social-preview.png"
+BANJO_SOCIAL_PREVIEW_SHA256 = "6274661228cf248d4b27f701823752197d863cad2fb88b6c209674ef0fa1fbe2"
 TITLE_SAFE_REGION = (110, 132, 1090, 370)
 TOUCH_ICON_BOUNDS = (558, 394, 642, 496)
 TITLE_FILL = "#f3ede0"
@@ -34,10 +41,32 @@ def normalise_social_title(title: str | None) -> str:
     return re.sub(r"\s+", " ", str(title or "").strip())
 
 
-def social_preview_filename(title: str | None) -> str:
+def _is_banjo(project_type: object | None) -> bool:
+    return str(getattr(project_type, "value", project_type) or "").lower() == "banjo"
+
+
+def social_preview_filename(title: str | None, project_type: object | None = None) -> str:
+    if _is_banjo(project_type):
+        return f"social-card-{BANJO_SOCIAL_PREVIEW_VERSION}-{BANJO_SOCIAL_PREVIEW_SHA256[:12]}.png"
     source = f"{SOCIAL_PREVIEW_VERSION}\0{normalise_social_title(title)}".encode("utf-8")
     digest = hashlib.sha256(source).hexdigest()[:12]
     return f"social-card-{SOCIAL_PREVIEW_VERSION}-{digest}.jpg"
+
+
+def verify_banjo_social_preview(path: Path | None = None) -> Path:
+    source = path or resource_path(BANJO_SOCIAL_PREVIEW_RESOURCE)
+    if not source.is_file():
+        raise FileNotFoundError(f"Approved Banjo social-preview image is missing: {source}")
+    digest = hashlib.sha256(source.read_bytes()).hexdigest()
+    if digest != BANJO_SOCIAL_PREVIEW_SHA256:
+        raise ValueError("Approved Banjo social-preview image hash does not match the canonical asset.")
+    with Image.open(source) as image:
+        if image.format != "PNG" or image.size != BANJO_SOCIAL_PREVIEW_SIZE:
+            raise ValueError(
+                "Approved Banjo social-preview image must remain the canonical "
+                f"{BANJO_SOCIAL_PREVIEW_SIZE[0]}x{BANJO_SOCIAL_PREVIEW_SIZE[1]} PNG."
+            )
+    return source
 
 
 def _font(size: int) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
@@ -221,11 +250,20 @@ def create_social_preview(title: str | None, destination: Path) -> TitleLayout:
     return layout
 
 
-def replace_social_preview(title: str | None, directory: Path) -> Path:
-    filename = social_preview_filename(title)
+def replace_social_preview(
+    title: str | None,
+    directory: Path,
+    project_type: object | None = None,
+) -> Path:
+    filename = social_preview_filename(title, project_type)
     destination = directory / filename
-    for existing in directory.glob("social-card-*.jpg"):
+    for existing in directory.glob("social-card-*"):
         if existing.name != filename and existing.is_file():
             existing.unlink()
-    create_social_preview(title, destination)
+    if _is_banjo(project_type):
+        source = verify_banjo_social_preview()
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source, destination)
+    else:
+        create_social_preview(title, destination)
     return destination

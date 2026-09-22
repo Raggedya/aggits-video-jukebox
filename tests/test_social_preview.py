@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import functools
+import hashlib
 import tempfile
 import threading
 import unittest
@@ -25,6 +26,9 @@ from aggits_video_factory.models import (
 from aggits_video_factory.site_builder import build_project_site
 from aggits_video_factory.publisher import _write_library
 from aggits_video_factory.social_preview import (
+    BANJO_SOCIAL_PREVIEW_RESOURCE,
+    BANJO_SOCIAL_PREVIEW_SHA256,
+    BANJO_SOCIAL_PREVIEW_SIZE,
     SOCIAL_PREVIEW_SIZE,
     SOCIAL_PREVIEW_VERSION,
     TITLE_SAFE_REGION,
@@ -34,6 +38,7 @@ from aggits_video_factory.social_preview import (
     normalise_social_title,
     social_preview_filename,
 )
+from aggits_video_factory.config import resource_path
 
 
 class MetadataParser(HTMLParser):
@@ -152,7 +157,8 @@ class UniversalSocialPreviewTests(unittest.TestCase):
                 raw_html = (destination / "index.html").read_text(encoding="utf-8")
                 parser.feed(raw_html)
                 expected_url = project.published_url
-                expected_image = f"{expected_url}{social_preview_filename(project.title)}"
+                filename = social_preview_filename(project.title, project.project_type)
+                expected_image = f"{expected_url}{filename}"
                 expected_description = f"Hit it. Discover {project.title} with Crispy Bits."
                 self.assertEqual(parser.title, f"{project.title} | Crispy Bits")
                 self.assertEqual(parser.canonical, expected_url)
@@ -162,24 +168,36 @@ class UniversalSocialPreviewTests(unittest.TestCase):
                 self.assertEqual(parser.meta["og:url"], expected_url)
                 self.assertEqual(parser.meta["og:image"], expected_image)
                 self.assertEqual(parser.meta["og:image:secure_url"], expected_image)
-                self.assertEqual(parser.meta["og:image:width"], "1200")
-                self.assertEqual(parser.meta["og:image:height"], "630")
-                self.assertEqual(parser.meta["og:image:alt"], f"{project.title} — Crispy Bits social preview")
+                if project_type is ProjectType.BANJO:
+                    self.assertEqual(parser.meta["og:image:type"], "image/png")
+                    self.assertEqual(parser.meta["og:image:width"], str(BANJO_SOCIAL_PREVIEW_SIZE[0]))
+                    self.assertEqual(parser.meta["og:image:height"], str(BANJO_SOCIAL_PREVIEW_SIZE[1]))
+                    expected_alt = "Fresh Video Update — Banjo's World of Cars"
+                else:
+                    self.assertEqual(parser.meta["og:image:type"], "image/jpeg")
+                    self.assertEqual(parser.meta["og:image:width"], "1200")
+                    self.assertEqual(parser.meta["og:image:height"], "630")
+                    expected_alt = f"{project.title} — Crispy Bits social preview"
+                self.assertEqual(parser.meta["og:image:alt"], expected_alt)
                 self.assertEqual(parser.meta["twitter:card"], "summary_large_image")
                 self.assertEqual(parser.meta["twitter:title"], project.title)
                 self.assertEqual(parser.meta["twitter:description"], expected_description)
                 self.assertEqual(parser.meta["twitter:image"], expected_image)
-                self.assertEqual(parser.meta["twitter:image:alt"], f"{project.title} — Crispy Bits social preview")
+                self.assertEqual(parser.meta["twitter:image:alt"], expected_alt)
                 self.assertEqual(parser.meta["description"], expected_description)
                 self.assertTrue(expected_image.startswith("https://"))
-                image_path = destination / social_preview_filename(project.title)
+                image_path = destination / filename
                 self.assertTrue(image_path.is_file())
                 with Image.open(image_path) as image:
-                    self.assertEqual(image.size, SOCIAL_PREVIEW_SIZE)
-                    self.assertEqual(image.format, "JPEG")
+                    if project_type is ProjectType.BANJO:
+                        self.assertEqual(image.size, BANJO_SOCIAL_PREVIEW_SIZE)
+                        self.assertEqual(image.format, "PNG")
+                    else:
+                        self.assertEqual(image.size, SOCIAL_PREVIEW_SIZE)
+                        self.assertEqual(image.format, "JPEG")
 
     def test_minimal_card_is_title_only_and_independent_of_project_content(self):
-        rendered_cards: list[bytes] = []
+        rendered_cards: dict[ProjectType, bytes] = {}
         for project_type in ProjectType:
             with self.subTest(project_type=project_type.value), tempfile.TemporaryDirectory() as temporary:
                 destination = Path(temporary)
@@ -187,16 +205,30 @@ class UniversalSocialPreviewTests(unittest.TestCase):
                 project.channel_thumbnail = f"https://example.com/{project_type.value}-customer-logo.png"
                 project.ticker_text = f"Unique {project_type.value} Bio content that must not affect the card."
                 build_project_site(project, destination)
-                image_path = destination / social_preview_filename(project.title)
-                rendered_cards.append(image_path.read_bytes())
+                image_path = destination / social_preview_filename(project.title, project.project_type)
+                rendered_cards[project_type] = image_path.read_bytes()
 
         self.assertEqual(SOCIAL_PREVIEW_VERSION, "v2")
-        self.assertEqual(rendered_cards[0], rendered_cards[1])
-        self.assertEqual(rendered_cards[0], rendered_cards[2])
+        self.assertEqual(rendered_cards[ProjectType.BUSINESS], rendered_cards[ProjectType.MUSIC])
+        self.assertEqual(rendered_cards[ProjectType.BUSINESS], rendered_cards[ProjectType.TOURISM])
+        self.assertNotEqual(rendered_cards[ProjectType.BUSINESS], rendered_cards[ProjectType.BANJO])
         renderer_source = Path(create_social_preview.__code__.co_filename).read_text(encoding="utf-8")
         self.assertNotIn("crispy-bits-social-preview-template.png", renderer_source)
         self.assertNotIn('"PRESS"', renderer_source)
         self.assertNotIn('"HIT IT"', renderer_source)
+
+    def test_banjo_uses_the_exact_operator_supplied_social_preview(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            destination = Path(temporary)
+            project = project_for(ProjectType.BANJO)
+            build_project_site(project, destination)
+            source = resource_path(BANJO_SOCIAL_PREVIEW_RESOURCE)
+            generated = destination / social_preview_filename(project.title, project.project_type)
+            self.assertEqual(source.read_bytes(), generated.read_bytes())
+            self.assertEqual(
+                hashlib.sha256(generated.read_bytes()).hexdigest(),
+                BANJO_SOCIAL_PREVIEW_SHA256,
+            )
 
     def test_dark_navy_vignette_and_small_touch_icon_are_rendered(self):
         with tempfile.TemporaryDirectory() as temporary:

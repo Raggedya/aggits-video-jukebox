@@ -210,7 +210,7 @@ class Publisher:
                 "videoCount": len(project.videos),
                 "publishedAt": utc_now(),
                 "url": public_url,
-                "socialImage": social_preview_filename(project.title),
+                "socialImage": social_preview_filename(project.title, project.project_type),
             })
             _write_library(workspace, library)
             _run([self.git, "add", "--", f"public/{PUBLIC_PATH}/{project.slug}", f"public/{PUBLIC_PATH}/library.json", f"public/{PUBLIC_PATH}/index.html"], cwd=workspace)

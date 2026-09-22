@@ -13,7 +13,12 @@ from qrcode.constants import ERROR_CORRECT_H
 from .config import BRAND_NAME, PUBLIC_BASE_URL, resource_path
 from .banjo import BANJO_TITLE, validate_sponsor_mp4, verify_banjo_character
 from .models import Project, ProjectType, project_primary_cta
-from .social_preview import replace_social_preview, social_preview_filename
+from .social_preview import (
+    BANJO_SOCIAL_PREVIEW_SIZE,
+    SOCIAL_PREVIEW_SIZE,
+    replace_social_preview,
+    social_preview_filename,
+)
 
 
 BRASS = "#b88a4f"
@@ -176,13 +181,21 @@ def build_project_site(project: Project, destination: Path) -> Path:
             shutil.copy2(source, sponsor_output / f"sponsor-{creative.creative_id}.mp4")
 
     canonical = project.published_url if str(project.published_url or "").startswith("https://") else f"{PUBLIC_BASE_URL}/{project.slug}/"
-    social_filename = social_preview_filename(project.title)
+    social_filename = social_preview_filename(project.title, project.project_type)
     social_url = f"{canonical.rstrip('/')}/{social_filename}"
     included_videos = included_project_videos(project)
     if not included_videos:
         raise ValueError("A project must include at least one video before generation.")
     social_title = project.title.strip() or BRAND_NAME
     description = f"Hit it. Discover {social_title} with Crispy Bits."
+    if project.project_type is ProjectType.BANJO:
+        social_image_type = "image/png"
+        social_image_width, social_image_height = BANJO_SOCIAL_PREVIEW_SIZE
+        social_image_alt = "Fresh Video Update — Banjo's World of Cars"
+    else:
+        social_image_type = "image/jpeg"
+        social_image_width, social_image_height = SOCIAL_PREVIEW_SIZE
+        social_image_alt = f"{social_title} — Crispy Bits social preview"
     story_sections = _story_sections(project.ticker_text, project.title, project.project_type)
     primary_action_label = primary_cta.display_label if primary_cta else ("CONTEXT" if project.project_type is ProjectType.BANJO else "PRIMARY ACTION")
     primary_action_aria = primary_action_label if primary_cta and primary_cta.destination_url else f"{primary_action_label} unavailable"
@@ -193,7 +206,10 @@ def build_project_site(project: Project, destination: Path) -> Path:
         "{{META_DESCRIPTION}}": html.escape(description, quote=True),
         "{{CANONICAL_URL}}": html.escape(canonical, quote=True),
         "{{SOCIAL_IMAGE_URL}}": html.escape(social_url, quote=True),
-        "{{SOCIAL_IMAGE_ALT}}": html.escape(f"{social_title} — Crispy Bits social preview", quote=True),
+        "{{SOCIAL_IMAGE_TYPE}}": social_image_type,
+        "{{SOCIAL_IMAGE_WIDTH}}": str(social_image_width),
+        "{{SOCIAL_IMAGE_HEIGHT}}": str(social_image_height),
+        "{{SOCIAL_IMAGE_ALT}}": html.escape(social_image_alt, quote=True),
         "{{SOCIAL_TITLE}}": html.escape(social_title, quote=True),
         "{{DOCUMENT_TITLE}}": html.escape(f"{social_title} | Crispy Bits"),
         "{{MACHINE_LABEL}}": html.escape(BANJO_TITLE if project.project_type is ProjectType.BANJO else f"{project.title} CRISPY BITS Video Jukebox", quote=True),
@@ -343,5 +359,5 @@ def build_project_site(project: Project, destination: Path) -> Path:
         }
     (destination / "machine.json").write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     create_qr_card(project, destination / "qr-card.png")
-    replace_social_preview(project.title, destination)
+    replace_social_preview(project.title, destination, project.project_type)
     return destination / "index.html"

@@ -1478,6 +1478,7 @@ def smoke_test() -> None:
         resource_path("static/music-machine/aggits-cabinet.webp"),
         resource_path("static/music-machine/crispy-bits-logo-cutout-v2.png"),
         resource_path("templates/social-preview/crispy-bits-social-preview-template.png"),
+        resource_path("templates/social-preview/banjo-world-of-cars-social-preview.png"),
     ]
     missing = [str(path) for path in required if not path.is_file()]
     if missing:
