@@ -5,6 +5,7 @@ import json
 import re
 import shutil
 from pathlib import Path
+from urllib.parse import quote
 
 import qrcode
 from PIL import Image, ImageDraw, ImageFont
@@ -25,6 +26,11 @@ BRASS = "#b88a4f"
 DEEP_BRASS = "#4c3219"
 CREAM = "#f2e4bf"
 INK = "#070605"
+BANJO_SPONSOR_CONTACT_EMAIL = "andrewharris501@gmail.com"
+BANJO_SPONSOR_CONTACT_SUBJECT = "Banjo Sponsorship Enquiry"
+BANJO_SPONSOR_CONTACT_HREF = (
+    f"mailto:{BANJO_SPONSOR_CONTACT_EMAIL}?subject={quote(BANJO_SPONSOR_CONTACT_SUBJECT)}"
+)
 
 
 def included_project_videos(project: Project):
@@ -220,6 +226,29 @@ def build_project_site(project: Project, destination: Path) -> Path:
     initial_reel_instruction = "PULL THE LEVER  ──────→"
     story_header_markup = ""
     story_aria_label = project.title
+    banjo_sponsor_area_markup = ""
+    if project.project_type is ProjectType.BANJO:
+        sponsor = banjo_config.sponsor if banjo_config else None
+        if sponsor and sponsor.active and sponsor.url:
+            destination_url = html.escape(sponsor.url, quote=True)
+            banjo_sponsor_area_markup = (
+                '<section class="banjo-sponsor-area" data-banjo-sponsor-area>'
+                f'<a class="banjo-sponsor-button" data-banjo-sponsor-button data-banjo-sponsor-mode="active" href="{destination_url}" target="_blank" rel="noopener noreferrer">VISIT OUR SPONSOR</a>'
+                + (
+                    f'<a class="banjo-sponsor-logo" data-banjo-sponsor-logo href="{destination_url}" target="_blank" rel="noopener noreferrer">'
+                    f'<img src="{html.escape(sponsor_logo_public_url, quote=True)}" alt="{html.escape(sponsor.title, quote=True)} sponsor logo"></a>'
+                    if sponsor_logo_public_url else ""
+                )
+                + '</section>'
+            )
+        else:
+            banjo_sponsor_area_markup = (
+                '<section class="banjo-sponsor-area banjo-sponsor-area--seeking" data-banjo-sponsor-area>'
+                '<h2>BANJO IS LOOKING FOR SPONSORS</h2>'
+                '<p>Interested in advertising on Banjo\'s World of Cars? Please email Andy to discuss sponsorship opportunities.</p>'
+                f'<a class="banjo-sponsor-button" data-banjo-sponsor-button data-banjo-sponsor-mode="inquiry" href="{BANJO_SPONSOR_CONTACT_HREF}">EMAIL ANDY</a>'
+                '</section>'
+            )
     replacements = {
         "{{META_DESCRIPTION}}": html.escape(description, quote=True),
         "{{CANONICAL_URL}}": html.escape(canonical, quote=True),
@@ -290,18 +319,7 @@ def build_project_site(project: Project, destination: Path) -> Path:
             '</div></div></section>'
             if project.project_type is ProjectType.BANJO else ""
         ),
-        "{{BANJO_SPONSOR_AREA_MARKUP}}": (
-            '<section class="banjo-sponsor-area" data-banjo-sponsor-area>'
-            f'<a class="banjo-sponsor-button" data-banjo-sponsor-button href="{html.escape(banjo_config.sponsor.url or "", quote=True)}" target="_blank" rel="noopener noreferrer">VISIT OUR SPONSOR</a>'
-            + (
-                f'<a class="banjo-sponsor-logo" data-banjo-sponsor-logo href="{html.escape(banjo_config.sponsor.url or "", quote=True)}" target="_blank" rel="noopener noreferrer">'
-                f'<img src="{html.escape(sponsor_logo_public_url, quote=True)}" alt="{html.escape(banjo_config.sponsor.title, quote=True)} sponsor logo"></a>'
-                if sponsor_logo_public_url else ""
-            )
-            + '</section>'
-            if project.project_type is ProjectType.BANJO and banjo_config and banjo_config.sponsor.active and banjo_config.sponsor.url
-            else ""
-        ),
+        "{{BANJO_SPONSOR_AREA_MARKUP}}": banjo_sponsor_area_markup,
         "{{MACHINE_TITLE}}": html.escape(project.title),
         "{{INITIAL_REEL_INSTRUCTION}}": initial_reel_instruction,
         "{{STORY_HEADER_MARKUP}}": story_header_markup,

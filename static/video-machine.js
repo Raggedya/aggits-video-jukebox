@@ -1027,7 +1027,8 @@ if (machine) {
     const report = () => {
       if (!buttonSeen && banjoSponsorButton) {
         buttonSeen = true;
-        emitBanjoEvent('sponsor_button_impression', {placement: 'sponsor_area'});
+        const inquiry = banjoSponsorButton.dataset.banjoSponsorMode === 'inquiry';
+        emitBanjoEvent(inquiry ? 'sponsor_interest_impression' : 'sponsor_button_impression', {placement: 'sponsor_area'});
       }
       if (!logoSeen && banjoSponsorLogo) {
         logoSeen = true;
@@ -1139,7 +1140,10 @@ if (machine) {
       }
     });
     homeButton?.addEventListener('click', () => { location.href = '../'; });
-    banjoSponsorButton?.addEventListener('click', () => emitBanjoEvent('sponsor_button_click', {placement: 'sponsor_area'}));
+    banjoSponsorButton?.addEventListener('click', () => {
+      const inquiry = banjoSponsorButton.dataset.banjoSponsorMode === 'inquiry';
+      emitBanjoEvent(inquiry ? 'sponsor_interest_click' : 'sponsor_button_click', {placement: 'sponsor_area'});
+    });
     banjoSponsorLogo?.addEventListener('click', () => emitBanjoEvent('sponsor_logo_click', {placement: 'sponsor_area'}));
     document.addEventListener('keydown', event => {
       if (event.key === 'Escape' && banjoSubmissionModal && !banjoSubmissionModal.hidden) {

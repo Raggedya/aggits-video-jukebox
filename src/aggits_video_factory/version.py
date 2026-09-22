@@ -2,7 +2,7 @@ from __future__ import annotations
 
 
 PRODUCT_NAME = "CRISPY BITS DESKTOP"
-VERSION = (3, 4, 0)
+VERSION = (3, 4, 1)
 APP_VERSION = ".".join(str(part) for part in VERSION)
 WINDOWS_FILE_VERSION = (*VERSION, 0)
 WINDOWS_FILE_VERSION_STRING = ".".join(str(part) for part in WINDOWS_FILE_VERSION)
