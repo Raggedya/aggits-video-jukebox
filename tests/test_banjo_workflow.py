@@ -409,8 +409,9 @@ class BanjoPublicOutputTests(unittest.TestCase):
             inactive_page = (inactive_output / "index.html").read_text(encoding="utf-8")
             self.assertNotIn("VISIT OUR SPONSOR", inactive_page)
             self.assertIn("BANJO IS LOOKING FOR SPONSORS", inactive_page)
-            self.assertIn("Interested in advertising on Banjo's World of Cars? Please email Andy to discuss sponsorship opportunities.", inactive_page)
-            self.assertIn("EMAIL ANDY", inactive_page)
+            self.assertIn("Interested in advertising on Banjo's World of Cars?", inactive_page)
+            self.assertNotIn("Please email Andy to discuss sponsorship opportunities.", inactive_page)
+            self.assertIn("EMAIL BANJO", inactive_page)
             self.assertIn('href="mailto:andrewharris501@gmail.com?subject=Banjo%20Sponsorship%20Enquiry"', inactive_page)
 
     def test_show_banjo_modal_is_banjo_only_and_contains_exact_public_copy(self):

@@ -245,8 +245,8 @@ def build_project_site(project: Project, destination: Path) -> Path:
             banjo_sponsor_area_markup = (
                 '<section class="banjo-sponsor-area banjo-sponsor-area--seeking" data-banjo-sponsor-area>'
                 '<h2>BANJO IS LOOKING FOR SPONSORS</h2>'
-                '<p>Interested in advertising on Banjo\'s World of Cars? Please email Andy to discuss sponsorship opportunities.</p>'
-                f'<a class="banjo-sponsor-button" data-banjo-sponsor-button data-banjo-sponsor-mode="inquiry" href="{BANJO_SPONSOR_CONTACT_HREF}">EMAIL ANDY</a>'
+                '<p>Interested in advertising on Banjo\'s World of Cars?</p>'
+                f'<a class="banjo-sponsor-button" data-banjo-sponsor-button data-banjo-sponsor-mode="inquiry" href="{BANJO_SPONSOR_CONTACT_HREF}">EMAIL BANJO</a>'
                 '</section>'
             )
     replacements = {
