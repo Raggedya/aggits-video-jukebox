@@ -6,6 +6,7 @@ from pathlib import Path
 
 from aggits_video_factory.models import (
     BusinessConfig,
+    BanjoConfig,
     MusicConfig,
     PrimaryCta,
     PrimaryCtaType,
@@ -50,6 +51,7 @@ def project_for(project_type: ProjectType) -> Project:
             ProjectType.BUSINESS: "ACCESS WORKWEAR & SAFETY",
             ProjectType.MUSIC: "WRAITH",
             ProjectType.TOURISM: "VISIT MERIMBULA",
+            ProjectType.BANJO: "BANJO'S WORLD OF CARS",
         }[project_type],
         ticker_text="Fixture Bio remains below the machine controls.",
         channel_url="https://www.youtube.com/channel/UChero",
@@ -66,14 +68,16 @@ def project_for(project_type: ProjectType) -> Project:
             **common,
             music_config=MusicConfig(PrimaryCta(PrimaryCtaType.BOOK_US, "https://example.com/book-us")),
         )
-    return Project(
+    if project_type is ProjectType.TOURISM:
+        return Project(
         **common,
         tourism_config=TourismConfig(
             primary_cta=PrimaryCta(PrimaryCtaType.STAY, "https://example.com/stay"),
             more_info_url="https://example.com/info",
             stay_url="https://example.com/stay",
         ),
-    )
+        )
+    return Project(**common, banjo_config=BanjoConfig())
 
 
 class MachineBrandHierarchyTests(unittest.TestCase):
@@ -145,7 +149,7 @@ class MachineBrandHierarchyTests(unittest.TestCase):
         self.assertGreater(TEMPLATE.index('class="brand-signature"'), TEMPLATE.index('class="customer-story"'))
         self.assertIn("width:min(28%,190px)", STYLES)
 
-    def test_all_project_types_generate_the_same_shared_hero_structure(self):
+    def test_all_project_types_generate_one_shared_hero_structure_with_banjo_scoping(self):
         for project_type in ProjectType:
             with self.subTest(project_type=project_type.value), tempfile.TemporaryDirectory() as temporary:
                 destination = Path(temporary)
@@ -155,6 +159,10 @@ class MachineBrandHierarchyTests(unittest.TestCase):
                 self.assertEqual(page.count('class="brand-signature"'), 1)
                 self.assertNotIn('class="brand-masthead"', page)
                 self.assertIn("customer-identity-subtitle", page)
+                if project_type is ProjectType.BANJO:
+                    self.assertIn("banjo-header-character", page)
+                else:
+                    self.assertNotIn("banjo-header-character", page)
 
 
 if __name__ == "__main__":

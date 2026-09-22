@@ -24,6 +24,9 @@ if (machine) {
   const soundLabel = machine.querySelector('[data-sound-label]');
   const homeButton = machine.querySelector('[data-action="home"]');
   const player = machine.querySelector('[data-youtube-player]');
+  const sponsorPlayer = machine.querySelector('[data-sponsor-player]');
+  const banjoChoiceOverlay = machine.querySelector('[data-banjo-choice-overlay]');
+  const banjoChoiceTitle = machine.querySelector('[data-banjo-choice-title]');
   const stage = machine.querySelector('[data-video-stage]');
   const winnerTitle = machine.querySelector('[data-winner-title]');
   const winnerChannel = machine.querySelector('[data-winner-channel]');
@@ -57,6 +60,10 @@ if (machine) {
   let primaryActionLabel = 'SHOP NOW';
   let plaqueDestination = '';
   let activeProjectType = 'business';
+  let banjoConfig = null;
+  let banjoSessionKey = '';
+  let banjoSession = {normalDiscoveries: 0, nextCreativeIndex: 0, lastWasSponsor: false};
+  let sponsorPlaybackMilestones = new Set();
   let shopPlaqueTimer = 0;
   let shopPlaqueEnabled = false;
   let storyTickerStarted = false;
@@ -87,6 +94,57 @@ if (machine) {
   function setState(value, message) {
     machine.dataset.machineState = value;
     if (message) status.textContent = message;
+  }
+
+  function emitBanjoEvent(name, detail = {}) {
+    if (activeProjectType !== 'banjo') return;
+    window.dispatchEvent(new CustomEvent('crispy-bits:banjo', {
+      detail: {name, projectType: 'banjo', ...detail},
+    }));
+  }
+
+  function readBanjoSession() {
+    try {
+      const parsed = JSON.parse(sessionStorage.getItem(banjoSessionKey) || '{}');
+      banjoSession = {
+        normalDiscoveries: Math.max(0, Number(parsed.normalDiscoveries) || 0),
+        nextCreativeIndex: Math.max(0, Number(parsed.nextCreativeIndex) || 0),
+        lastWasSponsor: Boolean(parsed.lastWasSponsor),
+      };
+    } catch {
+      banjoSession = {normalDiscoveries: 0, nextCreativeIndex: 0, lastWasSponsor: false};
+    }
+  }
+
+  function saveBanjoSession() {
+    try { sessionStorage.setItem(banjoSessionKey, JSON.stringify(banjoSession)); } catch {}
+  }
+
+  function activeSponsorCreatives() {
+    if (!banjoConfig?.sponsor?.active) return [];
+    return (banjoConfig.sponsor.creatives || []).filter(item => item?.active && item?.assetUrl && item?.creativeId);
+  }
+
+  function nextSponsorPresentation() {
+    const required = Math.max(5, Number(banjoConfig?.sponsor?.normalDiscoveriesRequired) || 5);
+    const creatives = activeSponsorCreatives();
+    if (banjoSession.lastWasSponsor || banjoSession.normalDiscoveries < required || !creatives.length) return null;
+    const position = banjoSession.nextCreativeIndex % creatives.length;
+    const creative = creatives[position];
+    return {
+      id: `sponsor-${creative.creativeId}`,
+      videoId: `sponsor-${creative.creativeId}`,
+      shortTitle: 'SPONSOR',
+      displayTitle: banjoConfig.sponsor.title,
+      title: banjoConfig.sponsor.title,
+      channelTitle: 'A MESSAGE FROM OUR SPONSOR',
+      description: `A message from our sponsor, ${banjoConfig.sponsor.title}.`,
+      contentType: 'sponsor_mp4',
+      creativeId: creative.creativeId,
+      assetUrl: creative.assetUrl,
+      url: banjoConfig.sponsor.url,
+      sponsorRotationPosition: position,
+    };
   }
 
   function sizeClass(node, text) {
@@ -339,22 +397,68 @@ if (machine) {
 
   function updateSelectedContent(video) {
     const label = titleOnly(video);
-    setCustomerBackdrop(video);
+    const isSponsor = video.contentType === 'sponsor_mp4';
+    const playText = playButton.querySelector('b');
+    if (playText) playText.textContent = 'PLAY VIDEO';
+    setCustomerBackdrop(isSponsor ? null : video);
     machine.dataset.selectedVideoId = video.videoId;
+    machine.dataset.contentKind = isSponsor ? 'sponsor' : (video.isBanjosChoice ? 'banjos-choice' : 'youtube');
     winnerTitle.textContent = label;
     winnerChannel.textContent = video.channelTitle || machineIdentity;
-    contentMeta.textContent = `${video.channelTitle || machineIdentity} • VIDEO DISCOVERY • YOUTUBE`;
-    contentDescription.textContent = video.description || `A closer look at ${label} from ${video.channelTitle || machineIdentity}.`;
+    contentMeta.textContent = isSponsor
+      ? `A MESSAGE FROM OUR SPONSOR • ${banjoConfig.sponsor.title}`
+      : video.isBanjosChoice
+        ? `BANJO'S CHOICE AWARD • ${machineIdentity}`
+        : activeProjectType === 'banjo'
+          ? machineIdentity
+          : `${video.channelTitle || machineIdentity} • VIDEO DISCOVERY • YOUTUBE`;
+    contentDescription.textContent = isSponsor
+      ? `Sponsored content from ${banjoConfig.sponsor.title}.`
+      : video.description || `A closer look at ${label} from ${video.channelTitle || machineIdentity}.`;
     const logoSource = channelThumbnail || video.thumbnailUrl;
-    if (logoSource) {
+    if (!isSponsor && logoSource) {
       contentLogo.src = logoSource;
       contentLogo.alt = `${video.channelTitle || machineIdentity} logo`;
       contentLogo.hidden = false;
       contentMonogram.hidden = true;
     }
-    viewYouTube.href = video.url;
-    viewYouTube.setAttribute('aria-disabled', 'false');
-    updateStory(video);
+    if (isSponsor) {
+      contentLogo.hidden = true;
+      contentMonogram.hidden = false;
+      contentMonogram.textContent = 'SP';
+      viewYouTube.removeAttribute('href');
+      viewYouTube.setAttribute('aria-disabled', 'true');
+    } else {
+      viewYouTube.href = video.url;
+      viewYouTube.setAttribute('aria-disabled', 'false');
+      updateStory(video);
+    }
+    primaryActionDestination = isSponsor ? String(banjoConfig?.sponsor?.url || '') : (activeProjectType === 'banjo' ? '' : primaryActionDestination);
+    const primaryText = primaryActionButton.querySelector('b');
+    if (activeProjectType === 'banjo' && primaryText) primaryText.textContent = isSponsor ? 'VISIT SPONSOR' : 'CONTEXT';
+    primaryActionButton.setAttribute('aria-label', isSponsor ? 'Visit sponsor' : 'Contextual action unavailable');
+  }
+
+  function showBanjoChoiceAward(video) {
+    if (activeProjectType !== 'banjo' || !video?.isBanjosChoice || !banjoChoiceOverlay) return;
+    if (banjoChoiceTitle) banjoChoiceTitle.textContent = video.banjosChoiceTitle || titleOnly(video);
+    banjoChoiceOverlay.classList.remove('is-visible');
+    void banjoChoiceOverlay.offsetWidth;
+    banjoChoiceOverlay.classList.add('is-visible');
+    banjoChoiceOverlay.setAttribute('aria-hidden', 'false');
+    emitBanjoEvent('banjos_choice_discovery', {videoId: video.videoId});
+    emitBanjoEvent('banjos_choice_award_display', {videoId: video.videoId});
+    if (soundEnabled) {
+      emitBanjoEvent('banjos_choice_audio_request', {videoId: video.videoId, available: Boolean(banjoConfig?.awardAudioUrl)});
+      if (banjoConfig?.awardAudioUrl) {
+        const awardAudio = new Audio(banjoConfig.awardAudioUrl);
+        awardAudio.play().catch(() => {});
+      }
+    }
+    window.setTimeout(() => {
+      banjoChoiceOverlay.classList.remove('is-visible');
+      banjoChoiceOverlay.setAttribute('aria-hidden', 'true');
+    }, reducedMotion.matches ? 600 : 2200);
   }
 
   function cancelPendingReveal() {
@@ -506,12 +610,19 @@ if (machine) {
     machine.dataset.videoOpen = 'false';
     stage.setAttribute('aria-hidden', 'true');
     player.src = 'about:blank';
+    if (sponsorPlayer) {
+      sponsorPlayer.pause();
+      sponsorPlayer.removeAttribute('src');
+      sponsorPlayer.load();
+      sponsorPlayer.hidden = true;
+    }
     meterMode = 'idle';
     await sleep(reducedMotion.matches ? 260 : 850);
   }
 
   async function spin() {
     if (spinning || catalogue.length === 0) return;
+    if (activeProjectType === 'banjo' && current?.contentType === 'sponsor_mp4') emitBanjoEvent('sponsor_respin', {creativeId: current.creativeId});
     cancelPendingReveal();
     spinning = true;
     ensureMachineSamples();
@@ -526,7 +637,8 @@ if (machine) {
     machine.dataset.hasWinner = 'false';
     playSample(reelStopAudio, {volume: .58, rate: .9});
     startReelSound();
-    const winner = nextWinner();
+    const sponsorWinner = activeProjectType === 'banjo' ? nextSponsorPresentation() : null;
+    const winner = sponsorWinner || nextWinner();
     await spinSingleReel({
       reel,
       finalEntry: winner,
@@ -538,16 +650,31 @@ if (machine) {
     });
     stopReelSound();
     current = winner;
+    if (activeProjectType === 'banjo') {
+      if (winner.contentType === 'sponsor_mp4') {
+        const creativeCount = activeSponsorCreatives().length;
+        banjoSession.normalDiscoveries = 0;
+        banjoSession.lastWasSponsor = true;
+        banjoSession.nextCreativeIndex = creativeCount ? (winner.sponsorRotationPosition + 1) % creativeCount : 0;
+        emitBanjoEvent('sponsor_impression', {creativeId: winner.creativeId});
+      } else {
+        banjoSession.normalDiscoveries += 1;
+        banjoSession.lastWasSponsor = false;
+      }
+      saveBanjoSession();
+    }
     machine.dataset.hasWinner = 'true';
     updateSelectedContent(winner);
-    setState('READY_TO_PLAY', `${titleOnly(winner)} selected. Press Play Video to open YouTube.`);
+    setState('READY_TO_PLAY', `${titleOnly(winner)} selected. Press Play Video to open it.`);
     meterMode = 'idle';
     playButton.disabled = false;
     shareButton.disabled = false;
-    primaryActionButton.disabled = !primaryActionDestination;
-    primaryActionButton.setAttribute('aria-disabled', String(!primaryActionDestination));
+    if (activeProjectType === 'banjo') primaryActionButton.disabled = winner.contentType !== 'sponsor_mp4' || !primaryActionDestination;
+    else primaryActionButton.disabled = !primaryActionDestination;
+    primaryActionButton.setAttribute('aria-disabled', String(primaryActionButton.disabled));
     respinButton.disabled = false;
     spinning = false;
+    showBanjoChoiceAward(winner);
     scheduleVideoReveal(winner);
   }
 
@@ -625,16 +752,34 @@ if (machine) {
   async function openVideo(playRequested = false) {
     if (!current || spinning) return;
     ensureMachineSamples();
+    const isSponsor = current.contentType === 'sponsor_mp4';
     if (machine.dataset.videoOpen === 'true') {
-      if (playRequested) requestPlayerPlay();
+      if (playRequested && isSponsor && sponsorPlayer) {
+        if (sponsorPlayer.ended) {
+          sponsorPlaybackMilestones = new Set();
+          sponsorPlayer.currentTime = 0;
+          emitBanjoEvent('sponsor_replay', {creativeId: current.creativeId});
+        }
+        void sponsorPlayer.play().catch(() => {});
+      } else if (playRequested) requestPlayerPlay();
       meterMode = 'video';
-      setState('VIDEO_READY', `${titleOnly(current)} is ready in the YouTube player.`);
+      setState('VIDEO_READY', `${titleOnly(current)} is ready in the video player.`);
       return;
     }
     cancelPendingReveal();
     const openingVideoId = current.videoId;
     setState('OPENING_VIDEO', `Opening ${titleOnly(current)}.`);
-    player.src = playerUrl(current);
+    if (isSponsor && sponsorPlayer) {
+      player.src = 'about:blank';
+      sponsorPlaybackMilestones = new Set();
+      sponsorPlayer.src = current.assetUrl;
+      sponsorPlayer.muted = !soundEnabled;
+      sponsorPlayer.hidden = false;
+      sponsorPlayer.load();
+    } else {
+      player.src = playerUrl(current);
+      if (sponsorPlayer) sponsorPlayer.hidden = true;
+    }
     machine.dataset.revealedVideoId = openingVideoId;
     stage.setAttribute('aria-hidden', 'false');
     playSample(shutterGearAudio, {volume: .62, rate: .9});
@@ -642,15 +787,22 @@ if (machine) {
     await sleep(reducedMotion.matches ? 300 : 900);
     if (spinning || machine.dataset.videoOpen !== 'true' || current?.videoId !== openingVideoId) return;
     meterMode = 'video';
-    setState('VIDEO_READY', `${titleOnly(current)} is ready. Use the YouTube player or press Play Video again.`);
-    if (playRequested) {
+    setState('VIDEO_READY', `${titleOnly(current)} is ready. Use the video player or press Play Video again.`);
+    if (isSponsor && sponsorPlayer) {
+      if (playRequested || soundEnabled) {
+        void sponsorPlayer.play().catch(() => {
+          const playText = playButton.querySelector('b');
+          if (playText) playText.textContent = 'PLAY VIDEO';
+        });
+      }
+    } else if (playRequested) {
       requestPlayerPlay();
       window.setTimeout(requestPlayerPlay, 240);
     }
   }
 
   async function share() {
-    const data = {title: document.title, text: current ? `${titleOnly(current)} — ${machineIdentity}` : document.title, url: current?.url || location.href};
+    const data = {title: document.title, text: current ? `${titleOnly(current)} — ${machineIdentity}` : document.title, url: activeProjectType === 'banjo' ? location.href : (current?.url || location.href)};
     try {
       if (navigator.share) await navigator.share(data);
       else {
@@ -664,11 +816,15 @@ if (machine) {
 
   function openPrimaryAction() {
     if (!primaryActionDestination) return;
+    if (activeProjectType === 'banjo') emitBanjoEvent('sponsor_cta_click', {placement: 'video_control', creativeId: current?.creativeId || ''});
     window.open(primaryActionDestination, '_blank', 'noopener,noreferrer');
   }
 
   function openPlaqueAction() {
-    if (plaqueDestination) window.open(plaqueDestination, '_blank', 'noopener,noreferrer');
+    if (plaqueDestination) {
+      if (activeProjectType === 'banjo') emitBanjoEvent('sponsor_header_click', {placement: 'header'});
+      window.open(plaqueDestination, '_blank', 'noopener,noreferrer');
+    }
   }
 
   function stopShopPlaqueCycle() {
@@ -682,6 +838,7 @@ if (machine) {
     shopPlaqueTimer = window.setTimeout(() => {
       if (!shopPlaqueEnabled) return;
       shopPlaque.dataset.shopPlaqueState = state;
+      if (activeProjectType === 'banjo' && state === 'shop') emitBanjoEvent('sponsor_header_impression', {placement: 'header'});
       scheduleShopPlaqueState(
         state === 'shop' ? 'title' : 'shop',
         state === 'shop' ? SHOP_PLAQUE_PROMPT_DURATION : SHOP_PLAQUE_TITLE_DURATION,
@@ -703,7 +860,7 @@ if (machine) {
     shopPlaque.setAttribute('tabindex', '0');
     shopPlaque.setAttribute(
       'aria-label',
-      `${primaryActionLabel} for ${machineIdentity || 'this project'}`,
+      activeProjectType === 'banjo' ? `Visit our sponsor, ${banjoConfig?.sponsor?.title || ''}` : `${primaryActionLabel} for ${machineIdentity || 'this project'}`,
     );
     scheduleShopPlaqueState('shop', SHOP_PLAQUE_TITLE_DURATION);
   }
@@ -720,8 +877,14 @@ if (machine) {
       }
     });
     respinButton.addEventListener('click', spin);
-    playButton.addEventListener('click', () => { void openVideo(true); });
-    shareButton.addEventListener('click', share);
+    playButton.addEventListener('click', () => {
+      if (activeProjectType === 'banjo' && current?.isBanjosChoice) emitBanjoEvent('banjos_choice_video_play', {videoId: current.videoId});
+      void openVideo(true);
+    });
+    shareButton.addEventListener('click', () => {
+      if (activeProjectType === 'banjo') emitBanjoEvent('share', {contentKind: machine.dataset.contentKind || ''});
+      void share();
+    });
     primaryActionButton.addEventListener('click', () => {
       openPrimaryAction();
     });
@@ -738,6 +901,7 @@ if (machine) {
       soundEnabled = !soundEnabled;
       try { sessionStorage.setItem('crispyBitsSound', soundEnabled ? 'on' : 'off'); } catch {}
       updateSoundControl();
+      if (sponsorPlayer) sponsorPlayer.muted = !soundEnabled;
       if (soundEnabled) {
         ensureMachineSamples();
         playSample(reelStopAudio, {volume: .48, rate: 1});
@@ -748,6 +912,39 @@ if (machine) {
         stopSample(shutterGearAudio);
       }
     });
+    if (sponsorPlayer) {
+      sponsorPlayer.addEventListener('play', () => {
+        if (!current || current.contentType !== 'sponsor_mp4' || sponsorPlaybackMilestones.has('start')) return;
+        sponsorPlaybackMilestones.add('start');
+        emitBanjoEvent('sponsor_play_start', {creativeId: current.creativeId});
+      });
+      sponsorPlayer.addEventListener('timeupdate', () => {
+        if (!current || current.contentType !== 'sponsor_mp4' || !Number.isFinite(sponsorPlayer.duration) || sponsorPlayer.duration <= 0) return;
+        const ratio = sponsorPlayer.currentTime / sponsorPlayer.duration;
+        [[.25, 'sponsor_25_percent'], [.5, 'sponsor_50_percent'], [.75, 'sponsor_75_percent']].forEach(([threshold, eventName]) => {
+          const key = eventName.replace('sponsor_', '');
+          if (ratio >= threshold && !sponsorPlaybackMilestones.has(key)) {
+            sponsorPlaybackMilestones.add(key);
+            emitBanjoEvent(eventName, {creativeId: current.creativeId});
+          }
+        });
+      });
+      sponsorPlayer.addEventListener('ended', () => {
+        if (!current || current.contentType !== 'sponsor_mp4') return;
+        if (!sponsorPlaybackMilestones.has('complete')) {
+          sponsorPlaybackMilestones.add('complete');
+          emitBanjoEvent('sponsor_complete', {creativeId: current.creativeId});
+        }
+        const playText = playButton.querySelector('b');
+        if (playText) playText.textContent = 'REPLAY VIDEO';
+      });
+      sponsorPlayer.addEventListener('error', () => {
+        if (!current || current.contentType !== 'sponsor_mp4') return;
+        emitBanjoEvent('sponsor_media_error', {creativeId: current.creativeId});
+        status.textContent = 'Sponsor video unavailable. Re-Spin is ready.';
+        respinButton.disabled = false;
+      });
+    }
     const toggleStory = () => {
       const paused = storyTrack.classList.toggle('is-paused');
       storyWindow.setAttribute('aria-pressed', String(paused));
@@ -782,6 +979,11 @@ if (machine) {
       machineDescription = String(config.customerConfig?.customerStory || config.tickerText || '').trim();
       activeProjectType = String(config.projectType || 'business').trim().toLowerCase();
       machine.dataset.projectType = activeProjectType;
+      banjoConfig = activeProjectType === 'banjo' ? (config.banjoConfig || {}) : null;
+      if (activeProjectType === 'banjo') {
+        banjoSessionKey = `crispyBitsBanjoSponsor:${String(config.slug || 'banjo')}`;
+        readBanjoSession();
+      }
       const initialReelInstruction = 'PULL THE LEVER  ──────→';
       const musicPrimaryCta = activeProjectType === 'music' ? config.musicConfig?.primaryCTA : null;
       const tourismConfig = activeProjectType === 'tourism' ? config.tourismConfig : null;
@@ -794,21 +996,25 @@ if (machine) {
           ? {displayLabel: 'MORE INFO', destinationURL: tourismConfig?.moreInfoURL}
           : {displayLabel: 'SHOP NOW', destinationURL: legacyShopDestination};
       const primaryAction = config.customerConfig?.primaryAction || legacyPrimaryAction || {};
-      primaryActionDestination = String(primaryAction.destinationURL || '').trim();
-      primaryActionLabel = String(primaryAction.displayLabel || '').trim() || 'PRIMARY ACTION';
+      const validSponsor = activeProjectType === 'banjo' && Boolean(banjoConfig?.sponsor?.active && banjoConfig?.sponsor?.title && banjoConfig?.sponsor?.url);
+      primaryActionDestination = activeProjectType === 'banjo' ? '' : String(primaryAction.destinationURL || '').trim();
+      primaryActionLabel = activeProjectType === 'banjo'
+        ? (validSponsor ? `SPONSORED BY ${banjoConfig.sponsor.title}` : 'CONTEXT')
+        : String(primaryAction.displayLabel || '').trim() || 'PRIMARY ACTION';
       plaqueDestination = primaryActionDestination;
+      if (validSponsor) plaqueDestination = String(banjoConfig.sponsor.url);
       if (shopPlaqueLabel) shopPlaqueLabel.textContent = primaryActionLabel;
       if (shopPlaquePrompt) sizeClass(shopPlaquePrompt, primaryActionLabel);
       const primaryActionText = primaryActionButton.querySelector('b');
-      if (primaryActionText && primaryActionLabel) primaryActionText.textContent = primaryActionLabel;
+      if (primaryActionText && primaryActionLabel) primaryActionText.textContent = activeProjectType === 'banjo' ? 'CONTEXT' : primaryActionLabel;
       primaryActionButton.disabled = true;
       primaryActionButton.setAttribute('aria-disabled', 'true');
       primaryActionButton.setAttribute('aria-label', primaryActionDestination ? primaryActionLabel : `${primaryActionLabel || 'Primary action'} unavailable`);
       primaryActionButton.dataset.ctaPlacement = 'bottom';
-      primaryActionButton.dataset.ctaType = String(primaryAction.type || '');
+      primaryActionButton.dataset.ctaType = activeProjectType === 'banjo' ? 'sponsor' : String(primaryAction.type || '');
       primaryActionButton.dataset.ctaLabel = primaryActionLabel;
       shopPlaque.dataset.ctaPlacement = 'top';
-      shopPlaque.dataset.ctaType = String(primaryAction.type || '');
+      shopPlaque.dataset.ctaType = activeProjectType === 'banjo' ? 'sponsor' : String(primaryAction.type || '');
       shopPlaque.dataset.ctaLabel = primaryActionLabel;
       masterStorySections = [];
       channelThumbnail = String(config.channelThumbnail || '').trim();
@@ -817,7 +1023,7 @@ if (machine) {
       titleNode.textContent = config.title || 'VIDEO JUKEBOX';
       fitHeroContent();
       configureShopPlaque();
-      document.title = `${config.title || 'Video Jukebox'} — CRISPY BITS`;
+      document.title = activeProjectType === 'banjo' ? "BANJO'S WORLD OF CARS" : `${config.title || 'Video Jukebox'} — CRISPY BITS`;
       setCustomerBackdrop(catalogue[0]);
       if (channelThumbnail) {
         contentLogo.src = channelThumbnail;

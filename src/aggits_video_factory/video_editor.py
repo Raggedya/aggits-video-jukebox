@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from .config import MAX_VIDEOS
+from .config import video_limit_for_project_type
 from .models import Project, Video
 from .youtube_api import YouTubeClient, YouTubeError
 
@@ -24,9 +24,11 @@ class VideoSelectionSession:
     network resolution separate from the eventual atomic ProjectStore save.
     """
 
-    def __init__(self, project: Project, maximum: int = MAX_VIDEOS) -> None:
+    def __init__(self, project: Project, maximum: int | None = None) -> None:
         self._source = project
-        self.maximum = max(1, min(MAX_VIDEOS, int(maximum)))
+        project_limit = video_limit_for_project_type(project.project_type)
+        selected_maximum = project_limit if maximum is None else int(maximum)
+        self.maximum = max(1, min(project_limit, selected_maximum))
         self.videos = [Video.from_dict(video.to_dict()) for video in project.videos]
         known_ids = {video.video_id for video in self.videos}
         self.excluded_ids = {video_id for video_id in project.excluded_video_ids if video_id in known_ids}
@@ -87,6 +89,10 @@ class VideoSelectionSession:
         revised.videos = [Video.from_dict(video.to_dict()) for video in self.videos]
         revised.excluded_video_ids = sorted(self.excluded_ids | self.unknown_excluded_ids)
         revised.manual_video_urls = list(self.manual_video_urls)
+        if revised.banjo_config:
+            for award in revised.banjo_config.banjos_choice:
+                if award.video_id in self.excluded_ids:
+                    award.active = False
         if revised.published_url or revised.status == "published":
             revised.status = "changes_pending"
         return revised

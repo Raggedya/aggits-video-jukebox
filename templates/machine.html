@@ -28,7 +28,7 @@
   <title>{{DOCUMENT_TITLE}}</title>
 </head>
 <body>
-  <main class="music-machine video-discovery" data-machine-state="BOOT" data-machine-platform="youtube" data-video-open="false" aria-label="{{MACHINE_LABEL}}">
+  <main class="music-machine video-discovery" data-machine-state="BOOT" data-machine-platform="youtube" data-video-open="false" data-project-type="{{PROJECT_TYPE}}" aria-label="{{MACHINE_LABEL}}">
     <div class="customer-backdrop" aria-hidden="true"></div>
     <div class="experience-frame">
       <nav class="utility-controls" aria-label="Machine controls">
@@ -37,6 +37,7 @@
       </nav>
 
       <header class="customer-identity" data-shop-plaque>
+          {{BANJO_CHARACTER_MARKUP}}
           <h1 class="customer-identity-copy">
             <strong data-machine-title>{{MACHINE_TITLE}}</strong>
             <strong class="customer-identity-shop" data-shop-plaque-prompt aria-hidden="true">
@@ -68,10 +69,13 @@
       <section class="video-stage" data-video-stage aria-label="Selected YouTube video" aria-hidden="true">
         <div class="video-stage-frame">
           <iframe data-youtube-player title="Official YouTube video player" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen referrerpolicy="origin-when-cross-origin"></iframe>
+          {{BANJO_SPONSOR_PLAYER_MARKUP}}
           <div class="video-stage-placeholder"><span>SPIN FOR SOMETHING GREAT</span><small>THE VIDEO STAGE OPENS AFTER THE REEL LANDS</small></div>
           <div class="video-shutter video-shutter--left" aria-hidden="true"></div><div class="video-shutter video-shutter--right" aria-hidden="true"></div>
         </div>
       </section>
+
+      {{BANJO_CHOICE_MARKUP}}
 
       <section class="content-card" data-content-card aria-live="polite">
         <div class="content-logo-shell"><img data-content-logo alt="" hidden><span data-content-monogram>CB</span></div>

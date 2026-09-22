@@ -7,6 +7,7 @@ from typing import Any
 from urllib.parse import urlparse
 from uuid import UUID, uuid4
 
+from .config import video_limit_for_project_type
 from .migrations import CURRENT_PROJECT_SCHEMA_VERSION, migrate_project_dict
 
 
@@ -22,6 +23,7 @@ class ProjectType(str, Enum):
     BUSINESS = "business"
     MUSIC = "music"
     TOURISM = "tourism"
+    BANJO = "banjo"
 
 
 class PrimaryCtaType(str, Enum):
@@ -336,6 +338,140 @@ class TourismConfig:
         )
 
 
+@dataclass(slots=True)
+class BanjoChoice:
+    video_id: str
+    display_title: str = ""
+    active: bool = True
+
+    def __post_init__(self) -> None:
+        self.video_id = str(self.video_id or "").strip()
+        self.display_title = str(self.display_title or "").strip()
+        if not self.video_id:
+            raise ProjectValidationError("A Banjo's Choice award requires a YouTube video ID.")
+        if len(self.display_title) > 80:
+            raise ProjectValidationError("A Banjo's Choice display title cannot exceed 80 characters.")
+
+    def to_dict(self) -> dict[str, Any]:
+        return {"video_id": self.video_id, "display_title": self.display_title, "active": bool(self.active)}
+
+    @classmethod
+    def from_dict(cls, value: dict[str, Any]) -> "BanjoChoice":
+        return cls(
+            video_id=str(value.get("video_id") or value.get("videoId") or ""),
+            display_title=str(value.get("display_title") or value.get("displayTitle") or ""),
+            active=bool(value.get("active", True)),
+        )
+
+
+@dataclass(slots=True)
+class SponsorCreative:
+    creative_id: str = field(default_factory=lambda: str(uuid4()))
+    asset_path: str = ""
+    filename: str = ""
+    active: bool = True
+    size_bytes: int = 0
+
+    def __post_init__(self) -> None:
+        try:
+            self.creative_id = str(UUID(str(self.creative_id)))
+        except (ValueError, TypeError, AttributeError) as error:
+            raise ProjectValidationError("Sponsor creative ID must be a valid UUID.") from error
+        self.asset_path = str(self.asset_path or "").replace("\\", "/").strip()
+        self.filename = str(self.filename or "").strip()
+        if self.asset_path:
+            path = self.asset_path.lower()
+            if path.startswith(("/", "file:")) or ":" in path or ".." in path.split("/") or not path.endswith(".mp4"):
+                raise ProjectValidationError("Sponsor creative asset path must be a safe project-relative MP4 path.")
+        self.size_bytes = max(0, int(self.size_bytes or 0))
+        if self.size_bytes > 10 * 1024 * 1024:
+            raise ProjectValidationError("Sponsor MP4 files cannot exceed 10 MB.")
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "creative_id": self.creative_id,
+            "asset_path": self.asset_path,
+            "filename": self.filename,
+            "active": bool(self.active),
+            "size_bytes": self.size_bytes,
+        }
+
+    @classmethod
+    def from_dict(cls, value: dict[str, Any]) -> "SponsorCreative":
+        return cls(
+            creative_id=str(value.get("creative_id") or value.get("creativeId") or uuid4()),
+            asset_path=str(value.get("asset_path") or value.get("assetPath") or ""),
+            filename=str(value.get("filename") or ""),
+            active=bool(value.get("active", True)),
+            size_bytes=int(value.get("size_bytes") or value.get("sizeBytes") or 0),
+        )
+
+
+@dataclass(slots=True)
+class SponsorConfig:
+    active: bool = False
+    title: str = ""
+    url: str | None = None
+    creatives: list[SponsorCreative] = field(default_factory=list)
+
+    def __post_init__(self) -> None:
+        self.title = str(self.title or "").strip()
+        if len(self.title) > 40:
+            raise ProjectValidationError("Sponsor Title cannot exceed 40 characters.")
+        self.url = _optional_http_url(self.url, "Sponsor URL")
+        if len(self.creatives) > 4:
+            raise ProjectValidationError("A Banjo project can contain no more than four sponsor MP4s.")
+        ids = [item.creative_id for item in self.creatives]
+        if len(ids) != len(set(ids)):
+            raise ProjectValidationError("Sponsor creative IDs must be unique.")
+        if self.active and (not self.title or not self.url):
+            raise ProjectValidationError("Active sponsorship requires Sponsor Title and Sponsor URL.")
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "active": bool(self.active), "title": self.title, "url": self.url,
+            "creatives": [item.to_dict() for item in self.creatives],
+        }
+
+    @classmethod
+    def from_dict(cls, value: dict[str, Any] | None) -> "SponsorConfig":
+        source = dict(value or {})
+        return cls(
+            active=bool(source.get("active", False)),
+            title=str(source.get("title") or ""),
+            url=source.get("url"),
+            creatives=[SponsorCreative.from_dict(item) for item in source.get("creatives", []) if isinstance(item, dict)],
+        )
+
+
+@dataclass(slots=True)
+class BanjoConfig:
+    banjos_choice: list[BanjoChoice] = field(default_factory=list)
+    sponsor: SponsorConfig = field(default_factory=SponsorConfig)
+
+    def __post_init__(self) -> None:
+        if len(self.banjos_choice) > 4 or sum(bool(item.active) for item in self.banjos_choice) > 4:
+            raise ProjectValidationError("A Banjo project can have no more than four active Banjo's Choice awards.")
+        ids = [item.video_id for item in self.banjos_choice]
+        if len(ids) != len(set(ids)):
+            raise ProjectValidationError("A YouTube video can have only one Banjo's Choice record.")
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "banjos_choice": [item.to_dict() for item in self.banjos_choice],
+            "sponsor": self.sponsor.to_dict(),
+        }
+
+    @classmethod
+    def from_dict(cls, value: dict[str, Any] | None) -> "BanjoConfig":
+        source = dict(value or {})
+        choices = source.get("banjos_choice", source.get("banjosChoice", []))
+        return cls(
+            banjos_choice=[BanjoChoice.from_dict(item) for item in choices if isinstance(item, dict)],
+            sponsor=SponsorConfig.from_dict(source.get("sponsor")),
+        )
+
+
 def project_primary_cta(project: "Project") -> PrimaryCta | None:
     """Return the one active CTA, adapting legacy URLs without mutating them."""
     if project.project_type is ProjectType.BUSINESS:
@@ -345,6 +481,8 @@ def project_primary_cta(project: "Project") -> PrimaryCta | None:
         return config.primary_cta or PrimaryCta(PrimaryCtaType.SHOP_NOW, config.shop_url or "")
     if project.project_type is ProjectType.MUSIC:
         return project.music_config.primary_cta if project.music_config else None
+    if project.project_type is ProjectType.BANJO:
+        return None
     config = project.tourism_config
     if not config:
         return None
@@ -363,7 +501,9 @@ def allowed_primary_cta_types(project_type: ProjectType | str) -> frozenset[Prim
         return BUSINESS_CTA_TYPES
     if kind is ProjectType.MUSIC:
         return MUSIC_CTA_TYPES
-    return TOURISM_CTA_TYPES
+    if kind is ProjectType.TOURISM:
+        return TOURISM_CTA_TYPES
+    return frozenset()
 
 
 @dataclass(slots=True)
@@ -432,6 +572,7 @@ class Project:
     business_config: BusinessConfig | None = None
     music_config: MusicConfig | None = None
     tourism_config: TourismConfig | None = None
+    banjo_config: BanjoConfig | None = None
     source_channel_url: str = ""
     manual_video_urls: list[str] = field(default_factory=list)
     excluded_video_ids: list[str] = field(default_factory=list)
@@ -478,22 +619,36 @@ class Project:
             _optional_http_url(url, "Additional URL") or "" for url in self.additional_urls if str(url or "").strip()
         ]
         if self.project_type is ProjectType.BUSINESS:
-            if self.music_config is not None or self.tourism_config is not None:
-                raise ProjectValidationError("A Business project cannot have active Music or Tourism configuration.")
+            if self.music_config is not None or self.tourism_config is not None or self.banjo_config is not None:
+                raise ProjectValidationError("A Business project cannot have another project type's configuration.")
             self.business_config = self.business_config or BusinessConfig()
         elif self.project_type is ProjectType.MUSIC:
-            if self.business_config is not None or self.tourism_config is not None:
-                raise ProjectValidationError("A Music project cannot have active Business or Tourism configuration.")
+            if self.business_config is not None or self.tourism_config is not None or self.banjo_config is not None:
+                raise ProjectValidationError("A Music project cannot have another project type's configuration.")
             self.music_config = self.music_config or MusicConfig()
-        else:
-            if self.business_config is not None or self.music_config is not None:
-                raise ProjectValidationError("A Tourism project cannot have active Business or Music configuration.")
+        elif self.project_type is ProjectType.TOURISM:
+            if self.business_config is not None or self.music_config is not None or self.banjo_config is not None:
+                raise ProjectValidationError("A Tourism project cannot have another project type's configuration.")
             self.tourism_config = self.tourism_config or TourismConfig()
+        else:
+            if self.business_config is not None or self.music_config is not None or self.tourism_config is not None:
+                raise ProjectValidationError("A Banjo project cannot have Business, Music or Tourism configuration.")
+            if self.title != "BANJO'S WORLD OF CARS":
+                raise ProjectValidationError("Banjo project title must be exactly BANJO'S WORLD OF CARS.")
+            self.banjo_config = self.banjo_config or BanjoConfig()
+            known_ids = {video.video_id for video in self.videos}
+            for choice in self.banjo_config.banjos_choice:
+                if known_ids and choice.video_id not in known_ids:
+                    raise ProjectValidationError("Banjo's Choice must reference a video in the Banjo YouTube catalogue.")
         primary_cta = project_primary_cta(self)
         if primary_cta and primary_cta.cta_type not in allowed_primary_cta_types(self.project_type):
             raise ProjectValidationError(
                 f"Primary CTA type {primary_cta.cta_type.value!r} is not allowed for {self.project_type.value}."
             )
+        included_count = sum(video.video_id not in set(self.excluded_video_ids) for video in self.videos)
+        maximum = video_limit_for_project_type(self.project_type)
+        if included_count > maximum:
+            raise ProjectValidationError(f"A {self.project_type.value.title()} project can include no more than {maximum} YouTube videos.")
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -511,6 +666,7 @@ class Project:
             "business_config": self.business_config.to_dict() if self.business_config else None,
             "music_config": self.music_config.to_dict() if self.music_config else None,
             "tourism_config": self.tourism_config.to_dict() if self.tourism_config else None,
+            "banjo_config": self.banjo_config.to_dict() if self.banjo_config else None,
             "source_channel_url": self.source_channel_url,
             "manual_video_urls": list(self.manual_video_urls),
             "excluded_video_ids": list(self.excluded_video_ids),
@@ -535,7 +691,7 @@ class Project:
             "schemaVersion", "slug", "title", "ticker_text", "tickerText", "channel_url", "channelUrl",
             "channel_id", "channelId", "channel_title", "channelTitle", "channel_thumbnail", "channelThumbnail",
             "id", "project_id", "projectId", "project_type", "projectType", "additional_urls", "additionalUrls",
-            "business_config", "businessConfig", "music_config", "musicConfig", "tourism_config", "tourismConfig",
+            "business_config", "businessConfig", "music_config", "musicConfig", "tourism_config", "tourismConfig", "banjo_config", "banjoConfig",
             "source_channel_url", "sourceChannelUrl",
             "manual_video_urls", "manualVideoUrls", "excluded_video_ids", "excludedVideoIds", "videos", "status",
             "created_at", "createdAt", "updated_at", "updatedAt", "published_at", "publishedAt", "published_url",
@@ -546,12 +702,15 @@ class Project:
         business_value = value.get("business_config", value.get("businessConfig"))
         music_value = value.get("music_config", value.get("musicConfig"))
         tourism_value = value.get("tourism_config", value.get("tourismConfig"))
+        banjo_value = value.get("banjo_config", value.get("banjoConfig"))
         if business_value is not None and not isinstance(business_value, dict):
             raise ProjectValidationError("business_config must be an object or null.")
         if music_value is not None and not isinstance(music_value, dict):
             raise ProjectValidationError("music_config must be an object or null.")
         if tourism_value is not None and not isinstance(tourism_value, dict):
             raise ProjectValidationError("tourism_config must be an object or null.")
+        if banjo_value is not None and not isinstance(banjo_value, dict):
+            raise ProjectValidationError("banjo_config must be an object or null.")
         return cls(
             slug=str(value.get("slug") or ""),
             title=str(value.get("title") or ""),
@@ -566,6 +725,7 @@ class Project:
             business_config=BusinessConfig.from_dict(business_value) if business_value is not None else None,
             music_config=MusicConfig.from_dict(music_value) if music_value is not None else None,
             tourism_config=TourismConfig.from_dict(tourism_value) if tourism_value is not None else None,
+            banjo_config=BanjoConfig.from_dict(banjo_value) if banjo_value is not None else None,
             source_channel_url=str(value.get("source_channel_url") or value.get("sourceChannelUrl") or value.get("channel_url") or value.get("channelUrl") or ""),
             manual_video_urls=[str(item) for item in (value.get("manual_video_urls", value.get("manualVideoUrls", [])) or []) if str(item).strip()],
             excluded_video_ids=[str(item) for item in (value.get("excluded_video_ids", value.get("excludedVideoIds", [])) or []) if str(item).strip()],

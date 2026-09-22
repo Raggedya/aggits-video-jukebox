@@ -16,7 +16,16 @@ PUBLIC_PATH = "crispy-bits"
 PUBLIC_BASE_URL = f"https://{GITHUB_OWNER.lower()}.github.io/{GITHUB_REPOSITORY}/{PUBLIC_PATH}"
 DELIVERY_ENDPOINT = "https://aggits-video-jukebox.andrewharris501.workers.dev/api/deliveries"
 MAX_VIDEOS = 30
+MAX_BANJO_VIDEOS = 40
+MAX_SPONSOR_CREATIVES = 4
+MAX_SPONSOR_MP4_BYTES = 10 * 1024 * 1024
 MAX_TICKER_LENGTH = 1000
+
+
+def video_limit_for_project_type(project_type: object) -> int:
+    """Return the included-video limit without changing existing project policy."""
+    value = getattr(project_type, "value", project_type)
+    return MAX_BANJO_VIDEOS if str(value).lower() == "banjo" else MAX_VIDEOS
 
 
 def bundled_root() -> Path:

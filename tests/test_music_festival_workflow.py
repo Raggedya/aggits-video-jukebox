@@ -65,7 +65,8 @@ class MusicFestivalWorkflowTests(unittest.TestCase):
     def test_music_form_makes_the_festival_workflow_explicit(self):
         self.assertIn('"YouTube Channel URL (Optional)"', DESKTOP_SOURCE)
         self.assertIn('f"Festival / Individual YouTube Videos (up to {MAX_INDIVIDUAL_VIDEO_URLS})"', DESKTOP_SOURCE)
-        self.assertIn('self.manual_vars = [tk.StringVar() for _ in range(MAX_INDIVIDUAL_VIDEO_URLS)]', DESKTOP_SOURCE)
+        self.assertIn('manual_limit = manual_url_limit_for_project_type(self.project_type)', DESKTOP_SOURCE)
+        self.assertIn('self.manual_vars = [tk.StringVar() for _ in range(manual_limit)]', DESKTOP_SOURCE)
         self.assertIn('"Additional Web Page', DESKTOP_SOURCE)
         self.assertIn('"Channel optional — add up to {MAX_INDIVIDUAL_VIDEO_URLS} videos from any artists."', DESKTOP_SOURCE)
 

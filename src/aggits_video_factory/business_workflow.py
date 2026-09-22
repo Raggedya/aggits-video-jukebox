@@ -3,7 +3,7 @@ from __future__ import annotations
 from uuid import uuid4
 
 from .desktop_forms import ValidatedProjectForm
-from .models import Project, ProjectType, Video, utc_now
+from .models import BanjoConfig, Project, ProjectType, Video, utc_now
 from .supplementary_sources import SupplementarySourceResult
 from .youtube_api import ChannelCatalogue
 
@@ -18,6 +18,7 @@ def assemble_reviewed_project(
     source_results: list[SupplementarySourceResult],
     slug: str,
     existing: Project | None = None,
+    banjo_config: BanjoConfig | None = None,
 ) -> Project:
     """Create a persisted project after the shared authoritative video review."""
     if project_type is ProjectType.BUSINESS:
@@ -29,6 +30,9 @@ def assemble_reviewed_project(
     elif project_type is ProjectType.TOURISM:
         if values.tourism_config is None or values.business_config is not None or values.music_config is not None:
             raise ValueError("Validated Tourism configuration is required.")
+    elif project_type is ProjectType.BANJO:
+        if banjo_config is None or values.business_config is not None or values.music_config is not None or values.tourism_config is not None:
+            raise ValueError("Validated Banjo configuration is required.")
     else:
         raise ValueError(f"Unsupported project type: {project_type!r}.")
     if existing and existing.project_type is not project_type:
@@ -56,6 +60,7 @@ def assemble_reviewed_project(
         business_config=values.business_config if project_type is ProjectType.BUSINESS else None,
         music_config=values.music_config if project_type is ProjectType.MUSIC else None,
         tourism_config=values.tourism_config if project_type is ProjectType.TOURISM else None,
+        banjo_config=banjo_config if project_type is ProjectType.BANJO else None,
         source_channel_url=values.channel_url,
         manual_video_urls=list(values.manual_video_urls),
         excluded_video_ids=sorted(excluded_ids),
@@ -88,3 +93,8 @@ def assemble_music_project(**kwargs) -> Project:
 def assemble_tourism_project(**kwargs) -> Project:
     """Tourism adapter over the same reviewed-project assembly service."""
     return assemble_reviewed_project(project_type=ProjectType.TOURISM, **kwargs)
+
+
+def assemble_banjo_project(**kwargs) -> Project:
+    """Banjo adapter over the shared reviewed-project assembly service."""
+    return assemble_reviewed_project(project_type=ProjectType.BANJO, **kwargs)

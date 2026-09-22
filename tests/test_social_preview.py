@@ -13,6 +13,7 @@ from PIL import Image, ImageDraw
 
 from aggits_video_factory.models import (
     BusinessConfig,
+    BanjoConfig,
     MusicConfig,
     PrimaryCta,
     PrimaryCtaType,
@@ -83,6 +84,8 @@ def sample_video() -> Video:
 
 
 def project_for(project_type: ProjectType, title: str = "WRAITH") -> Project:
+    if project_type is ProjectType.BANJO:
+        title = "BANJO'S WORLD OF CARS"
     common = dict(
         slug=f"preview-{project_type.value}",
         title=title,
@@ -102,7 +105,9 @@ def project_for(project_type: ProjectType, title: str = "WRAITH") -> Project:
             **common,
             music_config=MusicConfig(PrimaryCta(PrimaryCtaType.SPOTIFY, "https://example.com/listen")),
         )
-    return Project(**common, tourism_config=TourismConfig())
+    if project_type is ProjectType.TOURISM:
+        return Project(**common, tourism_config=TourismConfig())
+    return Project(**common, banjo_config=BanjoConfig())
 
 
 class UniversalSocialPreviewTests(unittest.TestCase):
@@ -186,7 +191,8 @@ class UniversalSocialPreviewTests(unittest.TestCase):
                 rendered_cards.append(image_path.read_bytes())
 
         self.assertEqual(SOCIAL_PREVIEW_VERSION, "v2")
-        self.assertTrue(all(card == rendered_cards[0] for card in rendered_cards[1:]))
+        self.assertEqual(rendered_cards[0], rendered_cards[1])
+        self.assertEqual(rendered_cards[0], rendered_cards[2])
         renderer_source = Path(create_social_preview.__code__.co_filename).read_text(encoding="utf-8")
         self.assertNotIn("crispy-bits-social-preview-template.png", renderer_source)
         self.assertNotIn('"PRESS"', renderer_source)

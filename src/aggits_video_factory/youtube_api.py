@@ -9,7 +9,7 @@ from urllib.parse import parse_qs, urlparse
 
 import requests
 
-from .config import MAX_VIDEOS
+from .config import MAX_BANJO_VIDEOS, MAX_VIDEOS
 from .models import Video
 
 
@@ -39,7 +39,7 @@ def merge_video_selections(manual: list[Video], channel: list[Video], maximum: i
             continue
         selected.append(video)
         seen.add(video.video_id)
-        if len(selected) >= max(1, min(MAX_VIDEOS, int(maximum))):
+        if len(selected) >= max(1, min(MAX_BANJO_VIDEOS, int(maximum))):
             break
     return selected
 
@@ -263,7 +263,7 @@ class YouTubeClient:
         )
 
     def fetch_catalogue(self, channel_url: str, maximum: int = MAX_VIDEOS) -> ChannelCatalogue:
-        maximum = max(1, min(MAX_VIDEOS, int(maximum)))
+        maximum = max(1, min(MAX_BANJO_VIDEOS, int(maximum)))
         channel = self.resolve_channel(channel_url)
         channel_id = str(channel.get("id") or "")
         snippet = channel.get("snippet") if isinstance(channel.get("snippet"), dict) else {}

@@ -10,7 +10,7 @@ from concurrent.futures import ThreadPoolExecutor
 from io import BytesIO
 from pathlib import Path
 import tkinter as tk
-from tkinter import messagebox, ttk
+from tkinter import filedialog, messagebox, ttk
 
 import requests
 from PIL import Image, ImageOps, ImageTk
@@ -21,7 +21,8 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from aggits_video_factory.config import APP_NAME, APP_VERSION, MAX_TICKER_LENGTH, MAX_VIDEOS, resource_path
+from aggits_video_factory.banjo import BANJO_DEFAULT_SLUG, BANJO_TITLE, materialize_banjo_config, sponsor_media_summary
+from aggits_video_factory.config import APP_NAME, APP_VERSION, MAX_TICKER_LENGTH, resource_path, video_limit_for_project_type
 from aggits_video_factory.business_workflow import assemble_reviewed_project
 from aggits_video_factory.delivery import (
     DeliveryError,
@@ -38,6 +39,7 @@ from aggits_video_factory.desktop_forms import (
     FormValidationError,
     MAX_INDIVIDUAL_VIDEO_URLS,
     ProjectFormValues,
+    manual_url_limit_for_project_type,
     project_is_visible_in_tab,
     project_to_form_values,
     validate_project_form,
@@ -99,45 +101,60 @@ class ProjectForm(tk.Frame):
         self.custom_label_var = tk.StringVar()
         self.more_info_var = tk.StringVar()
         self.stay_var = tk.StringVar()
+        self.banjo_choice_url_vars = [tk.StringVar() for _ in range(4)]
+        self.banjo_choice_title_vars = [tk.StringVar() for _ in range(4)]
+        self.banjo_choice_active_vars = [tk.BooleanVar(value=False) for _ in range(4)]
+        self.sponsor_active_var = tk.BooleanVar(value=False)
+        self.sponsor_title_var = tk.StringVar()
+        self.sponsor_url_var = tk.StringVar()
+        self.sponsor_path_vars = [tk.StringVar() for _ in range(4)]
+        self.sponsor_creative_active_vars = [tk.BooleanVar(value=False) for _ in range(4)]
         self.field_widgets: dict[str, tk.Widget] = {}
         row = 1
         row = self._entry_row(row, "Title", self.title_var, "title")
-        channel_label = "YouTube Channel URL (Optional)" if self.project_type is ProjectType.MUSIC else "YouTube Channel URL"
+        if self.project_type is ProjectType.BANJO:
+            self.field_widgets["title"].configure(state="readonly", readonlybackground="#101217")
+        channel_label = "YouTube Channel URL (Optional)" if self.project_type in {ProjectType.MUSIC, ProjectType.BANJO} else "YouTube Channel URL"
         row = self._entry_row(row, channel_label, self.channel_var, "channel_url")
-        for index, variable in enumerate(self.additional_vars, start=1):
-            row = self._entry_row(row, f"Additional Web Page {index}", variable, "additional_urls")
+        if self.project_type is not ProjectType.BANJO:
+            for index, variable in enumerate(self.additional_vars, start=1):
+                row = self._entry_row(row, f"Additional Web Page {index}", variable, "additional_urls")
 
-        tk.Label(self, text="Primary Call to Action", bg=PANEL, fg=CREAM, anchor="e", font=("Segoe UI", 9)).grid(row=row, column=0, sticky="e", padx=(22, 12), pady=5)
-        self.cta_combo = ttk.Combobox(
-            self, textvariable=self.cta_var,
-            values=[label for label, _ in CTA_CHOICES_BY_PROJECT[self.project_type]],
-            state="readonly", font=("Segoe UI", 10),
-        )
-        self.cta_combo.grid(row=row, column=1, sticky="ew", padx=(0, 22), pady=5, ipady=3)
-        self.cta_combo.bind("<<ComboboxSelected>>", lambda _event: self._update_custom_visibility())
-        self.field_widgets["cta_type"] = self.cta_combo
-        row += 1
-        row = self._entry_row(row, "CTA Destination URL", self.destination_var, "destination_url")
-        self.custom_row = row
-        row = self._entry_row(row, "Custom Button Label", self.custom_label_var, "custom_label")
+            tk.Label(self, text="Primary Call to Action", bg=PANEL, fg=CREAM, anchor="e", font=("Segoe UI", 9)).grid(row=row, column=0, sticky="e", padx=(22, 12), pady=5)
+            self.cta_combo = ttk.Combobox(
+                self, textvariable=self.cta_var,
+                values=[label for label, _ in CTA_CHOICES_BY_PROJECT[self.project_type]],
+                state="readonly", font=("Segoe UI", 10),
+            )
+            self.cta_combo.grid(row=row, column=1, sticky="ew", padx=(0, 22), pady=5, ipady=3)
+            self.cta_combo.bind("<<ComboboxSelected>>", lambda _event: self._update_custom_visibility())
+            self.field_widgets["cta_type"] = self.cta_combo
+            row += 1
+            row = self._entry_row(row, "CTA Destination URL", self.destination_var, "destination_url")
+            self.custom_row = row
+            row = self._entry_row(row, "Custom Button Label", self.custom_label_var, "custom_label")
 
-        bio_label = "Bio / About" if self.project_type is ProjectType.TOURISM else "Bio / Story Information"
-        tk.Label(self, text=bio_label, bg=PANEL, fg=CREAM, anchor="ne", font=("Segoe UI", 9)).grid(row=row, column=0, sticky="ne", padx=(22, 12), pady=(8, 5))
-        story_shell = tk.Frame(self, bg=PANEL)
-        story_shell.grid(row=row, column=1, sticky="ew", padx=(0, 22), pady=(5, 3))
-        story_shell.columnconfigure(0, weight=1)
-        self.story_text = tk.Text(story_shell, height=4, wrap="word", bg="#101217", fg=PAPER, insertbackground=PAPER, relief="flat", bd=0, highlightbackground=DEEP_BRASS, highlightthickness=1, font=("Segoe UI", 10), padx=9, pady=7)
-        self.story_text.grid(row=0, column=0, sticky="ew")
-        self.story_text.bind("<KeyRelease>", self._story_changed)
-        self.story_count = tk.Label(story_shell, text=f"0 / {MAX_TICKER_LENGTH}", bg=PANEL, fg=MUTED, font=("Segoe UI", 8))
-        self.story_count.grid(row=1, column=0, sticky="e", pady=(3, 0))
-        self.field_widgets["story_text"] = self.story_text
-        row += 1
+            bio_label = "Bio / About" if self.project_type is ProjectType.TOURISM else "Bio / Story Information"
+            tk.Label(self, text=bio_label, bg=PANEL, fg=CREAM, anchor="ne", font=("Segoe UI", 9)).grid(row=row, column=0, sticky="ne", padx=(22, 12), pady=(8, 5))
+            story_shell = tk.Frame(self, bg=PANEL)
+            story_shell.grid(row=row, column=1, sticky="ew", padx=(0, 22), pady=(5, 3))
+            story_shell.columnconfigure(0, weight=1)
+            self.story_text = tk.Text(story_shell, height=4, wrap="word", bg="#101217", fg=PAPER, insertbackground=PAPER, relief="flat", bd=0, highlightbackground=DEEP_BRASS, highlightthickness=1, font=("Segoe UI", 10), padx=9, pady=7)
+            self.story_text.grid(row=0, column=0, sticky="ew")
+            self.story_text.bind("<KeyRelease>", self._story_changed)
+            self.story_count = tk.Label(story_shell, text=f"0 / {MAX_TICKER_LENGTH}", bg=PANEL, fg=MUTED, font=("Segoe UI", 8))
+            self.story_count.grid(row=1, column=0, sticky="e", pady=(3, 0))
+            self.field_widgets["story_text"] = self.story_text
+            row += 1
+        else:
+            self.story_text = tk.Text(self)
+            self.story_count = tk.Label(self)
+            self.custom_row = -1
 
         self.manual_toggle_label = (
             f"Festival / Individual YouTube Videos (up to {MAX_INDIVIDUAL_VIDEO_URLS})"
             if self.project_type is ProjectType.MUSIC
-            else f"Individual YouTube Videos (up to {MAX_INDIVIDUAL_VIDEO_URLS})"
+            else f"YouTube Content (up to {manual_url_limit_for_project_type(self.project_type)})"
         )
         self.manual_toggle = tk.Button(
             self, text=f"▸  {self.manual_toggle_label}", command=self._toggle_manual,
@@ -158,7 +175,8 @@ class ProjectForm(tk.Frame):
         window = canvas.create_window((0, 0), window=rows, anchor="nw")
         rows.bind("<Configure>", lambda _event: canvas.configure(scrollregion=canvas.bbox("all")))
         canvas.bind("<Configure>", lambda event: canvas.itemconfigure(window, width=event.width))
-        self.manual_vars = [tk.StringVar() for _ in range(MAX_INDIVIDUAL_VIDEO_URLS)]
+        manual_limit = manual_url_limit_for_project_type(self.project_type)
+        self.manual_vars = [tk.StringVar() for _ in range(manual_limit)]
         self.manual_entries: list[tk.Entry] = []
         for index, variable in enumerate(self.manual_vars, start=1):
             item = tk.Frame(rows, bg="#12151a")
@@ -169,6 +187,9 @@ class ProjectForm(tk.Frame):
             self.manual_entries.append(entry)
         self.field_widgets["manual_video_urls"] = self.manual_entries[0]
         row += 1
+
+        if self.project_type is ProjectType.BANJO:
+            row = self._build_banjo_fields(row)
 
         self.validation_label = tk.Label(self, text="", bg=PANEL, fg=ERROR, anchor="w", justify="left", font=("Segoe UI Semibold", 8))
         self.validation_label.grid(row=row, column=0, columnspan=2, sticky="ew", padx=22, pady=(3, 1))
@@ -184,6 +205,51 @@ class ProjectForm(tk.Frame):
         self.stage_note.pack(side="left", padx=14)
         self._toggle_manual(force=False)
         self._update_custom_visibility()
+
+    def _build_banjo_fields(self, row: int) -> int:
+        heading = tk.Label(self, text="BANJO'S CHOICE AWARDS — MAXIMUM 4", bg=PANEL_2, fg=BRASS, anchor="w", font=("Segoe UI Semibold", 10), padx=11, pady=8)
+        heading.grid(row=row, column=0, columnspan=2, sticky="ew", padx=22, pady=(10, 5))
+        row += 1
+        for index in range(4):
+            shell = tk.Frame(self, bg=PANEL)
+            shell.grid(row=row, column=0, columnspan=2, sticky="ew", padx=22, pady=3)
+            shell.columnconfigure(1, weight=1)
+            tk.Checkbutton(shell, text=f"{index + 1} ACTIVE", variable=self.banjo_choice_active_vars[index], bg=PANEL, fg=CREAM, selectcolor=PANEL_2, activebackground=PANEL, activeforeground=PAPER, font=("Segoe UI Semibold", 8)).grid(row=0, column=0, rowspan=2, sticky="w", padx=(0, 8))
+            url_entry = tk.Entry(shell, textvariable=self.banjo_choice_url_vars[index], bg="#101217", fg=PAPER, insertbackground=PAPER, relief="flat", highlightbackground=DEEP_BRASS, highlightthickness=1, font=("Segoe UI", 9))
+            url_entry.grid(row=0, column=1, sticky="ew", ipady=5)
+            title_entry = tk.Entry(shell, textvariable=self.banjo_choice_title_vars[index], bg="#101217", fg=PAPER, insertbackground=PAPER, relief="flat", highlightbackground=DEEP_BRASS, highlightthickness=1, font=("Segoe UI", 9))
+            title_entry.grid(row=1, column=1, sticky="ew", pady=(3, 0), ipady=5)
+            if index == 0:
+                self.field_widgets["banjo_choices"] = url_entry
+            row += 1
+
+        tk.Label(self, text="SPONSOR", bg=PANEL_2, fg=BRASS, anchor="w", font=("Segoe UI Semibold", 10), padx=11, pady=8).grid(row=row, column=0, columnspan=2, sticky="ew", padx=22, pady=(10, 5))
+        row += 1
+        tk.Checkbutton(self, text="SPONSOR ACTIVE", variable=self.sponsor_active_var, bg=PANEL, fg=CREAM, selectcolor=PANEL_2, activebackground=PANEL, activeforeground=PAPER, font=("Segoe UI Semibold", 9)).grid(row=row, column=0, columnspan=2, sticky="w", padx=22, pady=4)
+        row += 1
+        row = self._entry_row(row, "Sponsor Title", self.sponsor_title_var, "sponsor_title")
+        row = self._entry_row(row, "Sponsor URL", self.sponsor_url_var, "sponsor_url")
+        tk.Label(self, text="SPONSOR VIDEOS — MAXIMUM 4 · MP4 ONLY · 10 MB EACH", bg=PANEL_2, fg=BRASS, anchor="w", font=("Segoe UI Semibold", 10), padx=11, pady=8).grid(row=row, column=0, columnspan=2, sticky="ew", padx=22, pady=(10, 5))
+        row += 1
+
+        def choose(slot: int) -> None:
+            selected = filedialog.askopenfilename(parent=self, title=f"Select Sponsor Video {slot + 1}", filetypes=[("MP4 video", "*.mp4")])
+            if selected:
+                self.sponsor_path_vars[slot].set(selected)
+                self.sponsor_creative_active_vars[slot].set(True)
+
+        for index in range(4):
+            shell = tk.Frame(self, bg=PANEL)
+            shell.grid(row=row, column=0, columnspan=2, sticky="ew", padx=22, pady=3)
+            shell.columnconfigure(1, weight=1)
+            tk.Checkbutton(shell, text=f"{index + 1} ACTIVE", variable=self.sponsor_creative_active_vars[index], bg=PANEL, fg=CREAM, selectcolor=PANEL_2, activebackground=PANEL, activeforeground=PAPER, font=("Segoe UI Semibold", 8)).grid(row=0, column=0, sticky="w", padx=(0, 8))
+            entry = tk.Entry(shell, textvariable=self.sponsor_path_vars[index], state="readonly", readonlybackground="#101217", fg=PAPER, relief="flat", highlightbackground=DEEP_BRASS, highlightthickness=1, font=("Segoe UI", 8))
+            entry.grid(row=0, column=1, sticky="ew", ipady=5)
+            tk.Button(shell, text="SELECT / REPLACE MP4", command=lambda slot=index: choose(slot), bg=PANEL_2, fg=CREAM, activebackground="#303641", activeforeground=PAPER, relief="flat", bd=0, font=("Segoe UI Semibold", 8), padx=8, pady=6).grid(row=0, column=2, padx=(7, 0))
+            if index == 0:
+                self.field_widgets["sponsor_creatives"] = entry
+            row += 1
+        return row
 
     def _entry_row(self, row: int, label: str, variable: tk.StringVar, field_name: str) -> int:
         tk.Label(self, text=label, bg=PANEL, fg=CREAM, anchor="e", font=("Segoe UI", 9)).grid(row=row, column=0, sticky="e", padx=(22, 12), pady=5)
@@ -210,6 +276,8 @@ class ProjectForm(tk.Frame):
             self.manual_toggle.configure(text=f"▸  {self.manual_toggle_label}")
 
     def _update_custom_visibility(self) -> None:
+        if self.project_type is ProjectType.BANJO:
+            return
         label = self.cta_var.get()
         widget = self.field_widgets["custom_label"]
         if label == "Custom":
@@ -237,6 +305,14 @@ class ProjectForm(tk.Frame):
             # an existing project is edited; they are no longer active CTA inputs.
             more_info_url=self.more_info_var.get(),
             stay_url=self.stay_var.get(),
+            banjo_choice_urls=[variable.get() for variable in self.banjo_choice_url_vars],
+            banjo_choice_titles=[variable.get() for variable in self.banjo_choice_title_vars],
+            banjo_choice_active=[variable.get() for variable in self.banjo_choice_active_vars],
+            sponsor_active=self.sponsor_active_var.get(),
+            sponsor_title=self.sponsor_title_var.get(),
+            sponsor_url=self.sponsor_url_var.get(),
+            sponsor_creative_paths=[variable.get() for variable in self.sponsor_path_vars],
+            sponsor_creative_active=[variable.get() for variable in self.sponsor_creative_active_vars],
         )
 
     def set_values(self, values: ProjectFormValues) -> None:
@@ -252,8 +328,21 @@ class ProjectForm(tk.Frame):
         self.stay_var.set(values.stay_url)
         for variable, value in zip(
             self.manual_vars,
-            [*values.manual_video_urls, *("" for _ in range(MAX_INDIVIDUAL_VIDEO_URLS))][:MAX_INDIVIDUAL_VIDEO_URLS],
+            [*values.manual_video_urls, *("" for _ in range(len(self.manual_vars)))][:len(self.manual_vars)],
         ):
+            variable.set(value)
+        for variable, value in zip(self.banjo_choice_url_vars, [*values.banjo_choice_urls, "", "", "", ""][:4]):
+            variable.set(value)
+        for variable, value in zip(self.banjo_choice_title_vars, [*values.banjo_choice_titles, "", "", "", ""][:4]):
+            variable.set(value)
+        for variable, value in zip(self.banjo_choice_active_vars, [*values.banjo_choice_active, False, False, False, False][:4]):
+            variable.set(value)
+        self.sponsor_active_var.set(values.sponsor_active)
+        self.sponsor_title_var.set(values.sponsor_title)
+        self.sponsor_url_var.set(values.sponsor_url)
+        for variable, value in zip(self.sponsor_path_vars, [*values.sponsor_creative_paths, "", "", "", ""][:4]):
+            variable.set(value)
+        for variable, value in zip(self.sponsor_creative_active_vars, [*values.sponsor_creative_active, False, False, False, False][:4]):
             variable.set(value)
         self.story_text.delete("1.0", "end")
         self.story_text.insert("1.0", values.story_text)
@@ -264,13 +353,19 @@ class ProjectForm(tk.Frame):
 
     def clear_new(self) -> None:
         self.editing_project_id = None
-        values = ProjectFormValues(cta_label=DEFAULT_CTA_LABEL_BY_PROJECT[self.project_type])
+        values = ProjectFormValues(
+            title=BANJO_TITLE if self.project_type is ProjectType.BANJO else "",
+            story_text="" if self.project_type is ProjectType.BANJO else ProjectFormValues().story_text,
+            cta_label=DEFAULT_CTA_LABEL_BY_PROJECT[self.project_type],
+        )
         self.set_values(values)
         name = self.project_type.value.upper()
         self.mode_label.configure(text=f"NEW {name} PROJECT")
         self.submit_button.configure(text="CREATE CRISPY BITS")
         if self.project_type is ProjectType.MUSIC:
             self.stage_note.configure(text=f"Channel optional — add up to {MAX_INDIVIDUAL_VIDEO_URLS} videos from any artists.")
+        elif self.project_type is ProjectType.BANJO:
+            self.stage_note.configure(text="Channel optional · 40 YouTube videos · 4 awards · 4 sponsor MP4s.")
         else:
             self.stage_note.configure(text="Analyse and review videos, then build locally.")
         self.mark_clean()
@@ -295,6 +390,10 @@ class ProjectForm(tk.Frame):
             story_text=str(self._baseline[3]), manual_video_urls=list(self._baseline[4]), shop_url=str(self._baseline[5]),
             cta_label=str(self._baseline[6]), destination_url=str(self._baseline[7]), custom_label=str(self._baseline[8]),
             more_info_url=str(self._baseline[9]), stay_url=str(self._baseline[10]),
+            banjo_choice_urls=list(self._baseline[11]), banjo_choice_titles=list(self._baseline[12]),
+            banjo_choice_active=list(self._baseline[13]), sponsor_active=bool(self._baseline[14]),
+            sponsor_title=str(self._baseline[15]), sponsor_url=str(self._baseline[16]),
+            sponsor_creative_paths=list(self._baseline[17]), sponsor_creative_active=list(self._baseline[18]),
         )
         self.set_values(values)
         self.mark_clean()
@@ -417,7 +516,7 @@ class Factory(tk.Tk):
 
         self.notebook = ttk.Notebook(self, style="Desktop.TNotebook")
         self.notebook.pack(fill="both", expand=True, padx=12, pady=(0, 10))
-        self.tab_types: list[ProjectType] = [ProjectType.BUSINESS, ProjectType.MUSIC, ProjectType.TOURISM]
+        self.tab_types: list[ProjectType] = [ProjectType.BUSINESS, ProjectType.MUSIC, ProjectType.TOURISM, ProjectType.BANJO]
         for project_type in self.tab_types:
             page = tk.Frame(self.notebook, bg=INK)
             self.notebook.add(page, text=project_type.value.upper())
@@ -568,7 +667,7 @@ class Factory(tk.Tk):
         if form.is_dirty() and not self._resolve_unsaved(form, "open another project"):
             return
         form.load_project(project)
-        form.field_widgets["title"].focus_set()
+        form.field_widgets["channel_url" if project.project_type is ProjectType.BANJO else "title"].focus_set()
 
     def _edit_videos_selected(self) -> None:
         project = self._selected_project()
@@ -631,7 +730,7 @@ class Factory(tk.Tk):
         variables: dict[str, tk.BooleanVar] = {}
 
         def update_count() -> None:
-            count_label.configure(text=f"{session.included_count} / {MAX_VIDEOS} INCLUDED")
+            count_label.configure(text=f"{session.included_count} / {session.maximum} INCLUDED")
 
         def toggle(video_id: str, variable: tk.BooleanVar) -> None:
             try:
@@ -776,7 +875,7 @@ class Factory(tk.Tk):
         if form.is_dirty() and not self._resolve_unsaved(form, "start a new project"):
             return
         form.clear_new()
-        form.field_widgets["title"].focus_set()
+        form.field_widgets["channel_url" if project_type is ProjectType.BANJO else "title"].focus_set()
 
     def _submit_project(self, project_type: ProjectType) -> bool:
         if self.busy:
@@ -879,16 +978,17 @@ class Factory(tk.Tk):
         if existing and existing.project_type is not project_type:
             messagebox.showerror(DESKTOP_TITLE, "A saved project cannot be changed to a different project type.")
             return False
-        slug = existing.slug if existing else self.store.allocate_slug(values.title)
+        slug = existing.slug if existing else self.store.allocate_slug(BANJO_DEFAULT_SLUG if project_type is ProjectType.BANJO else values.title)
+        video_limit = video_limit_for_project_type(project_type)
 
         def worker() -> dict[str, object]:
             client = YouTubeClient(api_key)
             manual_catalogue = client.fetch_videos(values.manual_video_urls) if values.manual_video_urls else None
-            channel_catalogue = client.fetch_catalogue(values.channel_url, MAX_VIDEOS) if values.channel_url else None
+            channel_catalogue = client.fetch_catalogue(values.channel_url, video_limit) if values.channel_url else None
             videos = merge_video_selections(
                 manual_catalogue.videos if manual_catalogue else [],
                 channel_catalogue.videos if channel_catalogue else [],
-                MAX_VIDEOS,
+                video_limit,
             )
             catalogue = channel_catalogue or manual_catalogue
             if catalogue is None or not videos:
@@ -1044,6 +1144,11 @@ class Factory(tk.Tk):
             if not selected:
                 messagebox.showerror(DESKTOP_TITLE, "Include at least one video before building the jukebox.", parent=dialog)
                 return
+            project_type = ProjectType(candidate.get("project_type", ProjectType.BUSINESS))
+            maximum = video_limit_for_project_type(project_type)
+            if len(selected) > maximum:
+                messagebox.showerror(DESKTOP_TITLE, f"Maximum {maximum} videos can be included.", parent=dialog)
+                return
             canvas.unbind_all("<MouseWheel>")
             dialog.destroy()
             self._finish_jukebox(candidate, selected)
@@ -1079,6 +1184,16 @@ class Factory(tk.Tk):
             self.logger.info("Build started slug=%s type=%s", slug, project_type.value)
             editing_project_id = str(candidate.get("editing_project_id") or "")
             existing = self.projects.get(editing_project_id) if editing_project_id else None
+            project_dir = self.store.project_dir(slug)
+            banjo_config = None
+            if project_type is ProjectType.BANJO:
+                banjo_config = materialize_banjo_config(
+                    values,
+                    list(candidate["videos"]),
+                    {video.video_id for video in videos},
+                    project_dir,
+                    existing.banjo_config if existing else None,
+                )
             project = assemble_reviewed_project(
                 project_type=project_type,
                 values=values,
@@ -1088,11 +1203,20 @@ class Factory(tk.Tk):
                 source_results=list(candidate.get("source_results", [])),
                 slug=slug,
                 existing=existing,
+                banjo_config=banjo_config,
             )
-            project_dir = self.store.project_dir(slug)
             build_project_site(project, project_dir / "site")
             self.store.save_project(project)
-            self.logger.info("Build completed slug=%s videos=%s", project.slug, len(project.videos))
+            if banjo_config:
+                creative_count, sponsor_bytes = sponsor_media_summary(banjo_config.sponsor.creatives)
+                award_count = sum(item.active for item in banjo_config.banjos_choice)
+                site_bytes = sum(path.stat().st_size for path in (project_dir / "site").rglob("*") if path.is_file())
+                self.logger.info(
+                    "Banjo build completed slug=%s youtube=%s awards=%s sponsor_creatives=%s sponsor_bytes=%s site_bytes=%s",
+                    project.slug, len(videos), award_count, creative_count, sponsor_bytes, site_bytes,
+                )
+            else:
+                self.logger.info("Build completed slug=%s videos=%s", project.slug, len(project.videos))
             return project
 
         self._run_async("BUILDING THE REVIEWED JUKEBOX…", worker, self._create_complete)
@@ -1103,10 +1227,22 @@ class Factory(tk.Tk):
         included_count = len([video for video in project.videos if video.video_id not in set(project.excluded_video_ids)])
         self.forms[project.project_type].load_project(project)
         self._open_project_preview(project)
+        summary = ""
+        if project.project_type is ProjectType.BANJO and project.banjo_config:
+            sponsor_count, sponsor_bytes = sponsor_media_summary(project.banjo_config.sponsor.creatives)
+            award_count = sum(item.active for item in project.banjo_config.banjos_choice)
+            site_bytes = sum(path.stat().st_size for path in (self.store.project_dir(project.slug) / "site").rglob("*") if path.is_file())
+            summary = (
+                f"\n\nYouTube videos: {included_count} / 40"
+                f"\nBanjo's Choice: {award_count} / 4"
+                f"\nSponsor videos: {sponsor_count} / 4"
+                f"\nSponsor media: {sponsor_bytes / (1024 * 1024):.2f} MB"
+                f"\nGenerated site: {site_bytes / (1024 * 1024):.2f} MB"
+            )
         if editing:
-            messagebox.showinfo(DESKTOP_TITLE, f"{project.title} now has {included_count} included videos and its local preview has opened.\n\nThe existing live jukebox is unchanged. Press UPDATE + REPUBLISH in the Library when you are ready.")
+            messagebox.showinfo(DESKTOP_TITLE, f"{project.title} now has {included_count} included videos and its local preview has opened.{summary}\n\nThe existing live jukebox is unchanged. Press UPDATE + REPUBLISH in the Library when you are ready.")
         else:
-            messagebox.showinfo(DESKTOP_TITLE, f"{project.title} was created with {included_count} videos and its local preview has opened.\n\nIt is private until you press PUBLISH in the Library.")
+            messagebox.showinfo(DESKTOP_TITLE, f"{project.title} was created with {included_count} videos and its local preview has opened.{summary}\n\nIt is private until you press PUBLISH in the Library.")
 
     def _open_project_preview(self, project: Project) -> bool:
         site = self.store.project_dir(project.slug) / "site"

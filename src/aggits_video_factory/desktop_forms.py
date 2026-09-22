@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Iterable
 from uuid import uuid4
 
-from .config import MAX_TICKER_LENGTH
+from .banjo import BANJO_TITLE, validate_sponsor_mp4
+from .config import MAX_BANJO_VIDEOS, MAX_TICKER_LENGTH
 from .models import (
     BusinessConfig, MusicConfig, PrimaryCta, PrimaryCtaType, Project, ProjectType,
     TourismConfig, project_primary_cta, utc_now,
@@ -53,15 +55,20 @@ CTA_CHOICES_BY_PROJECT = {
     ProjectType.BUSINESS: BUSINESS_CTA_CHOICES,
     ProjectType.MUSIC: CTA_CHOICES,
     ProjectType.TOURISM: TOURISM_CTA_CHOICES,
+    ProjectType.BANJO: (),
 }
 CTA_LABEL_TO_TYPE_BY_PROJECT = {kind: dict(choices) for kind, choices in CTA_CHOICES_BY_PROJECT.items()}
 CTA_TYPE_TO_LABEL_BY_PROJECT = {kind: {cta_type: label for label, cta_type in choices} for kind, choices in CTA_CHOICES_BY_PROJECT.items()}
 CTA_LABEL_TO_TYPE = dict(CTA_CHOICES)  # Backward-compatible Music aliases.
 CTA_TYPE_TO_LABEL = {cta_type: label for label, cta_type in CTA_CHOICES}
 DEFAULT_CTA_LABEL = CTA_CHOICES[0][0]
-DEFAULT_CTA_LABEL_BY_PROJECT = {kind: choices[0][0] for kind, choices in CTA_CHOICES_BY_PROJECT.items()}
+DEFAULT_CTA_LABEL_BY_PROJECT = {kind: choices[0][0] if choices else "" for kind, choices in CTA_CHOICES_BY_PROJECT.items()}
 DEFAULT_STORY = "PULL THE LEVER. LET THE MACHINE CHOOSE WHAT YOU WATCH NEXT."
 MAX_INDIVIDUAL_VIDEO_URLS = 25
+
+
+def manual_url_limit_for_project_type(project_type: ProjectType | str) -> int:
+    return MAX_BANJO_VIDEOS if ProjectType(project_type) is ProjectType.BANJO else MAX_INDIVIDUAL_VIDEO_URLS
 
 
 class FormValidationError(ValueError):
@@ -83,6 +90,14 @@ class ProjectFormValues:
     custom_label: str = ""
     more_info_url: str = ""
     stay_url: str = ""
+    banjo_choice_urls: list[str] = field(default_factory=list)
+    banjo_choice_titles: list[str] = field(default_factory=list)
+    banjo_choice_active: list[bool] = field(default_factory=list)
+    sponsor_active: bool = False
+    sponsor_title: str = ""
+    sponsor_url: str = ""
+    sponsor_creative_paths: list[str] = field(default_factory=list)
+    sponsor_creative_active: list[bool] = field(default_factory=list)
 
     def comparable(self) -> tuple[object, ...]:
         return (
@@ -97,6 +112,14 @@ class ProjectFormValues:
             self.custom_label,
             self.more_info_url,
             self.stay_url,
+            tuple(self.banjo_choice_urls),
+            tuple(self.banjo_choice_titles),
+            tuple(self.banjo_choice_active),
+            bool(self.sponsor_active),
+            self.sponsor_title,
+            self.sponsor_url,
+            tuple(self.sponsor_creative_paths),
+            tuple(self.sponsor_creative_active),
         )
 
 
@@ -110,6 +133,14 @@ class ValidatedProjectForm:
     business_config: BusinessConfig | None
     music_config: MusicConfig | None
     tourism_config: TourismConfig | None
+    banjo_choice_urls: list[str] = field(default_factory=list)
+    banjo_choice_titles: list[str] = field(default_factory=list)
+    banjo_choice_active: list[bool] = field(default_factory=list)
+    sponsor_active: bool = False
+    sponsor_title: str = ""
+    sponsor_url: str = ""
+    sponsor_creative_paths: list[str] = field(default_factory=list)
+    sponsor_creative_active: list[bool] = field(default_factory=list)
 
 
 def _clean_urls(values: Iterable[str]) -> list[str]:
@@ -118,7 +149,7 @@ def _clean_urls(values: Iterable[str]) -> list[str]:
 
 def validate_project_form(values: ProjectFormValues, project_type: ProjectType | str) -> ValidatedProjectForm:
     project_type = ProjectType(project_type)
-    title = re.sub(r"\s+", " ", values.title).strip()
+    title = BANJO_TITLE if project_type is ProjectType.BANJO else re.sub(r"\s+", " ", values.title).strip()
     if not title:
         raise FormValidationError("title", "Title is required.")
     if len(title) > 120:
@@ -130,7 +161,7 @@ def validate_project_form(values: ProjectFormValues, project_type: ProjectType |
         raise FormValidationError("additional_urls", "A project can contain no more than three additional URLs.")
 
     manual_urls = _clean_urls(values.manual_video_urls)
-    if project_type is ProjectType.MUSIC:
+    if project_type in {ProjectType.MUSIC, ProjectType.BANJO}:
         # Festival and multi-artist Music projects do not need a channel. If a
         # YouTube video was pasted into an Additional Web Page field, route it
         # into the authoritative individual-video list instead of attempting
@@ -155,17 +186,72 @@ def validate_project_form(values: ProjectFormValues, project_type: ProjectType |
         seen_video_ids.add(video_id)
         unique_manual_urls.append(url)
     manual_urls = unique_manual_urls
-    if len(manual_urls) > MAX_INDIVIDUAL_VIDEO_URLS:
+    manual_limit = manual_url_limit_for_project_type(project_type)
+    if len(manual_urls) > manual_limit:
         raise FormValidationError(
             "manual_video_urls",
-            f"No more than {MAX_INDIVIDUAL_VIDEO_URLS} individual YouTube videos can be added during project creation.",
+            f"No more than {manual_limit} individual YouTube videos can be added during project creation.",
         )
     if not channel_url and not manual_urls:
         raise FormValidationError("channel_url", "Add a YouTube channel URL or at least one individual YouTube video.")
 
-    story_text = values.story_text.strip()
+    story_text = "" if project_type is ProjectType.BANJO else values.story_text.strip()
     if len(story_text) > MAX_TICKER_LENGTH:
         raise FormValidationError("story_text", f"Bio / Story Information cannot exceed {MAX_TICKER_LENGTH} characters.")
+
+    if project_type is ProjectType.BANJO:
+        choice_rows = [
+            (str(url or "").strip(), str(values.banjo_choice_titles[index] if index < len(values.banjo_choice_titles) else "").strip(),
+             bool(values.banjo_choice_active[index]) if index < len(values.banjo_choice_active) else True)
+            for index, url in enumerate(values.banjo_choice_urls)
+            if str(url or "").strip()
+        ]
+        choice_urls = [row[0] for row in choice_rows]
+        choice_titles = [row[1] for row in choice_rows]
+        choice_active = [row[2] for row in choice_rows]
+        if len(choice_urls) > 4 or sum(choice_active[:len(choice_urls)]) > 4:
+            raise FormValidationError("banjo_choices", "A Banjo project can have no more than four active Banjo's Choice awards.")
+        if any(not YouTubeClient.video_id_from_url(url) for url in choice_urls):
+            raise FormValidationError("banjo_choices", "Banjo's Choice entries must use recognised YouTube video URLs.")
+        if any(len(title) > 80 for title in choice_titles):
+            raise FormValidationError("banjo_choices", "Banjo's Choice display titles cannot exceed 80 characters.")
+        sponsor_title = str(values.sponsor_title or "").strip()
+        sponsor_url = str(values.sponsor_url or "").strip()
+        if len(sponsor_title) > 40:
+            raise FormValidationError("sponsor_title", "Sponsor Title cannot exceed 40 characters.")
+        if values.sponsor_active and (not sponsor_title or not sponsor_url):
+            raise FormValidationError("sponsor_title", "Active sponsorship requires Sponsor Title and Sponsor URL.")
+        if sponsor_url:
+            try:
+                PrimaryCta(PrimaryCtaType.CUSTOM, sponsor_url, custom_label="SPONSOR")
+            except ValueError as error:
+                raise FormValidationError("sponsor_url", str(error)) from error
+        creative_rows = [
+            (str(path or "").strip(), bool(values.sponsor_creative_active[index]) if index < len(values.sponsor_creative_active) else True)
+            for index, path in enumerate(values.sponsor_creative_paths)
+            if str(path or "").strip()
+        ]
+        creative_paths = [row[0] for row in creative_rows]
+        if len(creative_paths) > 4:
+            raise FormValidationError("sponsor_creatives", "A Banjo project can contain no more than four sponsor MP4s.")
+        for path in creative_paths:
+            # Existing project-relative assets are validated during build. New
+            # operator selections are validated before any project mutation.
+            if not path.replace("\\", "/").startswith("assets/sponsor-"):
+                try:
+                    validate_sponsor_mp4(Path(path))
+                except ValueError as error:
+                    raise FormValidationError("sponsor_creatives", str(error)) from error
+        return ValidatedProjectForm(
+            title=BANJO_TITLE, channel_url=channel_url, additional_urls=[], story_text="",
+            manual_video_urls=manual_urls, business_config=None, music_config=None, tourism_config=None,
+            banjo_choice_urls=choice_urls,
+            banjo_choice_titles=choice_titles[:len(choice_urls)],
+            banjo_choice_active=choice_active[:len(choice_urls)],
+            sponsor_active=bool(values.sponsor_active), sponsor_title=sponsor_title, sponsor_url=sponsor_url,
+            sponsor_creative_paths=creative_paths,
+            sponsor_creative_active=[row[1] for row in creative_rows],
+        )
 
     try:
         selected_label = values.cta_label
@@ -266,6 +352,26 @@ def validate_project_form(values: ProjectFormValues, project_type: ProjectType |
 
 
 def project_to_form_values(project: Project) -> ProjectFormValues:
+    if project.project_type is ProjectType.BANJO:
+        config = project.banjo_config
+        choices = list(config.banjos_choice) if config else []
+        sponsor = config.sponsor if config else None
+        by_id = {video.video_id: video.url for video in project.videos}
+        return ProjectFormValues(
+            title=BANJO_TITLE,
+            channel_url=project.source_channel_url or project.channel_url,
+            manual_video_urls=list(project.manual_video_urls),
+            story_text="",
+            cta_label="",
+            banjo_choice_urls=[by_id.get(item.video_id, "") for item in choices],
+            banjo_choice_titles=[item.display_title for item in choices],
+            banjo_choice_active=[item.active for item in choices],
+            sponsor_active=bool(sponsor and sponsor.active),
+            sponsor_title=sponsor.title if sponsor else "",
+            sponsor_url=sponsor.url or "" if sponsor else "",
+            sponsor_creative_paths=[item.asset_path for item in sponsor.creatives] if sponsor else [],
+            sponsor_creative_active=[item.active for item in sponsor.creatives] if sponsor else [],
+        )
     cta = project_primary_cta(project)
     default_label = DEFAULT_CTA_LABEL_BY_PROJECT[project.project_type]
     return ProjectFormValues(

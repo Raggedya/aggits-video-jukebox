@@ -157,6 +157,20 @@ test("valid authenticated Tourism request is accepted without changing recipient
 });
 
 
+test("valid authenticated Banjo request is accepted without weakening recipient security", async () => {
+  const env = environment();
+  const mock = installFetchMock({ machineProjectType: "banjo", machineTitle: "BANJO'S WORLD OF CARS" });
+  try {
+    const body = payload({ projectType: "banjo", title: "BANJO'S WORLD OF CARS", productName: "BANJO'S WORLD OF CARS" });
+    const response = await worker.fetch(signedRequest(body, { nonce: "ab".repeat(16) }), env);
+    assert.equal(response.status, 201);
+    const resend = mock.calls.find((call) => call.url.includes("api.resend.com"));
+    assert.deepEqual(JSON.parse(resend.init.body).to, ["listener@example.com"]);
+    assert.equal(env.DB.deliveries.size, 1);
+  } finally { mock.restore(); }
+});
+
+
 test("missing invalid modified expired and future authentication is rejected without secret disclosure", async () => {
   const now = Math.floor(Date.now() / 1000);
   const cases = [

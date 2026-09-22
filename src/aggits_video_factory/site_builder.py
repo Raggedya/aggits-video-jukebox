@@ -11,6 +11,7 @@ from PIL import Image, ImageDraw, ImageFont
 from qrcode.constants import ERROR_CORRECT_H
 
 from .config import BRAND_NAME, PUBLIC_BASE_URL, resource_path
+from .banjo import BANJO_TITLE, validate_sponsor_mp4, verify_banjo_character
 from .models import Project, ProjectType, project_primary_cta
 from .social_preview import replace_social_preview, social_preview_filename
 
@@ -151,11 +152,12 @@ def create_qr_card(project: Project, destination: Path) -> None:
 
 
 def build_project_site(project: Project, destination: Path) -> Path:
-    if project.project_type not in {ProjectType.BUSINESS, ProjectType.MUSIC, ProjectType.TOURISM}:
+    if project.project_type not in {ProjectType.BUSINESS, ProjectType.MUSIC, ProjectType.TOURISM, ProjectType.BANJO}:
         raise ValueError(f"Unsupported project type: {project.project_type!r}.")
     primary_cta = project_primary_cta(project)
     music_cta = project.music_config.primary_cta if project.music_config else None
     tourism_config = project.tourism_config if project.project_type is ProjectType.TOURISM else None
+    banjo_config = project.banjo_config if project.project_type is ProjectType.BANJO else None
     if project.project_type is ProjectType.MUSIC and primary_cta is None:
         raise ValueError("A Music project requires a configured primary CTA before generation.")
     destination.mkdir(parents=True, exist_ok=True)
@@ -163,6 +165,15 @@ def build_project_site(project: Project, destination: Path) -> Path:
     if assets.exists():
         shutil.rmtree(assets)
     shutil.copytree(resource_path("static"), assets)
+    if project.project_type is ProjectType.BANJO:
+        character = assets / "banjo" / "banjo-approved-header.png"
+        verify_banjo_character(character)
+        sponsor_output = assets / "banjo-sponsor"
+        sponsor_output.mkdir(parents=True, exist_ok=True)
+        for creative in banjo_config.sponsor.creatives if banjo_config else []:
+            source = destination.parent / creative.asset_path
+            validate_sponsor_mp4(source)
+            shutil.copy2(source, sponsor_output / f"sponsor-{creative.creative_id}.mp4")
 
     canonical = project.published_url if str(project.published_url or "").startswith("https://") else f"{PUBLIC_BASE_URL}/{project.slug}/"
     social_filename = social_preview_filename(project.title)
@@ -173,7 +184,7 @@ def build_project_site(project: Project, destination: Path) -> Path:
     social_title = project.title.strip() or BRAND_NAME
     description = f"Hit it. Discover {social_title} with Crispy Bits."
     story_sections = _story_sections(project.ticker_text, project.title, project.project_type)
-    primary_action_label = primary_cta.display_label if primary_cta else "PRIMARY ACTION"
+    primary_action_label = primary_cta.display_label if primary_cta else ("CONTEXT" if project.project_type is ProjectType.BANJO else "PRIMARY ACTION")
     primary_action_aria = primary_action_label if primary_cta and primary_cta.destination_url else f"{primary_action_label} unavailable"
     initial_reel_instruction = "PULL THE LEVER  ──────→"
     story_header_markup = ""
@@ -185,7 +196,22 @@ def build_project_site(project: Project, destination: Path) -> Path:
         "{{SOCIAL_IMAGE_ALT}}": html.escape(f"{social_title} — Crispy Bits social preview", quote=True),
         "{{SOCIAL_TITLE}}": html.escape(social_title, quote=True),
         "{{DOCUMENT_TITLE}}": html.escape(f"{social_title} | Crispy Bits"),
-        "{{MACHINE_LABEL}}": html.escape(f"{project.title} CRISPY BITS Video Jukebox", quote=True),
+        "{{MACHINE_LABEL}}": html.escape(BANJO_TITLE if project.project_type is ProjectType.BANJO else f"{project.title} CRISPY BITS Video Jukebox", quote=True),
+        "{{PROJECT_TYPE}}": project.project_type.value,
+        "{{BANJO_CHARACTER_MARKUP}}": (
+            '<span class="banjo-header-character" aria-hidden="true"><img src="assets/banjo/banjo-approved-header.png" alt="" draggable="false"></span>'
+            if project.project_type is ProjectType.BANJO else ""
+        ),
+        "{{BANJO_SPONSOR_PLAYER_MARKUP}}": (
+            '<video data-sponsor-player preload="metadata" controls playsinline hidden aria-label="Sponsor video"></video>'
+            if project.project_type is ProjectType.BANJO else ""
+        ),
+        "{{BANJO_CHOICE_MARKUP}}": (
+            '<section class="banjo-choice-overlay" data-banjo-choice-overlay aria-hidden="true" role="status">'
+            '<small>BANJO\'S CHOICE AWARD</small><strong data-banjo-choice-title></strong>'
+            '<span>CHOSEN BY BANJO</span></section>'
+            if project.project_type is ProjectType.BANJO else ""
+        ),
         "{{MACHINE_TITLE}}": html.escape(project.title),
         "{{INITIAL_REEL_INSTRUCTION}}": initial_reel_instruction,
         "{{STORY_HEADER_MARKUP}}": story_header_markup,
@@ -234,7 +260,7 @@ def build_project_site(project: Project, destination: Path) -> Path:
         "videoCount": len(included_videos),
         "customerConfig": customer_config,
         "videos": [
-            {
+            ({
                 "id": item.video_id,
                 "videoId": item.video_id,
                 "title": item.title,
@@ -256,7 +282,17 @@ def build_project_site(project: Project, destination: Path) -> Path:
                 "durationSeconds": item.duration_seconds,
                 "channelTitle": item.channel_title,
                 "channelId": item.channel_id,
-            }
+            } | ({
+                "contentType": "youtube",
+                "isBanjosChoice": bool(
+                    banjo_config and any(choice.video_id == item.video_id and choice.active for choice in banjo_config.banjos_choice)
+                ),
+                "banjosChoiceTitle": next((
+                    choice.display_title or item.display_title
+                    for choice in (banjo_config.banjos_choice if banjo_config else [])
+                    if choice.video_id == item.video_id
+                ), ""),
+            } if project.project_type is ProjectType.BANJO else {}))
             for item in included_videos
         ],
     }
@@ -276,6 +312,34 @@ def build_project_site(project: Project, destination: Path) -> Path:
             "moreInfoEnabled": bool(more_info_url),
             "stayURL": stay_url,
             "stayEnabled": bool(stay_url),
+        }
+    if project.project_type is ProjectType.BANJO:
+        sponsor = banjo_config.sponsor if banjo_config else None
+        payload["banjoConfig"] = {
+            "title": BANJO_TITLE,
+            "banjosChoice": [
+                {
+                    "videoId": item.video_id,
+                    "displayTitle": item.display_title,
+                    "active": bool(item.active and item.video_id not in set(project.excluded_video_ids)),
+                }
+                for item in (banjo_config.banjos_choice if banjo_config else [])
+            ],
+            "sponsor": {
+                "active": bool(sponsor and sponsor.active),
+                "title": sponsor.title if sponsor else "",
+                "url": sponsor.url or "" if sponsor else "",
+                "normalDiscoveriesRequired": 5,
+                "creatives": [
+                    {
+                        "creativeId": item.creative_id,
+                        "assetUrl": f"assets/banjo-sponsor/sponsor-{item.creative_id}.mp4",
+                        "active": bool(item.active),
+                        "sizeBytes": item.size_bytes,
+                    }
+                    for item in (sponsor.creatives if sponsor else [])
+                ],
+            },
         }
     (destination / "machine.json").write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     create_qr_card(project, destination / "qr-card.png")
