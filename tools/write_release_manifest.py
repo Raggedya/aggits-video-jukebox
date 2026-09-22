@@ -70,7 +70,6 @@ Legacy source tag: {LEGACY_TAG}
 Known unresolved release items
 ------------------------------
 - Production delivery provisioning is incomplete unless the three statuses above say otherwise.
-- The source repository has no configured remote backup.
 - The executable is not Authenticode-signed.
 """
     args.output.parent.mkdir(parents=True, exist_ok=True)

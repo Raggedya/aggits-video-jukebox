@@ -7,7 +7,12 @@ param(
 $ErrorActionPreference = "Stop"
 $projectRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $buildRoot = [IO.Path]::GetFullPath((Join-Path $projectRoot ".release-build"))
-$releaseRoot = [IO.Path]::GetFullPath((Join-Path $projectRoot "release-artifacts\v3.0.0"))
+$sourceRoot = Join-Path $projectRoot "src"
+$env:PYTHONPATH = $sourceRoot
+$appVersion = (& py -3.12 -c "from aggits_video_factory.version import APP_VERSION; print(APP_VERSION)").Trim()
+if (-not $appVersion) { throw "Unable to resolve application version." }
+$releaseRoot = [IO.Path]::GetFullPath((Join-Path $projectRoot "release-artifacts\v$appVersion"))
+$releaseDocs = [IO.Path]::GetFullPath((Join-Path $projectRoot "docs\release-v$appVersion"))
 
 function Assert-WorkspaceChild([string]$Path) {
     $full = [IO.Path]::GetFullPath($Path)
@@ -26,8 +31,8 @@ function Invoke-Checked([scriptblock]$Command, [string]$Description) {
 }
 
 $branch = (& git -C $projectRoot branch --show-current).Trim()
-if ($branch -ne "crispy-bits-desktop-development") {
-    throw "Release builds must run from crispy-bits-desktop-development; current branch is '$branch'."
+if ($branch -notlike "crispy-bits-desktop*-development") {
+    throw "Release builds must run from a Crispy Bits Desktop development branch; current branch is '$branch'."
 }
 $dirty = (& git -C $projectRoot status --porcelain)
 if ($dirty) {
@@ -51,7 +56,7 @@ if ($actualPython -ne "3.12.10") { throw "Release requires Python 3.12.10; found
 $actualPyInstaller = (& $python -c "import PyInstaller; print(PyInstaller.__version__)").Trim()
 if ($actualPyInstaller -ne "6.22.2") { throw "Release requires PyInstaller 6.22.2; found $actualPyInstaller." }
 
-$env:PYTHONPATH = Join-Path $projectRoot "src"
+$env:PYTHONPATH = $sourceRoot
 $env:CRISPY_BITS_TEST_DIR = Join-Path $projectRoot "tests"
 Invoke-Checked { & $python -m compileall -q (Join-Path $projectRoot "src") (Join-Path $projectRoot "desktop") (Join-Path $projectRoot "tests") (Join-Path $projectRoot "tools") } "Python compilation"
 $pythonTestCount = [int]((& $python -c "import os, unittest; print(unittest.defaultTestLoader.discover(os.environ['CRISPY_BITS_TEST_DIR']).countTestCases())").Trim())
@@ -69,7 +74,7 @@ try {
 finally {
     Pop-Location
 }
-$workerTestCount = 9
+$workerTestCount = 22
 
 $versionFile = Join-Path $buildRoot "windows-version-info.txt"
 Invoke-Checked { & $python (Join-Path $projectRoot "tools\generate_version_resource.py") $versionFile } "Windows version-resource generation"
@@ -88,14 +93,14 @@ if ($smoke.ExitCode -ne 0) { throw "Packaged-resource smoke test failed with exi
 $info = (Get-Item -LiteralPath $builtExe).VersionInfo
 if ($info.ProductName -ne "CRISPY BITS DESKTOP") { throw "Incorrect ProductName: $($info.ProductName)" }
 if ($info.FileDescription -ne "CRISPY BITS DESKTOP") { throw "Incorrect FileDescription: $($info.FileDescription)" }
-if ($info.FileVersion -ne "3.0.0.0") { throw "Incorrect FileVersion: $($info.FileVersion)" }
-if ($info.ProductVersion -ne "3.0.0") { throw "Incorrect ProductVersion: $($info.ProductVersion)" }
+if ($info.FileVersion -ne "$appVersion.0") { throw "Incorrect FileVersion: $($info.FileVersion)" }
+if ($info.ProductVersion -ne $appVersion) { throw "Incorrect ProductVersion: $($info.ProductVersion)" }
 if ($info.OriginalFilename -ne $exeName) { throw "Incorrect OriginalFilename: $($info.OriginalFilename)" }
 
 $releaseExe = Join-Path $releaseRoot $exeName
 Copy-Item -LiteralPath $builtExe -Destination $releaseExe
-Copy-Item -LiteralPath (Join-Path $projectRoot "docs\release-v3.0.0\RELEASE-NOTES.txt") -Destination (Join-Path $releaseRoot "RELEASE-NOTES.txt")
-Copy-Item -LiteralPath (Join-Path $projectRoot "docs\release-v3.0.0\OPERATOR-GUIDE.txt") -Destination (Join-Path $releaseRoot "OPERATOR-GUIDE.txt")
+Copy-Item -LiteralPath (Join-Path $releaseDocs "RELEASE-NOTES.txt") -Destination (Join-Path $releaseRoot "RELEASE-NOTES.txt")
+Copy-Item -LiteralPath (Join-Path $releaseDocs "OPERATOR-GUIDE.txt") -Destination (Join-Path $releaseRoot "OPERATOR-GUIDE.txt")
 
 $releaseSmoke = Start-Process -FilePath $releaseExe -ArgumentList "--smoke-test" -WindowStyle Hidden -Wait -PassThru
 if ($releaseSmoke.ExitCode -ne 0) { throw "Copied release executable smoke test failed with exit code $($releaseSmoke.ExitCode)." }

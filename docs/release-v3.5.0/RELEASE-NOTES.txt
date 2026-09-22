@@ -1,0 +1,34 @@
+CRISPY BITS DESKTOP v3.5.0
+================================
+
+NEW
+
+- CHANNEL MASTER is now a fifth first-class desktop project type for
+  managing curated YouTube channel experiences.
+- BANJO'S WORLD OF CARS supports up to 40 YouTube videos, Banjo's Choice
+  awards, sponsor MP4 creatives, sponsor presentation, and Show Banjo car
+  submissions.
+- Banjo projects use the approved Banjo character, dedicated social preview
+  artwork, a rotating sponsor header, and a streamlined public layout.
+- The shared desktop Library, preview, publication, QR, delivery and recovery
+  workflows now recognise Banjo and Channel Master projects.
+
+PRESERVED
+
+- Existing Business, Music and Tourism project behaviour and public layouts.
+- Existing project UUIDs, slugs, public URLs and QR destinations.
+- Proven reel, lever, spin mathematics, landing behaviour and YouTube player.
+- Authenticated delivery security, recipient authority, replay protection and
+  idempotency.
+
+BACKWARD COMPATIBILITY
+
+Crispy Bits Desktop v3.5.0 reads existing schema-version 3 projects. Opening
+the application does not republish or change live projects. Public changes
+remain private until the operator deliberately previews and publishes or
+republishes them.
+
+CODE SIGNING
+
+This release contains embedded Windows product and version metadata but is
+unsigned because no trusted code-signing certificate is configured.

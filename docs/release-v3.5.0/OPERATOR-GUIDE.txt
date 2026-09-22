@@ -1,0 +1,47 @@
+CRISPY BITS DESKTOP v3.5.0 — OPERATOR QUICK GUIDE
+==================================================
+
+PROJECT TYPES
+
+The desktop provides BUSINESS, MUSIC, TOURISM, BANJO and CHANNEL MASTER.
+Choose the matching tab, complete its required fields, analyse or add YouTube
+content, review the included videos, save, and build a local preview.
+
+BANJO
+
+Banjo projects support up to 40 included YouTube videos, up to four active
+Banjo's Choice awards, and up to four sponsor MP4 creatives. Sponsor files are
+copied into project-controlled storage when the project is saved. Always check
+the local preview before publishing or republishing.
+
+CHANNEL MASTER
+
+Channel Master projects support curated channel programming through the
+shared YouTube review workflow. Use the Library to reopen the same durable
+project when its programming changes so its identity and public URL remain
+stable.
+
+LIBRARY AND PUBLICATION
+
+Use the Library actions to open, edit videos, preview, publish, check live
+status, republish, unpublish, create a QR code, or retry delivery where the
+action applies. Published edits remain private as changes pending until an
+intentional republish.
+
+PUBLISH RECOVERY
+
+If publication reports VERIFICATION PENDING, do not publish again. Select
+CHECK LIVE STATUS to reconcile the push that already occurred. This avoids
+unnecessary duplicate publication attempts.
+
+DELIVERY
+
+Delivery Email in Settings is the address used for authenticated Crispy Bits
+deliveries. If delivery fails, resolve the indicated issue and use RETRY EMAIL.
+Exact retries are designed to avoid duplicate email.
+
+VERSION NOTE
+
+Projects deliberately saved with v3.5.0 should continue to be edited with
+v3.5.0 or a later compatible release unless backward editing has specifically
+been verified.
