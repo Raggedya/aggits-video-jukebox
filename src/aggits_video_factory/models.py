@@ -3,11 +3,12 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
+from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 from uuid import UUID, uuid4
 
-from .config import video_limit_for_project_type
+from .config import ticker_limit_for_project_type, video_limit_for_project_type
 from .migrations import CURRENT_PROJECT_SCHEMA_VERSION, migrate_project_dict
 
 
@@ -413,6 +414,9 @@ class SponsorConfig:
     title: str = ""
     url: str | None = None
     creatives: list[SponsorCreative] = field(default_factory=list)
+    logo_asset_path: str = ""
+    logo_filename: str = ""
+    logo_size_bytes: int = 0
 
     def __post_init__(self) -> None:
         self.title = str(self.title or "").strip()
@@ -426,11 +430,23 @@ class SponsorConfig:
             raise ProjectValidationError("Sponsor creative IDs must be unique.")
         if self.active and (not self.title or not self.url):
             raise ProjectValidationError("Active sponsorship requires Sponsor Title and Sponsor URL.")
+        self.logo_asset_path = str(self.logo_asset_path or "").replace("\\", "/").strip()
+        self.logo_filename = str(self.logo_filename or "").strip()
+        self.logo_size_bytes = max(0, int(self.logo_size_bytes or 0))
+        if self.logo_asset_path:
+            path = self.logo_asset_path.lower()
+            if path.startswith(("/", "file:")) or ":" in path or ".." in path.split("/") or Path(path).suffix not in {".png", ".jpg", ".jpeg", ".webp"}:
+                raise ProjectValidationError("Sponsor logo asset path must be a safe project-relative PNG, JPG, JPEG or WebP path.")
+        if self.logo_size_bytes > 2 * 1024 * 1024:
+            raise ProjectValidationError("Sponsor logo files cannot exceed 2 MB.")
 
     def to_dict(self) -> dict[str, Any]:
         return {
             "active": bool(self.active), "title": self.title, "url": self.url,
             "creatives": [item.to_dict() for item in self.creatives],
+            "logo_asset_path": self.logo_asset_path,
+            "logo_filename": self.logo_filename,
+            "logo_size_bytes": self.logo_size_bytes,
         }
 
     @classmethod
@@ -441,6 +457,9 @@ class SponsorConfig:
             title=str(source.get("title") or ""),
             url=source.get("url"),
             creatives=[SponsorCreative.from_dict(item) for item in source.get("creatives", []) if isinstance(item, dict)],
+            logo_asset_path=str(source.get("logo_asset_path") or source.get("logoAssetPath") or ""),
+            logo_filename=str(source.get("logo_filename") or source.get("logoFilename") or ""),
+            logo_size_bytes=int(source.get("logo_size_bytes") or source.get("logoSizeBytes") or 0),
         )
 
 
@@ -613,6 +632,11 @@ class Project:
             self.project_type = ProjectType(self.project_type)
         except ValueError as error:
             raise ProjectValidationError(f"Unsupported project type: {self.project_type!r}.") from error
+        self.ticker_text = str(self.ticker_text or "").strip()
+        ticker_limit = ticker_limit_for_project_type(self.project_type)
+        if len(self.ticker_text) > ticker_limit:
+            label = "Banjo Ticker Text" if self.project_type is ProjectType.BANJO else "Bio / Story Information"
+            raise ProjectValidationError(f"{label} cannot exceed {ticker_limit} characters.")
         if len(self.additional_urls) > 3:
             raise ProjectValidationError("A project can contain no more than three additional URLs.")
         self.additional_urls = [

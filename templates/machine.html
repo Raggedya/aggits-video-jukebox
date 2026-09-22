@@ -31,10 +31,7 @@
   <main class="music-machine video-discovery" data-machine-state="BOOT" data-machine-platform="youtube" data-video-open="false" data-project-type="{{PROJECT_TYPE}}" aria-label="{{MACHINE_LABEL}}">
     <div class="customer-backdrop" aria-hidden="true"></div>
     <div class="experience-frame">
-      <nav class="utility-controls" aria-label="Machine controls">
-        <button type="button" data-action="home"><span aria-hidden="true">⌂</span><b>HOME</b></button>
-        <button type="button" data-action="sound" aria-pressed="true"><span data-sound-icon aria-hidden="true">♪</span><b data-sound-label>SOUND ON</b></button>
-      </nav>
+      {{UTILITY_CONTROLS_MARKUP}}
 
       <header class="customer-identity" data-shop-plaque>
           {{BANJO_CHARACTER_MARKUP}}
@@ -49,6 +46,7 @@
               </svg>
             </strong>
           </h1>
+          {{BANJO_HEADER_TICKER_MARKUP}}
           <span class="customer-identity-subtitle" aria-hidden="true">&nbsp;</span>
       </header>
 
@@ -77,6 +75,8 @@
 
       {{BANJO_CHOICE_MARKUP}}
 
+      {{BANJO_SUBMISSION_MARKUP}}
+
       <section class="content-card" data-content-card aria-live="polite">
         <div class="content-logo-shell"><img data-content-logo alt="" hidden><span data-content-monogram>CB</span></div>
         <div class="content-copy">
@@ -94,6 +94,8 @@
         <button type="button" class="control-button" data-action="shop" aria-label="{{PRIMARY_ACTION_ARIA}}" disabled><span class="control-icon" aria-hidden="true">♙+</span><b>{{PRIMARY_ACTION_LABEL}}</b></button>
         <button type="button" class="control-button" data-action="spin-again" disabled><span class="control-icon" aria-hidden="true">↻</span><b>RE-SPIN</b></button>
       </section>
+
+      {{BANJO_SPONSOR_AREA_MARKUP}}
 
       <section class="customer-story" aria-label="{{STORY_ARIA_LABEL}}">
         {{STORY_HEADER_MARKUP}}

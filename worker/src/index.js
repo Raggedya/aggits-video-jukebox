@@ -1,6 +1,12 @@
 const DELIVERY_PATH = "/api/deliveries";
+const BANJO_SUBMISSION_PATH = "/api/banjo/submissions";
 const REPLAY_WINDOW_SECONDS = 300;
 const MAX_BODY_BYTES = 16 * 1024;
+const MAX_SUBMISSION_BODY_BYTES = 2 * 1024;
+const SUBMISSION_RATE_LIMIT = 5;
+const SUBMISSION_RATE_WINDOW_SECONDS = 60 * 60;
+const SUBMISSION_DUPLICATE_WINDOW_SECONDS = 24 * 60 * 60;
+const BANJO_SUBMISSION_SLUG = "banjos-world-of-cars";
 
 const json = (value, status = 200, headers = {}) => new Response(JSON.stringify(value), {
   status,
@@ -22,6 +28,38 @@ function safeRecipient(value) {
   const recipient = String(value || "").trim().toLowerCase();
   if (!recipient || recipient.length > 254 || /[\r\n]/.test(recipient)) return "";
   return /^[^\s@<>,;:"()[\]\\]+@[^\s@<>,;:"()[\]\\]+\.[^\s@<>,;:"()[\]\\]+$/.test(recipient) ? recipient : "";
+}
+
+function safeFirstName(value) {
+  const name = String(value || "").trim().replace(/\s+/g, " ");
+  if (!name || name.length > 50 || /[\u0000-\u001f\u007f]/.test(name)) return "";
+  return /^[\p{L}\p{M}][\p{L}\p{M} '\u2019-]{0,49}$/u.test(name) ? name : "";
+}
+
+function safeYouTubeVideo(value) {
+  const raw = String(value || "").trim();
+  if (!raw || raw.length > 300 || /[\u0000-\u001f\u007f]/.test(raw)) return null;
+  let url;
+  try { url = new URL(raw); } catch { return null; }
+  if (!['https:', 'http:'].includes(url.protocol)) return null;
+  const host = url.hostname.toLowerCase().replace(/^www\./, "").replace(/^m\./, "");
+  let videoId = "";
+  if (host === "youtu.be") videoId = url.pathname.split("/").filter(Boolean)[0] || "";
+  if (host === "youtube.com") {
+    if (url.pathname === "/watch") videoId = url.searchParams.get("v") || "";
+    else {
+      const parts = url.pathname.split("/").filter(Boolean);
+      if (["shorts", "embed", "live"].includes(parts[0])) videoId = parts[1] || "";
+    }
+  }
+  if (!/^[A-Za-z0-9_-]{11}$/.test(videoId)) return null;
+  return { videoId, url: `https://www.youtube.com/watch?v=${videoId}` };
+}
+
+function escapeHtml(value) {
+  return String(value || "").replace(/[&<>"']/g, (character) => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+  })[character]);
 }
 
 function asBase64(buffer) {
@@ -96,6 +134,11 @@ async function legacyRecipient(request, env, bodyBytes) {
 
 async function sha256(buffer) {
   return new Uint8Array(await crypto.subtle.digest("SHA-256", buffer));
+}
+
+async function sha256Hex(value) {
+  const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(String(value))));
+  return Array.from(digest, (byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
 async function verifyPublishedAssets(env, { slug, revision, expectedUrl, projectType, legacy = false }) {
@@ -208,7 +251,98 @@ async function handleDelivery(request, env) {
   return json({ ok: true, id: result.id || null, sentAt: new Date().toISOString(), legacy: Boolean(legacy) }, 201, cors);
 }
 
-export { authenticate, canonicalRequest, constantTimeEqual, deliveryIdempotencyKey, handleDelivery, safeRecipient, verifyPublishedAssets };
+async function handleBanjoSubmission(request, env, nowSeconds = Math.floor(Date.now() / 1000)) {
+  if (!env.RESEND_API_KEY || !env.DELIVERY_HMAC_SECRET || !safeRecipient(env.OWNER_EMAIL) || !env.REPORT_FROM_EMAIL || !env.DB) {
+    return json({ ok: false, error: "submission_unavailable" }, 503, cors);
+  }
+  if (!String(request.headers.get("content-type") || "").toLowerCase().startsWith("application/json")) {
+    return json({ ok: false, error: "invalid_content_type" }, 415, cors);
+  }
+  const declaredLength = Number(request.headers.get("content-length") || 0);
+  if (declaredLength > MAX_SUBMISSION_BODY_BYTES) return json({ ok: false, error: "request_too_large" }, 413, cors);
+  const bodyBuffer = await request.arrayBuffer();
+  if (bodyBuffer.byteLength > MAX_SUBMISSION_BODY_BYTES) return json({ ok: false, error: "request_too_large" }, 413, cors);
+  let body;
+  try { body = JSON.parse(new TextDecoder().decode(bodyBuffer)); } catch { return json({ ok: false, error: "invalid_json" }, 400, cors); }
+  if (!body || typeof body !== "object" || Array.isArray(body)) return json({ ok: false, error: "invalid_submission" }, 400, cors);
+
+  const allowedFields = new Set(["first_name", "email", "youtube_url", "project_slug", "project_type", "company"]);
+  if (Object.keys(body).some((key) => !allowedFields.has(key))) {
+    console.log("Banjo submission rejected: unexpected field");
+    return json({ ok: false, error: "unexpected_fields" }, 400, cors);
+  }
+  if (body.project_type !== "banjo" || safeSlug(body.project_slug) !== BANJO_SUBMISSION_SLUG) {
+    return json({ ok: false, error: "invalid_banjo_machine" }, 400, cors);
+  }
+
+  const clientAddress = String(request.headers.get("cf-connecting-ip") || "unknown").slice(0, 128);
+  const rateWindow = Math.floor(nowSeconds / SUBMISSION_RATE_WINDOW_SECONDS);
+  const rateKey = await sha256Hex(`banjo-rate:${env.DELIVERY_HMAC_SECRET}:${clientAddress}:${rateWindow}`);
+  const rateExpiry = (rateWindow + 1) * SUBMISSION_RATE_WINDOW_SECONDS;
+  await env.DB.prepare("DELETE FROM banjo_submission_guards WHERE expires_at <= ?1").bind(nowSeconds).run();
+  const rateRecord = await env.DB.prepare("INSERT INTO banjo_submission_guards (guard_key, guard_type, count, expires_at) VALUES (?1, 'rate', 1, ?2) ON CONFLICT(guard_key) DO UPDATE SET count = count + 1 RETURNING count")
+    .bind(rateKey, rateExpiry).first();
+  if (Number(rateRecord?.count || 0) > SUBMISSION_RATE_LIMIT) {
+    console.log("Banjo submission rate-limited");
+    return json({ ok: false, error: "rate_limited" }, 429, cors);
+  }
+
+  if (String(body.company || "").trim()) {
+    console.log("Banjo submission rejected: honeypot");
+    return json({ ok: true }, 202, cors);
+  }
+  const firstName = safeFirstName(body.first_name);
+  if (!firstName) return json({ ok: false, error: "invalid_first_name" }, 400, cors);
+  const submitter = safeRecipient(body.email);
+  if (!submitter) return json({ ok: false, error: "invalid_email" }, 400, cors);
+  const youtube = safeYouTubeVideo(body.youtube_url);
+  if (!youtube) {
+    console.log("Banjo submission rejected: invalid YouTube URL");
+    return json({ ok: false, error: "invalid_youtube_url" }, 400, cors);
+  }
+
+  const duplicateKey = await sha256Hex(`banjo-duplicate:${env.DELIVERY_HMAC_SECRET}:${submitter}:${youtube.videoId}`);
+  const duplicateResult = await env.DB.prepare("INSERT OR IGNORE INTO banjo_submission_guards (guard_key, guard_type, count, expires_at) VALUES (?1, 'duplicate', 1, ?2)")
+    .bind(duplicateKey, nowSeconds + SUBMISSION_DUPLICATE_WINDOW_SECONDS).run();
+  const duplicateInserted = Number(duplicateResult?.meta?.changes ?? duplicateResult?.changes ?? 0) > 0;
+  if (!duplicateInserted) return json({ ok: false, error: "duplicate_submission" }, 409, cors);
+
+  const submittedAt = new Date(nowSeconds * 1000).toISOString();
+  const operatorRecipient = safeRecipient(env.OWNER_EMAIL);
+  const subject = "NEW CAR FOR BANJO";
+  const text = [
+    subject, "", "First name:", firstName, "", "Email:", submitter, "", "YouTube:", youtube.url,
+    "", "Video ID:", youtube.videoId, "", "Source:", "Banjo's World of Cars", "", "Submitted:", submittedAt,
+  ].join("\n");
+  const providerResponse = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${env.RESEND_API_KEY}`,
+      "content-type": "application/json",
+      "Idempotency-Key": duplicateKey,
+    },
+    body: JSON.stringify({
+      from: env.REPORT_FROM_EMAIL,
+      to: [operatorRecipient],
+      reply_to: submitter,
+      subject,
+      text,
+      html: `<div style="font-family:Arial,sans-serif"><h1>${subject}</h1><p><strong>First name:</strong><br>${escapeHtml(firstName)}</p><p><strong>Email:</strong><br>${escapeHtml(submitter)}</p><p><strong>YouTube:</strong><br><a href="${escapeHtml(youtube.url)}">${escapeHtml(youtube.url)}</a></p><p><strong>Video ID:</strong><br>${escapeHtml(youtube.videoId)}</p><p><strong>Source:</strong><br>Banjo&#39;s World of Cars</p><p><strong>Submitted:</strong><br>${escapeHtml(submittedAt)}</p></div>`,
+    }),
+  });
+  if (!providerResponse.ok) {
+    await env.DB.prepare("DELETE FROM banjo_submission_guards WHERE guard_key = ?1 AND guard_type = 'duplicate'").bind(duplicateKey).run();
+    console.log("Banjo submission provider failure");
+    return json({ ok: false, error: "submission_unavailable" }, providerResponse.status === 429 ? 429 : 502, cors);
+  }
+  console.log("Banjo submission accepted");
+  return json({ ok: true }, 201, cors);
+}
+
+export {
+  authenticate, canonicalRequest, constantTimeEqual, deliveryIdempotencyKey, handleBanjoSubmission,
+  handleDelivery, safeFirstName, safeRecipient, safeYouTubeVideo, verifyPublishedAssets,
+};
 
 export default {
   async fetch(request, env) {
@@ -216,6 +350,8 @@ export default {
     if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: cors });
     if (request.method === "GET" && url.pathname === "/") return json({ ok: true, service: "aggits-video-jukebox-delivery" }, 200, cors);
     if (request.method === "POST" && url.pathname === DELIVERY_PATH) return handleDelivery(request, env);
+    if (request.method === "POST" && url.pathname === BANJO_SUBMISSION_PATH) return handleBanjoSubmission(request, env);
+    if (url.pathname === BANJO_SUBMISSION_PATH) return json({ ok: false, error: "method_not_allowed" }, 405, { ...cors, allow: "POST" });
     return json({ ok: false, error: "not_found" }, 404, cors);
   },
 };

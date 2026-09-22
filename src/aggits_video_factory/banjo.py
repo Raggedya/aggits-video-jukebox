@@ -8,7 +8,7 @@ from uuid import uuid4
 
 from PIL import Image
 
-from .config import MAX_SPONSOR_CREATIVES, MAX_SPONSOR_MP4_BYTES
+from .config import MAX_SPONSOR_CREATIVES, MAX_SPONSOR_LOGO_BYTES, MAX_SPONSOR_MP4_BYTES
 from .models import BanjoChoice, BanjoConfig, SponsorConfig, SponsorCreative, Video
 from .youtube_api import YouTubeClient
 
@@ -69,6 +69,41 @@ def import_sponsor_mp4(source: Path, project_directory: Path, *, active: bool = 
         active=active,
         size_bytes=size,
     )
+
+
+def validate_sponsor_logo(source: Path) -> int:
+    path = Path(source)
+    if not path.is_file():
+        raise BanjoValidationError("The selected Sponsor Logo file does not exist.")
+    suffix = path.suffix.casefold()
+    if suffix not in {".png", ".jpg", ".jpeg", ".webp"}:
+        raise BanjoValidationError("Sponsor Logo must be a PNG, JPG, JPEG or WebP image.")
+    size = path.stat().st_size
+    if size > MAX_SPONSOR_LOGO_BYTES:
+        raise BanjoValidationError("Sponsor Logo files cannot exceed 2 MB.")
+    expected_formats = {".png": {"PNG"}, ".jpg": {"JPEG"}, ".jpeg": {"JPEG"}, ".webp": {"WEBP"}}
+    try:
+        with Image.open(path) as image:
+            if image.format not in expected_formats[suffix]:
+                raise BanjoValidationError("Sponsor Logo contents do not match the selected image type.")
+            image.verify()
+    except BanjoValidationError:
+        raise
+    except (OSError, ValueError) as error:
+        raise BanjoValidationError("Sponsor Logo is not a valid PNG, JPG, JPEG or WebP image.") from error
+    return size
+
+
+def import_sponsor_logo(source: Path, project_directory: Path) -> tuple[str, str, int]:
+    source = Path(source)
+    size = validate_sponsor_logo(source)
+    relative = Path("assets") / f"sponsor-logo-{uuid4()}{source.suffix.casefold()}"
+    destination = project_directory / relative
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    temporary = destination.with_suffix(destination.suffix + ".tmp")
+    shutil.copy2(source, temporary)
+    temporary.replace(destination)
+    return relative.as_posix(), source.name, size
 
 
 def sponsor_media_summary(creatives: list[SponsorCreative]) -> tuple[int, int]:
@@ -150,6 +185,19 @@ def materialize_banjo_config(
         else:
             creatives.append(import_sponsor_mp4(Path(raw), project_directory, active=enabled))
     validate_creative_capacity(creatives)
+    logo_asset_path = ""
+    logo_filename = ""
+    logo_size_bytes = 0
+    requested_logo = str(getattr(values, "sponsor_logo_path", "") or "").replace("\\", "/").strip()
+    previous_sponsor = existing.sponsor if existing else None
+    if requested_logo:
+        if previous_sponsor and requested_logo == previous_sponsor.logo_asset_path:
+            logo_source = project_directory / previous_sponsor.logo_asset_path
+            logo_size_bytes = validate_sponsor_logo(logo_source)
+            logo_asset_path = previous_sponsor.logo_asset_path
+            logo_filename = previous_sponsor.logo_filename
+        else:
+            logo_asset_path, logo_filename, logo_size_bytes = import_sponsor_logo(Path(requested_logo), project_directory)
     return BanjoConfig(
         banjos_choice=choices,
         sponsor=SponsorConfig(
@@ -157,5 +205,8 @@ def materialize_banjo_config(
             title=str(getattr(values, "sponsor_title", "")),
             url=str(getattr(values, "sponsor_url", "")) or None,
             creatives=creatives,
+            logo_asset_path=logo_asset_path,
+            logo_filename=logo_filename,
+            logo_size_bytes=logo_size_bytes,
         ),
     )

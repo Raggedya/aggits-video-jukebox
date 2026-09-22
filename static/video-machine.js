@@ -27,6 +27,18 @@ if (machine) {
   const sponsorPlayer = machine.querySelector('[data-sponsor-player]');
   const banjoChoiceOverlay = machine.querySelector('[data-banjo-choice-overlay]');
   const banjoChoiceTitle = machine.querySelector('[data-banjo-choice-title]');
+  const banjoSubmissionModal = machine.querySelector('[data-banjo-submission-modal]');
+  const banjoSubmissionForm = machine.querySelector('[data-banjo-submission-form]');
+  const banjoSubmissionFormState = machine.querySelector('[data-banjo-submission-form-state]');
+  const banjoSubmissionSuccess = machine.querySelector('[data-banjo-submission-success]');
+  const banjoSubmissionError = machine.querySelector('[data-banjo-submission-error]');
+  const banjoSubmissionSend = machine.querySelector('[data-banjo-submission-send]');
+  const banjoSubmissionCloseButtons = [...machine.querySelectorAll('[data-banjo-submission-close]')];
+  const banjoHeaderTicker = machine.querySelector('[data-banjo-header-ticker]');
+  const banjoHeaderTickerCopy = machine.querySelector('[data-banjo-header-ticker-copy]');
+  const banjoSponsorArea = machine.querySelector('[data-banjo-sponsor-area]');
+  const banjoSponsorButton = machine.querySelector('[data-banjo-sponsor-button]');
+  const banjoSponsorLogo = machine.querySelector('[data-banjo-sponsor-logo]');
   const stage = machine.querySelector('[data-video-stage]');
   const winnerTitle = machine.querySelector('[data-winner-title]');
   const winnerChannel = machine.querySelector('[data-winner-channel]');
@@ -43,6 +55,7 @@ if (machine) {
   const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
   const SHOP_PLAQUE_TITLE_DURATION = 10000;
   const SHOP_PLAQUE_PROMPT_DURATION = 3500;
+  const BANJO_TICKER_DELAY = 10000;
 
   let catalogue = [];
   let current = null;
@@ -61,6 +74,10 @@ if (machine) {
   let plaqueDestination = '';
   let activeProjectType = 'business';
   let banjoConfig = null;
+  let banjoSubmissionEndpoint = '';
+  let banjoSubmissionReturnFocus = null;
+  let banjoHeaderTickerStarted = false;
+  let banjoHeaderTickerTimer = 0;
   let banjoSessionKey = '';
   let banjoSession = {normalDiscoveries: 0, nextCreativeIndex: 0, lastWasSponsor: false};
   let sponsorPlaybackMilestones = new Set();
@@ -366,7 +383,7 @@ if (machine) {
   function updateSoundControl() {
     if (soundLabel) soundLabel.textContent = soundEnabled ? 'SOUND ON' : 'SOUND OFF';
     if (soundIcon) soundIcon.textContent = soundEnabled ? '♪' : '×';
-    soundButton.setAttribute('aria-pressed', String(soundEnabled));
+    soundButton?.setAttribute('aria-pressed', String(soundEnabled));
   }
 
   function refillBag() {
@@ -433,10 +450,10 @@ if (machine) {
       viewYouTube.setAttribute('aria-disabled', 'false');
       updateStory(video);
     }
-    primaryActionDestination = isSponsor ? String(banjoConfig?.sponsor?.url || '') : (activeProjectType === 'banjo' ? '' : primaryActionDestination);
+    primaryActionDestination = activeProjectType === 'banjo' ? '' : primaryActionDestination;
     const primaryText = primaryActionButton.querySelector('b');
-    if (activeProjectType === 'banjo' && primaryText) primaryText.textContent = isSponsor ? 'VISIT SPONSOR' : 'CONTEXT';
-    primaryActionButton.setAttribute('aria-label', isSponsor ? 'Visit sponsor' : 'Contextual action unavailable');
+    if (activeProjectType === 'banjo' && primaryText) primaryText.textContent = 'SHOW BANJO';
+    primaryActionButton.setAttribute('aria-label', activeProjectType === 'banjo' ? 'Show Banjo your car' : 'Contextual action unavailable');
   }
 
   function showBanjoChoiceAward(video) {
@@ -669,7 +686,7 @@ if (machine) {
     meterMode = 'idle';
     playButton.disabled = false;
     shareButton.disabled = false;
-    if (activeProjectType === 'banjo') primaryActionButton.disabled = winner.contentType !== 'sponsor_mp4' || !primaryActionDestination;
+    if (activeProjectType === 'banjo') primaryActionButton.disabled = !banjoSubmissionEndpoint;
     else primaryActionButton.disabled = !primaryActionDestination;
     primaryActionButton.setAttribute('aria-disabled', String(primaryActionButton.disabled));
     respinButton.disabled = false;
@@ -814,15 +831,135 @@ if (machine) {
     }
   }
 
+  function submittedYouTubeVideo(value) {
+    const raw = String(value || '').trim();
+    if (!raw || raw.length > 300 || /[\u0000-\u001f\u007f]/.test(raw)) return null;
+    let url;
+    try { url = new URL(raw); } catch { return null; }
+    if (!['https:', 'http:'].includes(url.protocol)) return null;
+    const host = url.hostname.toLowerCase().replace(/^www\./, '').replace(/^m\./, '');
+    let videoId = '';
+    if (host === 'youtu.be') videoId = url.pathname.split('/').filter(Boolean)[0] || '';
+    if (host === 'youtube.com') {
+      if (url.pathname === '/watch') videoId = url.searchParams.get('v') || '';
+      else {
+        const parts = url.pathname.split('/').filter(Boolean);
+        if (['shorts', 'embed', 'live'].includes(parts[0])) videoId = parts[1] || '';
+      }
+    }
+    if (!/^[A-Za-z0-9_-]{11}$/.test(videoId)) return null;
+    return {videoId, url: `https://www.youtube.com/watch?v=${videoId}`};
+  }
+
+  function setBanjoSubmissionError(message = '') {
+    if (!banjoSubmissionError) return;
+    banjoSubmissionError.textContent = message;
+    banjoSubmissionError.hidden = !message;
+  }
+
+  function openBanjoSubmission() {
+    if (activeProjectType !== 'banjo' || !banjoSubmissionModal || !banjoSubmissionForm) return;
+    banjoSubmissionReturnFocus = document.activeElement;
+    banjoSubmissionForm.reset();
+    banjoSubmissionFormState.hidden = false;
+    banjoSubmissionSuccess.hidden = true;
+    if (banjoSubmissionSend) {
+      banjoSubmissionSend.disabled = false;
+      banjoSubmissionSend.textContent = 'SEND TO BANJO';
+    }
+    setBanjoSubmissionError();
+    banjoSubmissionModal.hidden = false;
+    emitBanjoEvent('show_banjo_open');
+    window.setTimeout(() => banjoSubmissionForm.elements.first_name?.focus(), 0);
+  }
+
+  function closeBanjoSubmission() {
+    if (!banjoSubmissionModal || banjoSubmissionModal.hidden) return;
+    banjoSubmissionModal.hidden = true;
+    setBanjoSubmissionError();
+    if (banjoSubmissionReturnFocus instanceof HTMLElement) banjoSubmissionReturnFocus.focus();
+    else primaryActionButton.focus();
+  }
+
+  function validateBanjoSubmission(form) {
+    const firstName = String(form.elements.first_name?.value || '').trim();
+    const email = String(form.elements.email?.value || '').trim().toLowerCase();
+    const youtube = submittedYouTubeVideo(form.elements.youtube_url?.value);
+    if (!/^[\p{L}\p{M}][\p{L}\p{M} '\u2019-]{0,49}$/u.test(firstName)) return {error: 'Please enter your first name.'};
+    if (!/^[^\s@<>,;:"()[\]\\]+@[^\s@<>,;:"()[\]\\]+\.[^\s@<>,;:"()[\]\\]+$/.test(email) || email.length > 254) {
+      return {error: 'Please enter a valid email address.'};
+    }
+    if (!youtube) return {error: 'Please enter a valid YouTube video link.'};
+    return {firstName, email, youtube};
+  }
+
+  function banjoSubmissionFailureMessage(statusCode, errorCode) {
+    if (statusCode === 409 || errorCode === 'duplicate_submission') return 'Banjo already has that one.';
+    if (statusCode === 429 || errorCode === 'rate_limited') return 'Too many submissions. Please try again later.';
+    if (errorCode === 'invalid_first_name') return 'Please enter your first name.';
+    if (errorCode === 'invalid_email') return 'Please enter a valid email address.';
+    if (errorCode === 'invalid_youtube_url') return 'Please enter a valid YouTube video link.';
+    return "Couldn't send that to Banjo. Please try again.";
+  }
+
+  async function submitBanjoForm(event) {
+    event.preventDefault();
+    if (!banjoSubmissionForm || !banjoSubmissionSend || banjoSubmissionSend.disabled) return;
+    const values = validateBanjoSubmission(banjoSubmissionForm);
+    if (values.error) {
+      setBanjoSubmissionError(values.error);
+      emitBanjoEvent('show_banjo_submit_failure', {reason: 'client_validation'});
+      return;
+    }
+    emitBanjoEvent('show_banjo_submit_attempt');
+    setBanjoSubmissionError();
+    banjoSubmissionSend.disabled = true;
+    const originalText = banjoSubmissionSend.textContent;
+    banjoSubmissionSend.textContent = 'SENDING…';
+    let succeeded = false;
+    try {
+      const localPreview = ['localhost', '127.0.0.1', '::1'].includes(location.hostname);
+      if (!localPreview) {
+        const response = await fetch(banjoSubmissionEndpoint, {
+          method: 'POST',
+          headers: {'content-type': 'application/json'},
+          body: JSON.stringify({
+            first_name: values.firstName,
+            email: values.email,
+            youtube_url: values.youtube.url,
+            project_slug: String(banjoConfig?.submission?.projectSlug || ''),
+            project_type: 'banjo',
+            company: String(banjoSubmissionForm.elements.company?.value || ''),
+          }),
+        });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok) throw Object.assign(new Error('submission_failed'), {statusCode: response.status, errorCode: result.error});
+      }
+      succeeded = true;
+      banjoSubmissionFormState.hidden = true;
+      banjoSubmissionSuccess.hidden = false;
+      emitBanjoEvent('show_banjo_submit_success');
+      banjoSubmissionSuccess.querySelector('button')?.focus();
+    } catch (error) {
+      setBanjoSubmissionError(banjoSubmissionFailureMessage(error?.statusCode, error?.errorCode));
+      emitBanjoEvent('show_banjo_submit_failure', {reason: String(error?.errorCode || 'unavailable')});
+    } finally {
+      if (!succeeded) banjoSubmissionSend.disabled = false;
+      banjoSubmissionSend.textContent = originalText;
+    }
+  }
+
   function openPrimaryAction() {
+    if (activeProjectType === 'banjo') {
+      openBanjoSubmission();
+      return;
+    }
     if (!primaryActionDestination) return;
-    if (activeProjectType === 'banjo') emitBanjoEvent('sponsor_cta_click', {placement: 'video_control', creativeId: current?.creativeId || ''});
     window.open(primaryActionDestination, '_blank', 'noopener,noreferrer');
   }
 
   function openPlaqueAction() {
     if (plaqueDestination) {
-      if (activeProjectType === 'banjo') emitBanjoEvent('sponsor_header_click', {placement: 'header'});
       window.open(plaqueDestination, '_blank', 'noopener,noreferrer');
     }
   }
@@ -838,7 +975,6 @@ if (machine) {
     shopPlaqueTimer = window.setTimeout(() => {
       if (!shopPlaqueEnabled) return;
       shopPlaque.dataset.shopPlaqueState = state;
-      if (activeProjectType === 'banjo' && state === 'shop') emitBanjoEvent('sponsor_header_impression', {placement: 'header'});
       scheduleShopPlaqueState(
         state === 'shop' ? 'title' : 'shop',
         state === 'shop' ? SHOP_PLAQUE_PROMPT_DURATION : SHOP_PLAQUE_TITLE_DURATION,
@@ -848,6 +984,14 @@ if (machine) {
 
   function configureShopPlaque() {
     stopShopPlaqueCycle();
+    if (activeProjectType === 'banjo') {
+      shopPlaqueEnabled = false;
+      shopPlaque.classList.remove('is-shop-enabled');
+      shopPlaque.removeAttribute('role');
+      shopPlaque.removeAttribute('tabindex');
+      shopPlaque.removeAttribute('aria-label');
+      return;
+    }
     shopPlaqueEnabled = Boolean(plaqueDestination);
     shopPlaque.classList.toggle('is-shop-enabled', shopPlaqueEnabled);
     if (!shopPlaqueEnabled) {
@@ -860,9 +1004,41 @@ if (machine) {
     shopPlaque.setAttribute('tabindex', '0');
     shopPlaque.setAttribute(
       'aria-label',
-      activeProjectType === 'banjo' ? `Visit our sponsor, ${banjoConfig?.sponsor?.title || ''}` : `${primaryActionLabel} for ${machineIdentity || 'this project'}`,
+      `${primaryActionLabel} for ${machineIdentity || 'this project'}`,
     );
     scheduleShopPlaqueState('shop', SHOP_PLAQUE_TITLE_DURATION);
+  }
+
+  function startBanjoHeaderTicker() {
+    if (activeProjectType !== 'banjo' || banjoHeaderTickerStarted || !banjoHeaderTicker || !banjoHeaderTickerCopy?.textContent?.trim()) return;
+    banjoHeaderTickerStarted = true;
+    banjoHeaderTickerTimer = window.setTimeout(() => {
+      shopPlaque.dataset.shopPlaqueState = 'banjo-ticker';
+      banjoHeaderTicker.hidden = false;
+      const travel = Math.max(360, shopPlaque.clientWidth + banjoHeaderTickerCopy.scrollWidth);
+      banjoHeaderTicker.style.setProperty('--banjo-ticker-duration', `${Math.max(14, travel / 42).toFixed(2)}s`);
+    }, BANJO_TICKER_DELAY);
+  }
+
+  function observeBanjoSponsorArea() {
+    if (activeProjectType !== 'banjo' || !banjoSponsorArea) return;
+    let buttonSeen = false;
+    let logoSeen = false;
+    const report = () => {
+      if (!buttonSeen && banjoSponsorButton) {
+        buttonSeen = true;
+        emitBanjoEvent('sponsor_button_impression', {placement: 'sponsor_area'});
+      }
+      if (!logoSeen && banjoSponsorLogo) {
+        logoSeen = true;
+        emitBanjoEvent('sponsor_logo_impression', {placement: 'sponsor_area'});
+      }
+    };
+    if (!('IntersectionObserver' in window)) { report(); return; }
+    const observer = new IntersectionObserver(entries => {
+      if (entries.some(entry => entry.isIntersecting)) { report(); observer.disconnect(); }
+    }, {threshold: .2});
+    observer.observe(banjoSponsorArea);
   }
 
   function bind() {
@@ -888,6 +1064,11 @@ if (machine) {
     primaryActionButton.addEventListener('click', () => {
       openPrimaryAction();
     });
+    banjoSubmissionForm?.addEventListener('submit', event => { void submitBanjoForm(event); });
+    banjoSubmissionCloseButtons.forEach(button => button.addEventListener('click', closeBanjoSubmission));
+    banjoSubmissionModal?.addEventListener('click', event => {
+      if (event.target === banjoSubmissionModal) closeBanjoSubmission();
+    });
     shopPlaque.addEventListener('click', () => {
       if (shopPlaqueEnabled) openPlaqueAction();
     });
@@ -897,7 +1078,7 @@ if (machine) {
         openPlaqueAction();
       }
     });
-    soundButton.addEventListener('click', () => {
+    soundButton?.addEventListener('click', () => {
       soundEnabled = !soundEnabled;
       try { sessionStorage.setItem('crispyBitsSound', soundEnabled ? 'on' : 'off'); } catch {}
       updateSoundControl();
@@ -957,8 +1138,26 @@ if (machine) {
         toggleStory();
       }
     });
-    homeButton.addEventListener('click', () => { location.href = '../'; });
+    homeButton?.addEventListener('click', () => { location.href = '../'; });
+    banjoSponsorButton?.addEventListener('click', () => emitBanjoEvent('sponsor_button_click', {placement: 'sponsor_area'}));
+    banjoSponsorLogo?.addEventListener('click', () => emitBanjoEvent('sponsor_logo_click', {placement: 'sponsor_area'}));
     document.addEventListener('keydown', event => {
+      if (event.key === 'Escape' && banjoSubmissionModal && !banjoSubmissionModal.hidden) {
+        event.preventDefault();
+        closeBanjoSubmission();
+        return;
+      }
+      if (event.key === 'Tab' && banjoSubmissionModal && !banjoSubmissionModal.hidden) {
+        const focusable = [...banjoSubmissionModal.querySelectorAll('button:not([disabled]),input:not([disabled]):not([tabindex="-1"])')]
+          .filter(node => !node.closest('[hidden]'));
+        if (focusable.length) {
+          const first = focusable[0];
+          const last = focusable[focusable.length - 1];
+          if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+          else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+        }
+        return;
+      }
       if ((event.key === ' ' || event.key === 'Enter') && event.target === document.body) {
         event.preventDefault();
         spin();
@@ -981,6 +1180,7 @@ if (machine) {
       machine.dataset.projectType = activeProjectType;
       banjoConfig = activeProjectType === 'banjo' ? (config.banjoConfig || {}) : null;
       if (activeProjectType === 'banjo') {
+        banjoSubmissionEndpoint = String(banjoConfig?.submission?.endpoint || '').trim();
         banjoSessionKey = `crispyBitsBanjoSponsor:${String(config.slug || 'banjo')}`;
         readBanjoSession();
       }
@@ -996,25 +1196,28 @@ if (machine) {
           ? {displayLabel: 'MORE INFO', destinationURL: tourismConfig?.moreInfoURL}
           : {displayLabel: 'SHOP NOW', destinationURL: legacyShopDestination};
       const primaryAction = config.customerConfig?.primaryAction || legacyPrimaryAction || {};
-      const validSponsor = activeProjectType === 'banjo' && Boolean(banjoConfig?.sponsor?.active && banjoConfig?.sponsor?.title && banjoConfig?.sponsor?.url);
       primaryActionDestination = activeProjectType === 'banjo' ? '' : String(primaryAction.destinationURL || '').trim();
       primaryActionLabel = activeProjectType === 'banjo'
-        ? (validSponsor ? `SPONSORED BY ${banjoConfig.sponsor.title}` : 'CONTEXT')
+        ? 'SHOW BANJO'
         : String(primaryAction.displayLabel || '').trim() || 'PRIMARY ACTION';
       plaqueDestination = primaryActionDestination;
-      if (validSponsor) plaqueDestination = String(banjoConfig.sponsor.url);
       if (shopPlaqueLabel) shopPlaqueLabel.textContent = primaryActionLabel;
       if (shopPlaquePrompt) sizeClass(shopPlaquePrompt, primaryActionLabel);
       const primaryActionText = primaryActionButton.querySelector('b');
-      if (primaryActionText && primaryActionLabel) primaryActionText.textContent = activeProjectType === 'banjo' ? 'CONTEXT' : primaryActionLabel;
-      primaryActionButton.disabled = true;
-      primaryActionButton.setAttribute('aria-disabled', 'true');
-      primaryActionButton.setAttribute('aria-label', primaryActionDestination ? primaryActionLabel : `${primaryActionLabel || 'Primary action'} unavailable`);
+      if (primaryActionText && primaryActionLabel) primaryActionText.textContent = activeProjectType === 'banjo' ? 'SHOW BANJO' : primaryActionLabel;
+      primaryActionButton.disabled = activeProjectType === 'banjo' ? !banjoSubmissionEndpoint : true;
+      primaryActionButton.setAttribute('aria-disabled', String(primaryActionButton.disabled));
+      primaryActionButton.setAttribute(
+        'aria-label',
+        activeProjectType === 'banjo'
+          ? 'Show Banjo your car'
+          : primaryActionDestination ? primaryActionLabel : `${primaryActionLabel || 'Primary action'} unavailable`,
+      );
       primaryActionButton.dataset.ctaPlacement = 'bottom';
-      primaryActionButton.dataset.ctaType = activeProjectType === 'banjo' ? 'sponsor' : String(primaryAction.type || '');
+      primaryActionButton.dataset.ctaType = activeProjectType === 'banjo' ? 'show_banjo' : String(primaryAction.type || '');
       primaryActionButton.dataset.ctaLabel = primaryActionLabel;
       shopPlaque.dataset.ctaPlacement = 'top';
-      shopPlaque.dataset.ctaType = activeProjectType === 'banjo' ? 'sponsor' : String(primaryAction.type || '');
+      shopPlaque.dataset.ctaType = activeProjectType === 'banjo' ? 'editorial_ticker' : String(primaryAction.type || '');
       shopPlaque.dataset.ctaLabel = primaryActionLabel;
       masterStorySections = [];
       channelThumbnail = String(config.channelThumbnail || '').trim();
@@ -1023,6 +1226,8 @@ if (machine) {
       titleNode.textContent = config.title || 'VIDEO JUKEBOX';
       fitHeroContent();
       configureShopPlaque();
+      startBanjoHeaderTicker();
+      observeBanjoSponsorArea();
       document.title = activeProjectType === 'banjo' ? "BANJO'S WORLD OF CARS" : `${config.title || 'Video Jukebox'} — CRISPY BITS`;
       setCustomerBackdrop(catalogue[0]);
       if (channelThumbnail) {
@@ -1063,6 +1268,7 @@ if (machine) {
     startStoryTicker(true);
   });
   window.addEventListener('pagehide', stopShopPlaqueCycle);
+  window.addEventListener('pagehide', () => window.clearTimeout(banjoHeaderTickerTimer));
 
   window.CrispyBitsMachine = Object.freeze({
     spin,

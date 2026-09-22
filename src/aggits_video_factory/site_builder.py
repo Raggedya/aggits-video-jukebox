@@ -10,8 +10,8 @@ import qrcode
 from PIL import Image, ImageDraw, ImageFont
 from qrcode.constants import ERROR_CORRECT_H
 
-from .config import BRAND_NAME, PUBLIC_BASE_URL, resource_path
-from .banjo import BANJO_TITLE, validate_sponsor_mp4, verify_banjo_character
+from .config import BANJO_SUBMISSION_ENDPOINT, BRAND_NAME, PUBLIC_BASE_URL, resource_path
+from .banjo import BANJO_TITLE, validate_sponsor_logo, validate_sponsor_mp4, verify_banjo_character
 from .models import Project, ProjectType, project_primary_cta
 from .social_preview import (
     BANJO_SOCIAL_PREVIEW_SIZE,
@@ -30,6 +30,11 @@ INK = "#070605"
 def included_project_videos(project: Project):
     excluded = set(project.excluded_video_ids)
     return [video for video in project.videos if video.video_id not in excluded]
+
+
+def _banjo_ticker_text(value: str) -> str:
+    parts = [re.sub(r"\s+", " ", part).strip() for part in re.split(r"[\r\n]+", str(value or ""))]
+    return " • ".join(part for part in parts if part)
 
 
 def _story_sections(
@@ -170,6 +175,7 @@ def build_project_site(project: Project, destination: Path) -> Path:
     if assets.exists():
         shutil.rmtree(assets)
     shutil.copytree(resource_path("static"), assets)
+    sponsor_logo_public_url = ""
     if project.project_type is ProjectType.BANJO:
         character = assets / "banjo" / "banjo-approved-header.png"
         verify_banjo_character(character)
@@ -179,6 +185,13 @@ def build_project_site(project: Project, destination: Path) -> Path:
             source = destination.parent / creative.asset_path
             validate_sponsor_mp4(source)
             shutil.copy2(source, sponsor_output / f"sponsor-{creative.creative_id}.mp4")
+        sponsor = banjo_config.sponsor if banjo_config else None
+        if sponsor and sponsor.logo_asset_path:
+            logo_source = destination.parent / sponsor.logo_asset_path
+            validate_sponsor_logo(logo_source)
+            logo_name = Path(sponsor.logo_asset_path).name
+            shutil.copy2(logo_source, sponsor_output / logo_name)
+            sponsor_logo_public_url = f"assets/banjo-sponsor/{logo_name}"
 
     canonical = project.published_url if str(project.published_url or "").startswith("https://") else f"{PUBLIC_BASE_URL}/{project.slug}/"
     social_filename = social_preview_filename(project.title, project.project_type)
@@ -197,8 +210,13 @@ def build_project_site(project: Project, destination: Path) -> Path:
         social_image_width, social_image_height = SOCIAL_PREVIEW_SIZE
         social_image_alt = f"{social_title} — Crispy Bits social preview"
     story_sections = _story_sections(project.ticker_text, project.title, project.project_type)
-    primary_action_label = primary_cta.display_label if primary_cta else ("CONTEXT" if project.project_type is ProjectType.BANJO else "PRIMARY ACTION")
-    primary_action_aria = primary_action_label if primary_cta and primary_cta.destination_url else f"{primary_action_label} unavailable"
+    banjo_ticker = _banjo_ticker_text(project.ticker_text) if project.project_type is ProjectType.BANJO else ""
+    primary_action_label = primary_cta.display_label if primary_cta else ("SHOW BANJO" if project.project_type is ProjectType.BANJO else "PRIMARY ACTION")
+    primary_action_aria = (
+        "Show Banjo your car"
+        if project.project_type is ProjectType.BANJO
+        else primary_action_label if primary_cta and primary_cta.destination_url else f"{primary_action_label} unavailable"
+    )
     initial_reel_instruction = "PULL THE LEVER  ──────→"
     story_header_markup = ""
     story_aria_label = project.title
@@ -214,6 +232,13 @@ def build_project_site(project: Project, destination: Path) -> Path:
         "{{DOCUMENT_TITLE}}": html.escape(f"{social_title} | Crispy Bits"),
         "{{MACHINE_LABEL}}": html.escape(BANJO_TITLE if project.project_type is ProjectType.BANJO else f"{project.title} CRISPY BITS Video Jukebox", quote=True),
         "{{PROJECT_TYPE}}": project.project_type.value,
+        "{{UTILITY_CONTROLS_MARKUP}}": (
+            "" if project.project_type is ProjectType.BANJO else
+            '<nav class="utility-controls" aria-label="Machine controls">'
+            '<button type="button" data-action="home"><span aria-hidden="true">⌂</span><b>HOME</b></button>'
+            '<button type="button" data-action="sound" aria-pressed="true"><span data-sound-icon aria-hidden="true">♪</span><b data-sound-label>SOUND ON</b></button>'
+            '</nav>'
+        ),
         "{{BANJO_CHARACTER_MARKUP}}": (
             '<span class="banjo-header-character" aria-hidden="true"><img src="assets/banjo/banjo-approved-header.png" alt="" draggable="false"></span>'
             if project.project_type is ProjectType.BANJO else ""
@@ -227,6 +252,55 @@ def build_project_site(project: Project, destination: Path) -> Path:
             '<small>BANJO\'S CHOICE AWARD</small><strong data-banjo-choice-title></strong>'
             '<span>CHOSEN BY BANJO</span></section>'
             if project.project_type is ProjectType.BANJO else ""
+        ),
+        "{{BANJO_HEADER_TICKER_MARKUP}}": (
+            '<div class="banjo-header-ticker" data-banjo-header-ticker aria-hidden="true" hidden>'
+            f'<span data-banjo-header-ticker-copy>{html.escape(banjo_ticker)}</span></div>'
+            f'<span class="visually-hidden" data-banjo-ticker-accessible>{html.escape(banjo_ticker)}</span>'
+            if banjo_ticker else ""
+        ),
+        "{{BANJO_SUBMISSION_MARKUP}}": (
+            '<section class="banjo-submission-backdrop" data-banjo-submission-modal hidden>'
+            '<div class="banjo-submission-dialog" role="dialog" aria-modal="true" '
+            'aria-labelledby="banjo-submission-title">'
+            '<button type="button" class="banjo-submission-close" data-banjo-submission-close '
+            'aria-label="Close Show Banjo form">&times;</button>'
+            '<div data-banjo-submission-form-state>'
+            '<h2 id="banjo-submission-title">SHOW BANJO YOUR CAR</h2>'
+            '<p>Think Banjo should see your car? Send him the YouTube link.</p>'
+            '<form data-banjo-submission-form novalidate>'
+            '<label for="banjo-first-name">FIRST NAME</label>'
+            '<input id="banjo-first-name" name="first_name" type="text" maxlength="50" autocomplete="given-name" required>'
+            '<label for="banjo-email">EMAIL ADDRESS</label>'
+            '<input id="banjo-email" name="email" type="email" maxlength="254" autocomplete="email" required>'
+            '<label for="banjo-youtube-url">YOUTUBE VIDEO LINK</label>'
+            '<input id="banjo-youtube-url" name="youtube_url" type="url" maxlength="300" inputmode="url" autocomplete="url" required>'
+            '<div class="banjo-submission-trap" aria-hidden="true">'
+            '<label for="banjo-company">COMPANY</label>'
+            '<input id="banjo-company" name="company" type="text" tabindex="-1" autocomplete="off">'
+            '</div>'
+            '<p class="banjo-submission-privacy">We\'ll only use your email to contact you about your submission.</p>'
+            '<p class="banjo-submission-error" data-banjo-submission-error role="alert" hidden></p>'
+            '<button type="submit" class="banjo-submission-send" data-banjo-submission-send>SEND TO BANJO</button>'
+            '</form></div>'
+            '<div class="banjo-submission-success" data-banjo-submission-success hidden>'
+            '<h2>THANKS — BANJO\'S GOT IT.</h2>'
+            '<p>If Banjo adds your car, we\'ll let you know.</p>'
+            '<button type="button" class="banjo-submission-send" data-banjo-submission-close>BACK TO THE CARS</button>'
+            '</div></div></section>'
+            if project.project_type is ProjectType.BANJO else ""
+        ),
+        "{{BANJO_SPONSOR_AREA_MARKUP}}": (
+            '<section class="banjo-sponsor-area" data-banjo-sponsor-area>'
+            f'<a class="banjo-sponsor-button" data-banjo-sponsor-button href="{html.escape(banjo_config.sponsor.url or "", quote=True)}" target="_blank" rel="noopener noreferrer">VISIT OUR SPONSOR</a>'
+            + (
+                f'<a class="banjo-sponsor-logo" data-banjo-sponsor-logo href="{html.escape(banjo_config.sponsor.url or "", quote=True)}" target="_blank" rel="noopener noreferrer">'
+                f'<img src="{html.escape(sponsor_logo_public_url, quote=True)}" alt="{html.escape(banjo_config.sponsor.title, quote=True)} sponsor logo"></a>'
+                if sponsor_logo_public_url else ""
+            )
+            + '</section>'
+            if project.project_type is ProjectType.BANJO and banjo_config and banjo_config.sponsor.active and banjo_config.sponsor.url
+            else ""
         ),
         "{{MACHINE_TITLE}}": html.escape(project.title),
         "{{INITIAL_REEL_INSTRUCTION}}": initial_reel_instruction,
@@ -333,6 +407,12 @@ def build_project_site(project: Project, destination: Path) -> Path:
         sponsor = banjo_config.sponsor if banjo_config else None
         payload["banjoConfig"] = {
             "title": BANJO_TITLE,
+            "tickerText": banjo_ticker,
+            "submission": {
+                "endpoint": BANJO_SUBMISSION_ENDPOINT,
+                "projectSlug": project.slug,
+                "projectType": "banjo",
+            },
             "banjosChoice": [
                 {
                     "videoId": item.video_id,
@@ -345,6 +425,7 @@ def build_project_site(project: Project, destination: Path) -> Path:
                 "active": bool(sponsor and sponsor.active),
                 "title": sponsor.title if sponsor else "",
                 "url": sponsor.url or "" if sponsor else "",
+                "logoAssetUrl": sponsor_logo_public_url,
                 "normalDiscoveriesRequired": 5,
                 "creatives": [
                     {

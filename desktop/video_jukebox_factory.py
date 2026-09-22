@@ -22,7 +22,7 @@ if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
 from aggits_video_factory.banjo import BANJO_DEFAULT_SLUG, BANJO_TITLE, materialize_banjo_config, sponsor_media_summary
-from aggits_video_factory.config import APP_NAME, APP_VERSION, MAX_TICKER_LENGTH, resource_path, video_limit_for_project_type
+from aggits_video_factory.config import APP_NAME, APP_VERSION, resource_path, ticker_limit_for_project_type, video_limit_for_project_type
 from aggits_video_factory.business_workflow import assemble_reviewed_project
 from aggits_video_factory.delivery import (
     DeliveryError,
@@ -108,6 +108,7 @@ class ProjectForm(tk.Frame):
         self.sponsor_active_var = tk.BooleanVar(value=False)
         self.sponsor_title_var = tk.StringVar()
         self.sponsor_url_var = tk.StringVar()
+        self.sponsor_logo_var = tk.StringVar()
         self.sponsor_path_vars = [tk.StringVar() for _ in range(4)]
         self.sponsor_creative_active_vars = [tk.BooleanVar(value=False) for _ in range(4)]
         self.field_widgets: dict[str, tk.Widget] = {}
@@ -117,6 +118,7 @@ class ProjectForm(tk.Frame):
             self.field_widgets["title"].configure(state="readonly", readonlybackground="#101217")
         channel_label = "YouTube Channel URL (Optional)" if self.project_type in {ProjectType.MUSIC, ProjectType.BANJO} else "YouTube Channel URL"
         row = self._entry_row(row, channel_label, self.channel_var, "channel_url")
+        self.ticker_limit = ticker_limit_for_project_type(self.project_type)
         if self.project_type is not ProjectType.BANJO:
             for index, variable in enumerate(self.additional_vars, start=1):
                 row = self._entry_row(row, f"Additional Web Page {index}", variable, "additional_urls")
@@ -143,14 +145,23 @@ class ProjectForm(tk.Frame):
             self.story_text = tk.Text(story_shell, height=4, wrap="word", bg="#101217", fg=PAPER, insertbackground=PAPER, relief="flat", bd=0, highlightbackground=DEEP_BRASS, highlightthickness=1, font=("Segoe UI", 10), padx=9, pady=7)
             self.story_text.grid(row=0, column=0, sticky="ew")
             self.story_text.bind("<KeyRelease>", self._story_changed)
-            self.story_count = tk.Label(story_shell, text=f"0 / {MAX_TICKER_LENGTH}", bg=PANEL, fg=MUTED, font=("Segoe UI", 8))
+            self.story_count = tk.Label(story_shell, text=f"0 / {self.ticker_limit}", bg=PANEL, fg=MUTED, font=("Segoe UI", 8))
             self.story_count.grid(row=1, column=0, sticky="e", pady=(3, 0))
             self.field_widgets["story_text"] = self.story_text
             row += 1
         else:
-            self.story_text = tk.Text(self)
-            self.story_count = tk.Label(self)
             self.custom_row = -1
+            tk.Label(self, text="Banjo Ticker Text", bg=PANEL, fg=CREAM, anchor="ne", font=("Segoe UI", 9)).grid(row=row, column=0, sticky="ne", padx=(22, 12), pady=(8, 5))
+            story_shell = tk.Frame(self, bg=PANEL)
+            story_shell.grid(row=row, column=1, sticky="ew", padx=(0, 22), pady=(5, 3))
+            story_shell.columnconfigure(0, weight=1)
+            self.story_text = tk.Text(story_shell, height=5, wrap="word", bg="#101217", fg=PAPER, insertbackground=PAPER, relief="flat", bd=0, highlightbackground=DEEP_BRASS, highlightthickness=1, font=("Segoe UI", 10), padx=9, pady=7)
+            self.story_text.grid(row=0, column=0, sticky="ew")
+            self.story_text.bind("<KeyRelease>", self._story_changed)
+            self.story_count = tk.Label(story_shell, text=f"0 / {self.ticker_limit}", bg=PANEL, fg=MUTED, font=("Segoe UI", 8))
+            self.story_count.grid(row=1, column=0, sticky="e", pady=(3, 0))
+            self.field_widgets["story_text"] = self.story_text
+            row += 1
 
         self.manual_toggle_label = (
             f"Festival / Individual YouTube Videos (up to {MAX_INDIVIDUAL_VIDEO_URLS})"
@@ -230,6 +241,27 @@ class ProjectForm(tk.Frame):
         row += 1
         row = self._entry_row(row, "Sponsor Title", self.sponsor_title_var, "sponsor_title")
         row = self._entry_row(row, "Sponsor URL", self.sponsor_url_var, "sponsor_url")
+
+        logo_shell = tk.Frame(self, bg=PANEL)
+        logo_shell.grid(row=row, column=0, columnspan=2, sticky="ew", padx=22, pady=4)
+        logo_shell.columnconfigure(1, weight=1)
+        tk.Label(logo_shell, text="Sponsor Logo", bg=PANEL, fg=CREAM, anchor="e", font=("Segoe UI", 9)).grid(row=0, column=0, sticky="e", padx=(0, 12))
+        logo_entry = tk.Entry(logo_shell, textvariable=self.sponsor_logo_var, state="readonly", readonlybackground="#101217", fg=PAPER, relief="flat", highlightbackground=DEEP_BRASS, highlightthickness=1, font=("Segoe UI", 8))
+        logo_entry.grid(row=0, column=1, sticky="ew", ipady=6)
+
+        def choose_logo() -> None:
+            selected = filedialog.askopenfilename(
+                parent=self,
+                title="Select Sponsor Logo",
+                filetypes=[("Sponsor image", "*.png *.jpg *.jpeg *.webp"), ("PNG", "*.png"), ("JPEG", "*.jpg *.jpeg"), ("WebP", "*.webp")],
+            )
+            if selected:
+                self.sponsor_logo_var.set(selected)
+
+        tk.Button(logo_shell, text="SELECT / REPLACE IMAGE", command=choose_logo, bg=PANEL_2, fg=CREAM, activebackground="#303641", activeforeground=PAPER, relief="flat", bd=0, font=("Segoe UI Semibold", 8), padx=8, pady=6).grid(row=0, column=2, padx=(7, 0))
+        tk.Button(logo_shell, text="REMOVE", command=lambda: self.sponsor_logo_var.set(""), bg=PANEL_2, fg=CREAM, activebackground="#303641", activeforeground=PAPER, relief="flat", bd=0, font=("Segoe UI Semibold", 8), padx=8, pady=6).grid(row=0, column=3, padx=(7, 0))
+        self.field_widgets["sponsor_logo"] = logo_entry
+        row += 1
         tk.Label(self, text="SPONSOR VIDEOS — MAXIMUM 4 · MP4 ONLY · 10 MB EACH", bg=PANEL_2, fg=BRASS, anchor="w", font=("Segoe UI Semibold", 10), padx=11, pady=8).grid(row=row, column=0, columnspan=2, sticky="ew", padx=22, pady=(10, 5))
         row += 1
 
@@ -261,11 +293,11 @@ class ProjectForm(tk.Frame):
 
     def _story_changed(self, _event=None) -> None:
         value = self.story_text.get("1.0", "end-1c")
-        if len(value) > MAX_TICKER_LENGTH:
-            value = value[:MAX_TICKER_LENGTH]
+        if len(value) > self.ticker_limit:
+            value = value[:self.ticker_limit]
             self.story_text.delete("1.0", "end")
             self.story_text.insert("1.0", value)
-        self.story_count.configure(text=f"{len(value)} / {MAX_TICKER_LENGTH}", fg=ERROR if len(value) >= MAX_TICKER_LENGTH else MUTED)
+        self.story_count.configure(text=f"{len(value)} / {self.ticker_limit}", fg=ERROR if len(value) >= self.ticker_limit else MUTED)
 
     def _toggle_manual(self, force: bool | None = None) -> None:
         self._manual_open = (not self._manual_open) if force is None else force
@@ -312,6 +344,7 @@ class ProjectForm(tk.Frame):
             sponsor_active=self.sponsor_active_var.get(),
             sponsor_title=self.sponsor_title_var.get(),
             sponsor_url=self.sponsor_url_var.get(),
+            sponsor_logo_path=self.sponsor_logo_var.get(),
             sponsor_creative_paths=[variable.get() for variable in self.sponsor_path_vars],
             sponsor_creative_active=[variable.get() for variable in self.sponsor_creative_active_vars],
         )
@@ -341,6 +374,7 @@ class ProjectForm(tk.Frame):
         self.sponsor_active_var.set(values.sponsor_active)
         self.sponsor_title_var.set(values.sponsor_title)
         self.sponsor_url_var.set(values.sponsor_url)
+        self.sponsor_logo_var.set(values.sponsor_logo_path)
         for variable, value in zip(self.sponsor_path_vars, [*values.sponsor_creative_paths, "", "", "", ""][:4]):
             variable.set(value)
         for variable, value in zip(self.sponsor_creative_active_vars, [*values.sponsor_creative_active, False, False, False, False][:4]):
@@ -394,7 +428,8 @@ class ProjectForm(tk.Frame):
             banjo_choice_urls=list(self._baseline[11]), banjo_choice_titles=list(self._baseline[12]),
             banjo_choice_active=list(self._baseline[13]), sponsor_active=bool(self._baseline[14]),
             sponsor_title=str(self._baseline[15]), sponsor_url=str(self._baseline[16]),
-            sponsor_creative_paths=list(self._baseline[17]), sponsor_creative_active=list(self._baseline[18]),
+            sponsor_logo_path=str(self._baseline[17]), sponsor_creative_paths=list(self._baseline[18]),
+            sponsor_creative_active=list(self._baseline[19]),
         )
         self.set_values(values)
         self.mark_clean()
