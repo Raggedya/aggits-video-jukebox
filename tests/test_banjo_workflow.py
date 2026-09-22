@@ -15,11 +15,18 @@ from aggits_video_factory.banjo import (
     BanjoSponsorScheduler,
     BanjoValidationError,
     import_sponsor_mp4,
+    materialize_banjo_config,
     validate_sponsor_mp4,
     verify_banjo_character,
 )
 from aggits_video_factory.config import MAX_BANJO_VIDEOS, MAX_VIDEOS, resource_path, video_limit_for_project_type
-from aggits_video_factory.desktop_forms import ProjectFormValues, project_to_form_values, validate_project_form
+from aggits_video_factory.desktop_forms import (
+    FormValidationError,
+    ProjectFormValues,
+    project_to_form_values,
+    validate_project_form,
+    youtube_urls_for_project_review,
+)
 from aggits_video_factory.delivery import request_delivery
 from aggits_video_factory.models import (
     BanjoChoice,
@@ -127,6 +134,49 @@ class BanjoModelTests(unittest.TestCase):
         self.assertEqual(values.title, BANJO_TITLE)
         self.assertEqual(len(values.manual_video_urls), 40)
         self.assertEqual(values.sponsor_title, "TEST SPONSOR")
+
+    def test_one_or_many_choice_urls_are_automatically_added_to_youtube_review(self):
+        choices = [video(index) for index in range(1, 5)]
+        one = validate_project_form(ProjectFormValues(
+            banjo_choice_urls=["", choices[0].url, "", ""],
+            banjo_choice_titles=["", "First award", "", ""],
+            banjo_choice_active=[False, True, False, False],
+        ), ProjectType.BANJO)
+        self.assertEqual(one.manual_video_urls, [])
+        self.assertEqual(one.banjo_choice_urls, [choices[0].url])
+        self.assertEqual(youtube_urls_for_project_review(one, ProjectType.BANJO), [choices[0].url])
+
+        many = validate_project_form(ProjectFormValues(
+            manual_video_urls=[video(0).url],
+            banjo_choice_urls=[item.url for item in choices],
+            banjo_choice_titles=[f"Award {index}" for index in range(4)],
+            banjo_choice_active=[True, True, True, True],
+        ), ProjectType.BANJO)
+        review_urls = youtube_urls_for_project_review(many, ProjectType.BANJO)
+        self.assertEqual(review_urls, [video(0).url, *[item.url for item in choices]])
+        with tempfile.TemporaryDirectory() as temporary:
+            config = materialize_banjo_config(
+                many,
+                [video(0), *choices],
+                {video(0).video_id, *[item.video_id for item in choices]},
+                Path(temporary),
+            )
+        self.assertEqual([item.video_id for item in config.banjos_choice], [item.video_id for item in choices])
+
+    def test_choice_videos_share_the_40_video_limit_without_needing_duplicate_entry(self):
+        manual = [video(index).url for index in range(39)]
+        accepted = validate_project_form(ProjectFormValues(
+            manual_video_urls=manual,
+            banjo_choice_urls=[video(38).url, video(39).url],
+            banjo_choice_active=[True, True],
+        ), ProjectType.BANJO)
+        self.assertEqual(len(youtube_urls_for_project_review(accepted, ProjectType.BANJO)), 40)
+        with self.assertRaises(FormValidationError):
+            validate_project_form(ProjectFormValues(
+                manual_video_urls=manual,
+                banjo_choice_urls=[video(39).url, video(40).url],
+                banjo_choice_active=[True, True],
+            ), ProjectType.BANJO)
 
     def test_awards_are_metadata_and_exclusion_safely_deactivates_them(self):
         chosen = video(1)

@@ -43,6 +43,7 @@ from aggits_video_factory.desktop_forms import (
     project_is_visible_in_tab,
     project_to_form_values,
     validate_project_form,
+    youtube_urls_for_project_review,
 )
 from aggits_video_factory.models import Project, ProjectType, utc_now
 from aggits_video_factory.preview import PreviewServer
@@ -983,7 +984,8 @@ class Factory(tk.Tk):
 
         def worker() -> dict[str, object]:
             client = YouTubeClient(api_key)
-            manual_catalogue = client.fetch_videos(values.manual_video_urls) if values.manual_video_urls else None
+            review_urls = youtube_urls_for_project_review(values, project_type)
+            manual_catalogue = client.fetch_videos(review_urls) if review_urls else None
             channel_catalogue = client.fetch_catalogue(values.channel_url, video_limit) if values.channel_url else None
             videos = merge_video_selections(
                 manual_catalogue.videos if manual_catalogue else [],

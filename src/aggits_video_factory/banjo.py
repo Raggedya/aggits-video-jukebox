@@ -117,9 +117,12 @@ def materialize_banjo_config(
     titles = list(getattr(values, "banjo_choice_titles", []))
     active_flags = list(getattr(values, "banjo_choice_active", []))
     for index, url in enumerate(urls[:4]):
-        video_id = YouTubeClient.video_id_from_url(url)
+        raw_url = str(url or "").strip()
+        if not raw_url:
+            continue
+        video_id = YouTubeClient.video_id_from_url(raw_url)
         if not video_id or video_id not in known:
-            raise BanjoValidationError("Banjo's Choice must reference a video in the Banjo YouTube catalogue.")
+            raise BanjoValidationError("Banjo's Choice video could not be resolved as a public YouTube video.")
         display_title = titles[index].strip() if index < len(titles) else ""
         active = bool(active_flags[index]) if index < len(active_flags) else True
         choices.append(BanjoChoice(video_id, display_title, active and video_id in included_video_ids))

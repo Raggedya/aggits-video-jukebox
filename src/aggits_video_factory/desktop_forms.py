@@ -147,6 +147,25 @@ def _clean_urls(values: Iterable[str]) -> list[str]:
     return [str(value).strip() for value in values if str(value).strip()]
 
 
+def youtube_urls_for_project_review(
+    values: ValidatedProjectForm,
+    project_type: ProjectType | str,
+) -> list[str]:
+    """Return explicit videos to resolve, automatically including Banjo awards."""
+    candidates = list(values.manual_video_urls)
+    if ProjectType(project_type) is ProjectType.BANJO:
+        candidates.extend(values.banjo_choice_urls)
+    result: list[str] = []
+    seen: set[str] = set()
+    for url in candidates:
+        video_id = YouTubeClient.video_id_from_url(url)
+        if not video_id or video_id in seen:
+            continue
+        seen.add(video_id)
+        result.append(url)
+    return result
+
+
 def validate_project_form(values: ProjectFormValues, project_type: ProjectType | str) -> ValidatedProjectForm:
     project_type = ProjectType(project_type)
     title = BANJO_TITLE if project_type is ProjectType.BANJO else re.sub(r"\s+", " ", values.title).strip()
@@ -192,13 +211,8 @@ def validate_project_form(values: ProjectFormValues, project_type: ProjectType |
             "manual_video_urls",
             f"No more than {manual_limit} individual YouTube videos can be added during project creation.",
         )
-    if not channel_url and not manual_urls:
-        raise FormValidationError("channel_url", "Add a YouTube channel URL or at least one individual YouTube video.")
 
-    story_text = "" if project_type is ProjectType.BANJO else values.story_text.strip()
-    if len(story_text) > MAX_TICKER_LENGTH:
-        raise FormValidationError("story_text", f"Bio / Story Information cannot exceed {MAX_TICKER_LENGTH} characters.")
-
+    choice_rows: list[tuple[str, str, bool]] = []
     if project_type is ProjectType.BANJO:
         choice_rows = [
             (str(url or "").strip(), str(values.banjo_choice_titles[index] if index < len(values.banjo_choice_titles) else "").strip(),
@@ -209,12 +223,36 @@ def validate_project_form(values: ProjectFormValues, project_type: ProjectType |
         choice_urls = [row[0] for row in choice_rows]
         choice_titles = [row[1] for row in choice_rows]
         choice_active = [row[2] for row in choice_rows]
-        if len(choice_urls) > 4 or sum(choice_active[:len(choice_urls)]) > 4:
+        if len(choice_urls) > 4 or sum(choice_active) > 4:
             raise FormValidationError("banjo_choices", "A Banjo project can have no more than four active Banjo's Choice awards.")
-        if any(not YouTubeClient.video_id_from_url(url) for url in choice_urls):
+        choice_video_ids = [YouTubeClient.video_id_from_url(url) for url in choice_urls]
+        if any(not video_id for video_id in choice_video_ids):
             raise FormValidationError("banjo_choices", "Banjo's Choice entries must use recognised YouTube video URLs.")
-        if any(len(title) > 80 for title in choice_titles):
+        if len(choice_video_ids) != len(set(choice_video_ids)):
+            raise FormValidationError("banjo_choices", "Each Banjo's Choice award must use a different YouTube video.")
+        if any(len(choice_title) > 80 for choice_title in choice_titles):
             raise FormValidationError("banjo_choices", "Banjo's Choice display titles cannot exceed 80 characters.")
+        combined_video_ids = seen_video_ids | set(choice_video_ids)
+        if len(combined_video_ids) > manual_limit:
+            raise FormValidationError(
+                "banjo_choices",
+                f"Banjo YouTube videos, including Banjo's Choice awards, cannot exceed {manual_limit} in total.",
+            )
+
+    if not channel_url and not manual_urls and not choice_rows:
+        raise FormValidationError(
+            "channel_url",
+            "Add a YouTube channel URL, an individual YouTube video, or a Banjo's Choice video.",
+        )
+
+    story_text = "" if project_type is ProjectType.BANJO else values.story_text.strip()
+    if len(story_text) > MAX_TICKER_LENGTH:
+        raise FormValidationError("story_text", f"Bio / Story Information cannot exceed {MAX_TICKER_LENGTH} characters.")
+
+    if project_type is ProjectType.BANJO:
+        choice_urls = [row[0] for row in choice_rows]
+        choice_titles = [row[1] for row in choice_rows]
+        choice_active = [row[2] for row in choice_rows]
         sponsor_title = str(values.sponsor_title or "").strip()
         sponsor_url = str(values.sponsor_url or "").strip()
         if len(sponsor_title) > 40:
