@@ -1,7 +1,9 @@
 const DELIVERY_PATH = "/api/deliveries";
+const CAMPAIGN_DELIVERY_PATH = "/api/campaign-deliveries";
 const BANJO_SUBMISSION_PATH = "/api/banjo/submissions";
 const REPLAY_WINDOW_SECONDS = 300;
 const MAX_BODY_BYTES = 16 * 1024;
+const MAX_CAMPAIGN_BODY_BYTES = 12 * 1024 * 1024;
 const MAX_SUBMISSION_BODY_BYTES = 2 * 1024;
 const SUBMISSION_RATE_LIMIT = 5;
 const SUBMISSION_RATE_WINDOW_SECONDS = 60 * 60;
@@ -83,15 +85,15 @@ function constantTimeEqual(left, right) {
   return difference === 0;
 }
 
-function canonicalRequest(timestamp, nonce, bodyBytes) {
-  const prefix = new TextEncoder().encode(`${timestamp}\n${nonce}\nPOST\n${DELIVERY_PATH}\n`);
+function canonicalRequest(timestamp, nonce, bodyBytes, path = DELIVERY_PATH) {
+  const prefix = new TextEncoder().encode(`${timestamp}\n${nonce}\nPOST\n${path}\n`);
   const canonical = new Uint8Array(prefix.length + bodyBytes.length);
   canonical.set(prefix);
   canonical.set(bodyBytes, prefix.length);
   return canonical;
 }
 
-async function expectedSignature(secret, timestamp, nonce, bodyBytes) {
+async function expectedSignature(secret, timestamp, nonce, bodyBytes, path = DELIVERY_PATH) {
   const key = await crypto.subtle.importKey(
     "raw",
     new TextEncoder().encode(secret),
@@ -99,10 +101,10 @@ async function expectedSignature(secret, timestamp, nonce, bodyBytes) {
     false,
     ["sign"],
   );
-  return new Uint8Array(await crypto.subtle.sign("HMAC", key, canonicalRequest(timestamp, nonce, bodyBytes)));
+  return new Uint8Array(await crypto.subtle.sign("HMAC", key, canonicalRequest(timestamp, nonce, bodyBytes, path)));
 }
 
-async function authenticate(request, env, bodyBytes, nowSeconds = Math.floor(Date.now() / 1000)) {
+async function authenticate(request, env, bodyBytes, nowSeconds = Math.floor(Date.now() / 1000), path = DELIVERY_PATH) {
   if (!env.DELIVERY_HMAC_SECRET) return { ok: false, response: json({ ok: false, error: "delivery_auth_not_configured" }, 503, cors) };
   const timestamp = request.headers.get("x-crispy-timestamp") || "";
   const nonce = request.headers.get("x-crispy-nonce") || "";
@@ -111,7 +113,7 @@ async function authenticate(request, env, bodyBytes, nowSeconds = Math.floor(Dat
   if (!Number.isInteger(parsedTimestamp) || Math.abs(nowSeconds - parsedTimestamp) > REPLAY_WINDOW_SECONDS || !/^[0-9a-f]{32,64}$/i.test(nonce) || !supplied) {
     return { ok: false, response: json({ ok: false, error: "delivery_authentication_failed" }, 401, cors) };
   }
-  const expected = await expectedSignature(env.DELIVERY_HMAC_SECRET, timestamp, nonce, bodyBytes);
+  const expected = await expectedSignature(env.DELIVERY_HMAC_SECRET, timestamp, nonce, bodyBytes, path);
   if (!constantTimeEqual(supplied, expected)) {
     return { ok: false, response: json({ ok: false, error: "delivery_authentication_failed" }, 401, cors) };
   }
@@ -339,9 +341,92 @@ async function handleBanjoSubmission(request, env, nowSeconds = Math.floor(Date.
   return json({ ok: true }, 201, cors);
 }
 
+async function handleCampaignDelivery(request, env) {
+  if (!env.RESEND_API_KEY) return json({ ok: false, error: "delivery_service_not_configured" }, 503, cors);
+  const bodyBuffer = await request.arrayBuffer();
+  if (bodyBuffer.byteLength > MAX_CAMPAIGN_BODY_BYTES) return json({ ok: false, error: "request_too_large" }, 413, cors);
+  const bodyBytes = new Uint8Array(bodyBuffer);
+  const auth = await authenticate(request, env, bodyBytes, Math.floor(Date.now() / 1000), CAMPAIGN_DELIVERY_PATH);
+  if (!auth.ok) return auth.response;
+  let body;
+  try { body = JSON.parse(new TextDecoder().decode(bodyBytes)); } catch { return json({ ok: false, error: "invalid_json" }, 400, cors); }
+  if (!body || typeof body !== "object" || Array.isArray(body)) return json({ ok: false, error: "invalid_campaign_delivery" }, 400, cors);
+  const allowedFields = new Set(["campaignId", "campaignName", "machines", "counts", "attachments", "idempotencyKey"]);
+  if (Object.keys(body).some((key) => !allowedFields.has(key))) return json({ ok: false, error: "unexpected_fields" }, 400, cors);
+  const campaignId = String(body.campaignId || "").toLowerCase();
+  const campaignName = String(body.campaignName || "").trim();
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(campaignId) || !campaignName || campaignName.length > 120 || /[\u0000-\u001f\u007f]/.test(campaignName)) {
+    return json({ ok: false, error: "invalid_campaign_identity" }, 400, cors);
+  }
+  const machines = Array.isArray(body.machines) ? body.machines : [];
+  if (!machines.length || machines.length > 20) return json({ ok: false, error: "invalid_campaign_machines" }, 400, cors);
+  const publicBase = String(env.PUBLIC_BASE_URL || "").replace(/\/+$/, "");
+  const normalizedMachines = [];
+  const seenNumbers = new Set();
+  const seenUrls = new Set();
+  for (const machine of machines) {
+    const number = Number(machine?.candidateNumber);
+    const name = String(machine?.organisationName || "").trim();
+    const publicUrl = String(machine?.publicUrl || "");
+    let parsed;
+    try { parsed = new URL(publicUrl); } catch { return json({ ok: false, error: "invalid_campaign_machine" }, 400, cors); }
+    const prefix = `${publicBase}/crispy-bits/`;
+    if (!Number.isInteger(number) || number < 1 || number > 999 || seenNumbers.has(number) || !name || name.length > 120 || /[\u0000-\u001f\u007f]/.test(name) || !publicUrl.startsWith(prefix) || parsed.protocol !== "https:" || !publicUrl.endsWith("/") || seenUrls.has(publicUrl)) {
+      return json({ ok: false, error: "invalid_campaign_machine" }, 400, cors);
+    }
+    seenNumbers.add(number); seenUrls.add(publicUrl);
+    normalizedMachines.push({ number, name, publicUrl });
+  }
+  normalizedMachines.sort((left, right) => left.number - right.number);
+  const expectedIdempotency = await sha256Hex(`${campaignId}\n${normalizedMachines.map((item) => item.publicUrl).join("\n")}`);
+  if (String(body.idempotencyKey || "") !== expectedIdempotency) return json({ ok: false, error: "invalid_campaign_idempotency" }, 400, cors);
+  const allowedAttachments = new Set(["campaign.csv", "qr-sheet.pdf", "prospect-cards.zip", "qr-codes.zip"]);
+  const requiredAttachments = new Set(["campaign.csv", "qr-sheet.pdf", "prospect-cards.zip"]);
+  const attachments = Array.isArray(body.attachments) ? body.attachments : [];
+  const names = new Set();
+  let decodedBytes = 0;
+  for (const attachment of attachments) {
+    const filename = String(attachment?.filename || "");
+    const content = String(attachment?.content || "");
+    if (!allowedAttachments.has(filename) || names.has(filename) || !content || !/^[A-Za-z0-9+/]+={0,2}$/.test(content)) return json({ ok: false, error: "invalid_campaign_attachment" }, 400, cors);
+    names.add(filename);
+    decodedBytes += Math.floor(content.length * 3 / 4);
+  }
+  if ([...requiredAttachments].some((name) => !names.has(name)) || decodedBytes > 8 * 1024 * 1024) return json({ ok: false, error: "invalid_campaign_attachments" }, 400, cors);
+  const recipient = safeRecipient(env.OWNER_EMAIL);
+  if (!recipient) return json({ ok: false, error: "delivery_recipient_not_configured" }, 503, cors);
+  const slug = `campaign-${campaignId.replaceAll("-", "")}`;
+  const revision = expectedIdempotency.slice(0, 40);
+  const existing = await env.DB.prepare("SELECT provider_id, status, created_at FROM deliveries WHERE slug = ?1 AND revision = ?2 AND recipient = ?3").bind(slug, revision, recipient).first();
+  if (existing && existing.status === "sent") return json({ ok: true, duplicate: true, id: existing.provider_id, sentAt: existing.created_at }, 200, cors);
+  const counts = body.counts && typeof body.counts === "object" ? body.counts : {};
+  const safeCount = (key) => Math.max(0, Math.min(999, Number.parseInt(counts[key], 10) || 0));
+  const subject = `CRISPY BITS — ${campaignName} — ${normalizedMachines.length} MACHINES`;
+  const lines = [subject, "", `Approved: ${safeCount("approved")}`, `Built: ${safeCount("built")}`, `Published: ${normalizedMachines.length}`, `Failures: ${safeCount("failed")}`, "", ...normalizedMachines.map((item) => `${String(item.number).padStart(2, "0")}. ${item.name} — ${item.publicUrl}`)];
+  await env.DB.prepare("INSERT OR IGNORE INTO deliveries (slug, revision, title, public_url, recipient, provider_id, status, idempotency_key, last_attempt_at) VALUES (?1, ?2, ?3, ?4, ?5, '', 'attempting', ?6, CURRENT_TIMESTAMP)").bind(slug, revision, campaignName, normalizedMachines[0].publicUrl, recipient, expectedIdempotency).run();
+  const providerResponse = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: { authorization: `Bearer ${env.RESEND_API_KEY}`, "content-type": "application/json", "Idempotency-Key": expectedIdempotency },
+    body: JSON.stringify({
+      from: env.REPORT_FROM_EMAIL, to: [recipient], subject, text: lines.join("\n"),
+      html: `<div style="font-family:Arial,sans-serif"><h1>${escapeHtml(subject)}</h1><p>Approved: ${safeCount("approved")}<br>Built: ${safeCount("built")}<br>Published: ${normalizedMachines.length}<br>Failures: ${safeCount("failed")}</p><ol>${normalizedMachines.map((item) => `<li><strong>${escapeHtml(item.name)}</strong> — <a href="${escapeHtml(item.publicUrl)}">${escapeHtml(item.publicUrl)}</a></li>`).join("")}</ol></div>`,
+      attachments: attachments.map((attachment) => ({ filename: attachment.filename, content: attachment.content })),
+    }),
+  });
+  if (!providerResponse.ok) {
+    await env.DB.prepare("UPDATE deliveries SET status = 'failed', last_error = ?1, last_attempt_at = CURRENT_TIMESTAMP WHERE slug = ?2 AND revision = ?3 AND recipient = ?4").bind(`provider_${providerResponse.status}`, slug, revision, recipient).run();
+    return json({ ok: false, error: "campaign_delivery_failed" }, providerResponse.status === 429 ? 429 : 502, cors);
+  }
+  let provider = {};
+  try { provider = await providerResponse.json(); } catch { provider = {}; }
+  const providerId = String(provider.id || "");
+  await env.DB.prepare("UPDATE deliveries SET provider_id = ?1, status = 'sent', created_at = COALESCE(created_at, CURRENT_TIMESTAMP), last_attempt_at = CURRENT_TIMESTAMP, last_error = NULL WHERE slug = ?2 AND revision = ?3 AND recipient = ?4").bind(providerId, slug, revision, recipient).run();
+  return json({ ok: true, id: providerId, sentAt: new Date().toISOString() }, 201, cors);
+}
+
 export {
   authenticate, canonicalRequest, constantTimeEqual, deliveryIdempotencyKey, handleBanjoSubmission,
-  handleDelivery, safeFirstName, safeRecipient, safeYouTubeVideo, verifyPublishedAssets,
+  handleCampaignDelivery, handleDelivery, safeFirstName, safeRecipient, safeYouTubeVideo, verifyPublishedAssets,
 };
 
 export default {
@@ -350,6 +435,7 @@ export default {
     if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: cors });
     if (request.method === "GET" && url.pathname === "/") return json({ ok: true, service: "aggits-video-jukebox-delivery" }, 200, cors);
     if (request.method === "POST" && url.pathname === DELIVERY_PATH) return handleDelivery(request, env);
+    if (request.method === "POST" && url.pathname === CAMPAIGN_DELIVERY_PATH) return handleCampaignDelivery(request, env);
     if (request.method === "POST" && url.pathname === BANJO_SUBMISSION_PATH) return handleBanjoSubmission(request, env);
     if (url.pathname === BANJO_SUBMISSION_PATH) return json({ ok: false, error: "method_not_allowed" }, 405, { ...cors, allow: "POST" });
     return json({ ok: false, error: "not_found" }, 404, cors);

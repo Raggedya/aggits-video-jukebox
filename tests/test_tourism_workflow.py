@@ -379,7 +379,7 @@ class TourismWorkflowTests(unittest.TestCase):
         self.assertNotIn("moreInfoURL", payload)
         self.assertNotIn("stayURL", payload)
 
-    def test_desktop_declares_five_tabs_in_required_order(self):
+    def test_desktop_declares_six_tabs_in_required_order(self):
         desktop_path = ROOT / "desktop" / "video_jukebox_factory.py"
         source = desktop_path.read_text(encoding="utf-8")
         self.assertIn(
@@ -416,7 +416,7 @@ class TourismWorkflowTests(unittest.TestCase):
             try:
                 self.assertEqual(
                     [app.notebook.tab(index, "text") for index in range(app.notebook.index("end"))],
-                    ["BUSINESS", "MUSIC", "TOURISM", "BANJO", "CHANNEL MASTER"],
+                    ["BUSINESS", "MUSIC", "TOURISM", "BANJO", "CHANNEL MASTER", "BULK UPLOAD"],
                 )
                 for width, height in ((1320, 820), (1120, 720)):
                     app.geometry(f"{width}x{height}")

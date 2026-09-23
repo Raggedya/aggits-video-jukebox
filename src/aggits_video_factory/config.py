@@ -15,6 +15,7 @@ GITHUB_REMOTE = f"https://github.com/{GITHUB_OWNER}/{GITHUB_REPOSITORY}.git"
 PUBLIC_PATH = "crispy-bits"
 PUBLIC_BASE_URL = f"https://{GITHUB_OWNER.lower()}.github.io/{GITHUB_REPOSITORY}/{PUBLIC_PATH}"
 DELIVERY_ENDPOINT = "https://aggits-video-jukebox.andrewharris501.workers.dev/api/deliveries"
+CAMPAIGN_DELIVERY_ENDPOINT = "https://aggits-video-jukebox.andrewharris501.workers.dev/api/campaign-deliveries"
 BANJO_SUBMISSION_ENDPOINT = "https://aggits-video-jukebox.andrewharris501.workers.dev/api/banjo/submissions"
 MAX_VIDEOS = 30
 MAX_BANJO_VIDEOS = 40

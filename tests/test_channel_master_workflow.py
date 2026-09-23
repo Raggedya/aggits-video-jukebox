@@ -437,11 +437,13 @@ class ChannelMasterWorkflowTests(unittest.TestCase):
             self.assertTrue(packaged.is_file())
             self.assertEqual(packaged.read_bytes(), asset.read_bytes())
 
-    def test_desktop_declares_exact_five_tabs_and_required_channel_master_controls(self):
+    def test_desktop_declares_exact_six_tabs_and_required_channel_master_controls(self):
         self.assertIn(
             "ProjectType.BUSINESS, ProjectType.MUSIC, ProjectType.TOURISM,\n            ProjectType.BANJO, ProjectType.CHANNEL_MASTER",
             DESKTOP,
         )
+        self.assertIn('self.notebook.add(bulk_page, text="BULK UPLOAD")', DESKTOP)
+        self.assertIn('self.tab_keys: list[ProjectType | str] = [*self.tab_types, "bulk_upload"]', DESKTOP)
         for copy in (
             "Additional URL", "Ticker Text", "Primary CTA URL", "Custom CTA Label",
             "Colour Palette", "Custom Primary", "Custom Accent", "Contact URL",

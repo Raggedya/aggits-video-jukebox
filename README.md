@@ -1,6 +1,6 @@
 # CRISPY BITS DESKTOP
 
-A standalone Windows desktop application for creating and managing CRISPY BITS BUSINESS, CRISPY BITS MUSIC and CRISPY BITS TOURISM projects. All three workflows share the proven YouTube analysis, review, machine generation, Library, publication, QR, delivery and recovery infrastructure.
+A standalone Windows desktop application for creating and managing CRISPY BITS BUSINESS, MUSIC, TOURISM, BANJO and CHANNEL MASTER projects. The six-tab desktop also includes BULK UPLOAD, an internal campaign workflow that creates ordinary Channel Master projects while reusing the proven YouTube, Library, publication, QR, delivery and recovery infrastructure.
 
 ## Factory workflow
 
@@ -13,6 +13,14 @@ A standalone Windows desktop application for creating and managing CRISPY BITS B
 7. After a verified publication, the separate delivery Worker emails the live link and titled QR card.
 
 Published jukeboxes can be reopened with **Edit Videos**. Reviewed changes remain private and the existing live version stays untouched until **Update + Republish** is pressed.
+
+## Bulk Upload campaign factory
+
+**BULK UPLOAD** is an operator-only orchestration tab, not a public project type. It can import/export a UTF-8 campaign CSV, validate and approve up to 20 prospects, build each approved row as a normal `channel_master` project with up to 50 videos, require a second approval before bulk publication, and package verified publications as individual QR codes, one internal A4 QR sheet, individual 1080×1350 prospect cards, ZIP files, a manifest and final campaign CSV.
+
+The desktop ships with a `CandidateResearchService` boundary but no prospect-research provider. Until an authorised provider is configured, use verified CSV input; the application does not scrape or invent prospects. Campaign data is stored separately under the application data root and never enters public machine output. Prospect outreach remains manual.
+
+One operator campaign email uses the authenticated `/api/campaign-deliveries` Worker route. The Worker fixes the recipient from `OWNER_EMAIL`, constructs the subject/body, allowlists campaign attachments and applies HMAC replay protection and delivery idempotency. Deploying that source route is a separate production operation.
 
 The public machine uses YouTube's official embedded player. After the reel confirms a winner, the machine pauses briefly and reveals the matched video without autoplaying it. **Play Video** activates the selected official player, while **Re-spin** closes the stage before the existing reel sequence begins again.
 

@@ -24,6 +24,19 @@ if str(SRC) not in sys.path:
 from aggits_video_factory.banjo import BANJO_DEFAULT_SLUG, BANJO_TITLE, materialize_banjo_config, sponsor_media_summary
 from aggits_video_factory.config import APP_NAME, APP_VERSION, MAX_CHANNEL_MASTER_REVIEW_VIDEOS, resource_path, ticker_limit_for_project_type, video_limit_for_project_type
 from aggits_video_factory.business_workflow import assemble_reviewed_project
+from aggits_video_factory.campaigns import (
+    BulkChannelMasterBuilder,
+    BulkPublishCoordinator,
+    Campaign,
+    CampaignCsvService,
+    CampaignEmailCoordinator,
+    CampaignError,
+    CampaignPackageService,
+    CampaignStore,
+    CandidateResearchService,
+    ResearchUnavailableError,
+)
+from aggits_video_factory.campaign_delivery import CampaignWorkerTransport
 from aggits_video_factory.delivery import (
     DeliveryError,
     delivery_intent_matches,
@@ -50,7 +63,7 @@ from aggits_video_factory.models import CHANNEL_MASTER_PALETTES, ChannelMasterCo
 from aggits_video_factory.preview import PreviewServer
 from aggits_video_factory.publisher import PublicationVerificationPending, PublishError, Publisher, UnpublishVerificationPending
 from aggits_video_factory.site_builder import build_project_site
-from aggits_video_factory.store import ProjectStore
+from aggits_video_factory.store import ProjectStore, slugify
 from aggits_video_factory.supplementary_sources import retrieve_supplementary_sources
 from aggits_video_factory.youtube_api import YouTubeClient, YouTubeError, merge_video_selections
 from aggits_video_factory.video_editor import VideoEditError, VideoSelectionSession
@@ -591,6 +604,349 @@ class LibraryPanel(tk.Frame):
         return selected[0] if selected else None
 
 
+class BulkUploadPanel(tk.Frame):
+    """Operator campaign controls; every generated public project remains Channel Master."""
+
+    def __init__(self, parent: tk.Misc, factory: "Factory") -> None:
+        super().__init__(parent, bg=INK)
+        self.factory = factory
+        self.store = factory.campaign_store
+        self.current: Campaign | None = None
+        self.campaign_name = tk.StringVar()
+        self.theme = tk.StringVar()
+        self.location = tk.StringVar()
+        self.target = tk.StringVar(value="20")
+        self.summary = tk.StringVar(value="Create a campaign or import a verified campaign CSV.")
+        self._build()
+        self.refresh_campaigns()
+
+    def _build(self) -> None:
+        self.columnconfigure(0, weight=1)
+        self.rowconfigure(1, weight=1)
+        heading = tk.Frame(self, bg=PANEL, highlightbackground=DEEP_BRASS, highlightthickness=1)
+        heading.grid(row=0, column=0, sticky="ew", pady=(0, 8))
+        tk.Label(heading, text="BULK UPLOAD · CHANNEL MASTER CAMPAIGN FACTORY", bg=PANEL, fg=PAPER, font=("Segoe UI Semibold", 14)).pack(anchor="w", padx=16, pady=(12, 2))
+        tk.Label(heading, text="IMPORT OR REVIEW PROSPECTS → BUILD → CHECK → APPROVE → PUBLISH → QR PACKAGE → EMAIL", bg=PANEL, fg=MUTED, font=("Segoe UI", 8)).pack(anchor="w", padx=16, pady=(0, 11))
+
+        body = tk.PanedWindow(self, orient="horizontal", bg=INK, sashwidth=7, sashrelief="flat", bd=0)
+        body.grid(row=1, column=0, sticky="nsew")
+        left = tk.Frame(body, bg=PANEL, highlightbackground=DEEP_BRASS, highlightthickness=1)
+        right = tk.Frame(body, bg=PANEL, highlightbackground=DEEP_BRASS, highlightthickness=1)
+        body.add(left, width=390, minsize=350)
+        body.add(right, minsize=650)
+
+        tk.Label(left, text="1 · WHAT AM I LOOKING FOR?", bg=PANEL, fg=BRASS, font=("Segoe UI Semibold", 10)).pack(anchor="w", padx=14, pady=(14, 8))
+        for label, variable in (("CAMPAIGN NAME", self.campaign_name), ("THEME", self.theme), ("LOCATION", self.location), ("NUMBER OF CANDIDATES (MAX 20)", self.target)):
+            tk.Label(left, text=label, bg=PANEL, fg=MUTED, font=("Segoe UI Semibold", 8)).pack(anchor="w", padx=14, pady=(5, 3))
+            tk.Entry(left, textvariable=variable, bg="#101217", fg=PAPER, insertbackground=PAPER, relief="flat", highlightbackground=DEEP_BRASS, highlightthickness=1, font=("Segoe UI", 9)).pack(fill="x", padx=14, ipady=6)
+        first_actions = tk.Frame(left, bg=PANEL)
+        first_actions.pack(fill="x", padx=14, pady=(10, 5))
+        self.factory._button(first_actions, "CREATE CAMPAIGN", self.create_campaign, primary=True, compact=True).pack(side="left")
+        self.factory._button(first_actions, "FIND CANDIDATES", self.find_candidates, compact=True).pack(side="left", padx=6)
+        import_actions = tk.Frame(left, bg=PANEL)
+        import_actions.pack(fill="x", padx=14, pady=(0, 12))
+        self.factory._button(import_actions, "IMPORT CSV", self.import_csv, compact=True).pack(side="left")
+        self.factory._button(import_actions, "CSV TEMPLATE", self.save_template, compact=True).pack(side="left", padx=6)
+
+        tk.Label(left, text="RECENT CAMPAIGNS", bg=PANEL_2, fg=BRASS, anchor="w", padx=10, pady=7, font=("Segoe UI Semibold", 9)).pack(fill="x", padx=14, pady=(4, 5))
+        recent_shell = tk.Frame(left, bg=PANEL)
+        recent_shell.pack(fill="both", expand=True, padx=14)
+        self.recent = ttk.Treeview(recent_shell, columns=("name", "theme", "location", "created", "status", "candidates", "published"), show="headings", height=8, style="Factory.Treeview")
+        for key, label, width in (("name", "CAMPAIGN", 160), ("theme", "THEME", 90), ("location", "LOCATION", 90), ("created", "CREATED", 115), ("status", "STATUS", 110), ("candidates", "CANDIDATES", 75), ("published", "PUBLISHED", 68)):
+            self.recent.heading(key, text=label)
+            self.recent.column(key, width=width, minwidth=35, stretch=key == "name")
+        recent_scroll = ttk.Scrollbar(recent_shell, orient="horizontal", command=self.recent.xview)
+        self.recent.configure(xscrollcommand=recent_scroll.set)
+        self.recent.pack(fill="both", expand=True)
+        recent_scroll.pack(fill="x")
+        self.recent.bind("<<TreeviewSelect>>", self._load_selected_campaign)
+        self.factory._button(left, "ARCHIVE CAMPAIGN", self.archive_campaign, compact=True).pack(anchor="w", padx=14, pady=10)
+
+        tk.Label(right, text="2 · WHO DID WE FIND?   3 · WHICH ONES DO I WANT?", bg=PANEL, fg=BRASS, font=("Segoe UI Semibold", 10)).pack(anchor="w", padx=14, pady=(14, 8))
+        table_shell = tk.Frame(right, bg=PANEL)
+        table_shell.pack(fill="both", expand=True, padx=14)
+        columns = ("approve", "number", "organisation", "videos", "ownership", "cta", "confidence", "status")
+        self.candidates = ttk.Treeview(table_shell, columns=columns, show="headings", height=12, style="Factory.Treeview")
+        definitions = (
+            ("approve", "APPROVE", 62), ("number", "#", 34), ("organisation", "ORGANISATION", 190),
+            ("videos", "VIDEOS", 55), ("ownership", "OWNERSHIP", 95), ("cta", "CTA", 105),
+            ("confidence", "CONFIDENCE", 95), ("status", "STATUS", 125),
+        )
+        for key, label, width in definitions:
+            self.candidates.heading(key, text=label)
+            self.candidates.column(key, width=width, minwidth=30, stretch=key == "organisation")
+        horizontal = ttk.Scrollbar(table_shell, orient="horizontal", command=self.candidates.xview)
+        vertical = ttk.Scrollbar(table_shell, orient="vertical", command=self.candidates.yview)
+        self.candidates.configure(xscrollcommand=horizontal.set, yscrollcommand=vertical.set)
+        self.candidates.grid(row=0, column=0, sticky="nsew")
+        vertical.grid(row=0, column=1, sticky="ns")
+        horizontal.grid(row=1, column=0, sticky="ew")
+        table_shell.columnconfigure(0, weight=1); table_shell.rowconfigure(0, weight=1)
+
+        row_actions = tk.Frame(right, bg=PANEL)
+        row_actions.pack(fill="x", padx=14, pady=(8, 4))
+        for index, (label, command) in enumerate((("TOGGLE APPROVE", self.toggle_approve), ("MARK REVIEWED", self.mark_reviewed), ("APPROVE TO PUBLISH", self.approve_to_publish), ("PREVIEW", self.preview_selected), ("OPEN PUBLIC", self.open_public), ("VIEW CARD", self.view_card), ("OPEN WEBSITE", self.open_website), ("OPEN YOUTUBE", self.open_youtube), ("VIEW QR", self.view_qr), ("HOLD", self.hold_candidate), ("COPY PUBLIC LINK", self.copy_public_link), ("COPY OUTREACH MESSAGE", self.copy_outreach_message))):
+            row_actions.columnconfigure(index % 3, weight=1)
+            self.factory._button(row_actions, label, command, compact=True).grid(row=index // 3, column=index % 3, sticky="ew", padx=(0, 5), pady=(0, 4))
+
+        tk.Label(right, textvariable=self.summary, bg=PANEL_2, fg=CREAM, anchor="w", justify="left", padx=10, pady=8, font=("Segoe UI", 8)).pack(fill="x", padx=14, pady=(4, 7))
+        actions = tk.Frame(right, bg=PANEL)
+        actions.pack(fill="x", padx=14, pady=(0, 14))
+        for index, (label, command, primary) in enumerate((
+            ("EXPORT CSV", self.export_csv, False), ("VALIDATE", self.validate_campaign, False),
+            ("BUILD APPROVED", self.build_approved, True), ("PUBLISH APPROVED", self.publish_approved, True),
+            ("GENERATE QR PACKAGE", self.generate_package, False), ("EMAIL CAMPAIGN TO ME", self.email_campaign, False),
+            ("OPEN PROSPECT CARDS", self.open_prospect_cards, False),
+            ("RETRY FAILED", self.build_approved, False), ("RETRY FAILED PUBLISH", self.publish_approved, False),
+            ("REGENERATE PACKAGE", self.generate_package, False), ("RETRY EMAIL", self.email_campaign, False),
+        )):
+            actions.columnconfigure(index % 4, weight=1)
+            self.factory._button(actions, label, command, primary=primary, compact=True).grid(row=index // 4, column=index % 4, sticky="ew", padx=(0, 5), pady=(0, 4))
+
+    def _selected_candidate(self):
+        if not self.current or not self.candidates.selection():
+            return None
+        number = int(self.candidates.selection()[0])
+        return next((item for item in self.current.candidates if item.candidate_number == number), None)
+
+    def refresh_campaigns(self) -> None:
+        self.recent.delete(*self.recent.get_children())
+        for campaign in self.store.list():
+            counts = campaign.counts()
+            created = campaign.created_at.replace("T", " ").replace("Z", "")[:16]
+            self.recent.insert("", "end", iid=campaign.campaign_id, values=(campaign.campaign_name, campaign.theme, campaign.location, created, campaign.status.replace("_", " "), counts["candidates"], counts["published"]))
+        self._render_current()
+
+    def _render_current(self) -> None:
+        self.candidates.delete(*self.candidates.get_children())
+        if not self.current:
+            return
+        for item in self.current.candidates:
+            status = item.publish_status if item.publish_status != "PENDING" else item.review_status if item.review_status != "PENDING" else item.build_status
+            self.candidates.insert("", "end", iid=str(item.candidate_number), values=("YES" if item.approved_for_build else "NO", f"{item.candidate_number:02d}", item.organisation_name, item.youtube_video_count if item.youtube_video_count is not None else "?", item.youtube_ownership_status, item.primary_cta_type or "REVIEW", item.research_confidence, status))
+        counts = self.current.counts()
+        self.summary.set(f"{self.current.campaign_name} · {self.current.status.replace('_', ' ')} · {counts['candidates']} candidates · {counts['approved']} approved · {counts['built']} built · {counts['published']} published · {counts['failed']} failed")
+
+    def _load_selected_campaign(self, _event=None) -> None:
+        selected = self.recent.selection()
+        if selected:
+            self.current = self.store.load(selected[0])
+            self.campaign_name.set(self.current.campaign_name); self.theme.set(self.current.theme); self.location.set(self.current.location); self.target.set(str(self.current.target_count))
+            self._render_current()
+
+    def create_campaign(self) -> None:
+        try:
+            name = self.campaign_name.get().strip() or f"{self.theme.get().strip()} - {self.location.get().strip()}".strip(" -")
+            self.current = Campaign(name, self.theme.get(), self.location.get(), int(self.target.get() or 20))
+            self.store.save(self.current)
+        except (ValueError, CampaignError) as error:
+            messagebox.showerror(DESKTOP_TITLE, str(error), parent=self)
+            return
+        self.refresh_campaigns()
+
+    def find_candidates(self) -> None:
+        try:
+            CandidateResearchService().find_candidates(theme=self.theme.get(), location=self.location.get(), limit=int(self.target.get() or 20))
+        except ResearchUnavailableError as error:
+            messagebox.showinfo(DESKTOP_TITLE, f"{error}\n\nThe complete IMPORT CSV workflow remains available.", parent=self)
+
+    def import_csv(self) -> None:
+        source = filedialog.askopenfilename(parent=self, title="Import Campaign CSV", filetypes=[("Campaign CSV", "*.csv")])
+        if not source:
+            return
+        try:
+            imported = CampaignCsvService.import_file(Path(source))
+            existing = next((item for item in self.store.list(include_archived=True) if item.campaign_id == imported.campaign_id), None)
+            if existing and not messagebox.askyesno("Existing campaign", "This CSV belongs to an existing campaign. Replace its campaign-control values while preserving its identity?", parent=self):
+                return
+            self.current = imported
+            self.store.save(imported)
+        except Exception as error:
+            messagebox.showerror(DESKTOP_TITLE, str(error), parent=self)
+            return
+        self.refresh_campaigns()
+
+    def save_template(self) -> None:
+        destination = filedialog.asksaveasfilename(parent=self, title="Save Campaign CSV Template", defaultextension=".csv", initialfile="crispy-bits-campaign-template.csv", filetypes=[("CSV", "*.csv")])
+        if destination:
+            CampaignCsvService.template(Path(destination))
+
+    def export_csv(self) -> None:
+        if not self.current:
+            return
+        destination = filedialog.asksaveasfilename(parent=self, title="Export Campaign CSV", defaultextension=".csv", initialfile=f"{slugify(self.current.campaign_name)}.csv", filetypes=[("CSV", "*.csv")])
+        if destination:
+            CampaignCsvService.export(self.current, Path(destination))
+
+    def validate_campaign(self) -> None:
+        if not self.current:
+            return
+        result = CampaignCsvService.validate(self.current, self.factory.store.list_projects())
+        detail = "\n".join(f"{issue.candidate_number:02d} {issue.severity}: {issue.message}" for issue in result.issues[:12])
+        messagebox.showinfo(DESKTOP_TITLE, f"VALID: {result.valid}   WARNINGS: {result.warnings}   BLOCKED: {result.blocked}\n\n{detail or 'No validation issues.'}", parent=self)
+
+    def toggle_approve(self) -> None:
+        item = self._selected_candidate()
+        if item and self.current:
+            item.approved_for_build = not item.approved_for_build
+            item.prospect_status = "APPROVED" if item.approved_for_build else "RESEARCHED"
+            self.store.save(self.current); self._render_current()
+
+    def mark_reviewed(self) -> None:
+        item = self._selected_candidate()
+        if item and self.current and item.build_status == "BUILT":
+            item.review_status = "REVIEWED"; item.prospect_status = "REVIEWED"
+            self.store.save(self.current); self._render_current()
+
+    def approve_to_publish(self) -> None:
+        item = self._selected_candidate()
+        if item and self.current and item.review_status in {"BUILT", "REVIEWED"}:
+            item.review_status = "APPROVED TO PUBLISH"; item.publish_status = "APPROVED TO PUBLISH"
+            self.store.save(self.current); self._render_current()
+
+    def build_approved(self) -> None:
+        if not self.current:
+            return
+        validation = CampaignCsvService.validate(self.current, self.factory.store.list_projects())
+        if validation.blocked:
+            messagebox.showerror(DESKTOP_TITLE, f"Resolve {validation.blocked} blocked candidate row(s) before build.", parent=self)
+            return
+        api_key = str(self.factory.settings.get("youtubeApiKey") or "")
+        if not api_key:
+            messagebox.showerror(DESKTOP_TITLE, "A YouTube Data API key is required in Settings.", parent=self)
+            return
+        campaign_id = self.current.campaign_id
+        def worker():
+            campaign = self.store.load(campaign_id)
+            return BulkChannelMasterBuilder(self.factory.store, self.store, YouTubeClient(api_key)).build_approved(campaign)
+        self.factory._run_async("BUILDING APPROVED CHANNEL MASTER MACHINES…", worker, lambda _result: self._campaign_operation_complete(campaign_id, "Machines are ready for review."))
+
+    def publish_approved(self) -> None:
+        if not self.current:
+            return
+        count = sum(item.review_status == "APPROVED TO PUBLISH" or item.publish_status == "APPROVED TO PUBLISH" for item in self.current.candidates)
+        if not count:
+            messagebox.showerror(DESKTOP_TITLE, "Review and explicitly approve at least one machine to publish.", parent=self)
+            return
+        if not messagebox.askyesno("Publish approved campaign", f"Publish {count} explicitly approved Channel Master machine(s)?", parent=self):
+            return
+        campaign_id = self.current.campaign_id
+        def worker():
+            campaign = self.store.load(campaign_id)
+            return BulkPublishCoordinator(self.factory.store, self.store, Publisher(self.factory.store)).publish_approved(campaign)
+        self.factory._run_async("PUBLISHING APPROVED CAMPAIGN MACHINES…", worker, lambda _result: self._campaign_operation_complete(campaign_id, "Bulk publication attempt completed. Review row statuses before packaging."))
+
+    def generate_package(self) -> None:
+        if not self.current:
+            return
+        try:
+            path = CampaignPackageService(self.store, self.factory.store).generate(self.current)
+        except Exception as error:
+            messagebox.showerror(DESKTOP_TITLE, str(error), parent=self)
+            return
+        self.refresh_campaigns()
+        card_count = len(list((path / "prospect-cards").glob("*.png")))
+        qr_count = len(list((path / "qr").glob("*.png")))
+        messagebox.showinfo(DESKTOP_TITLE, f"Campaign package created.\n\nPublished QR codes: {qr_count}\nIndividual prospect cards: {card_count}\n\n{path}", parent=self)
+
+    def email_campaign(self) -> None:
+        if not self.current or self.current.email_status not in {"READY", "FAILED"}:
+            messagebox.showinfo(DESKTOP_TITLE, "Generate the verified QR package before emailing it.", parent=self)
+            return
+        _recipient, delivery_secret = self.factory._current_delivery_credentials()
+        if not delivery_secret:
+            messagebox.showerror(DESKTOP_TITLE, "Campaign email authentication is not configured in Settings.", parent=self)
+            return
+        campaign_id = self.current.campaign_id
+        def worker():
+            campaign = self.store.load(campaign_id)
+            return CampaignEmailCoordinator(self.store, CampaignWorkerTransport(delivery_secret)).send(campaign)
+        self.factory._run_async("SENDING ONE CAMPAIGN PACKAGE TO THE OPERATOR…", worker, lambda _result: self._campaign_operation_complete(campaign_id, "Campaign package emailed to the authorised operator."))
+
+    def preview_selected(self) -> None:
+        item = self._selected_candidate()
+        if item and item.project_slug:
+            try:
+                self.factory._open_project_preview(self.factory.store.load_project(item.project_slug))
+            except Exception as error:
+                messagebox.showerror(DESKTOP_TITLE, str(error), parent=self)
+
+    def open_public(self) -> None:
+        item = self._selected_candidate()
+        if item and item.public_url:
+            webbrowser.open(item.public_url)
+
+    def view_card(self) -> None:
+        item = self._selected_candidate()
+        if not item or not self.current or not item.prospect_card_path:
+            messagebox.showinfo(DESKTOP_TITLE, "Generate the campaign package before opening this prospect card.", parent=self)
+            return
+        card = self.store.output_dir(self.current) / item.prospect_card_path
+        if card.is_file():
+            os.startfile(card)
+        else:
+            messagebox.showerror(DESKTOP_TITLE, "The prospect card file is missing. Regenerate the campaign package.", parent=self)
+
+    def open_website(self) -> None:
+        item = self._selected_candidate()
+        if item and item.website_url:
+            webbrowser.open(item.website_url)
+
+    def open_youtube(self) -> None:
+        item = self._selected_candidate()
+        if item and item.youtube_channel_url:
+            webbrowser.open(item.youtube_channel_url)
+
+    def view_qr(self) -> None:
+        item = self._selected_candidate()
+        if not item or not self.current or not item.qr_path:
+            return
+        path = self.store.output_dir(self.current) / item.qr_path
+        if path.is_file():
+            os.startfile(path)
+
+    def hold_candidate(self) -> None:
+        item = self._selected_candidate()
+        if item and self.current:
+            item.prospect_status = "HOLD"
+            item.review_status = "REJECTED-HOLD"
+            item.publish_status = "HOLD"
+            self.store.save(self.current); self._render_current()
+
+    def copy_public_link(self) -> None:
+        item = self._selected_candidate()
+        if item and item.public_url:
+            self.clipboard_clear(); self.clipboard_append(item.public_url); self.update()
+
+    def copy_outreach_message(self) -> None:
+        item = self._selected_candidate()
+        if not item:
+            return
+        copy = "Hey, I made this for you using some of your existing YouTube videos.\nNo catch or obligation — I just thought your content would work really well with the idea.\nHave a play and let me know what you reckon."
+        if item.public_url:
+            copy += f"\n\n{item.public_url}"
+        self.clipboard_clear(); self.clipboard_append(copy); self.update()
+
+    def open_prospect_cards(self) -> None:
+        if not self.current:
+            return
+        folder = self.store.output_dir(self.current) / "prospect-cards"
+        if folder.is_dir():
+            os.startfile(folder)
+        else:
+            messagebox.showinfo(DESKTOP_TITLE, "Generate the campaign package first.", parent=self)
+
+    def archive_campaign(self) -> None:
+        if self.current and messagebox.askyesno("Archive campaign", "Archive this campaign record? Generated Channel Master projects will remain unchanged.", parent=self):
+            self.store.archive(self.current); self.current = None; self.refresh_campaigns()
+
+    def _campaign_operation_complete(self, campaign_id: str, message: str) -> None:
+        self.current = self.store.load(campaign_id)
+        self.factory._refresh_library()
+        self.refresh_campaigns()
+        messagebox.showinfo(DESKTOP_TITLE, message, parent=self)
+
+
 class Factory(tk.Tk):
     def __init__(self) -> None:
         super().__init__()
@@ -599,6 +955,7 @@ class Factory(tk.Tk):
         self.minsize(1120, 720)
         self.configure(bg=INK)
         self.store = ProjectStore()
+        self.campaign_store = CampaignStore(self.store.root)
         self.logger = configure_logging(self.store.root)
         self.logger.info("Application startup")
         self.preview_server = PreviewServer()
@@ -610,6 +967,7 @@ class Factory(tk.Tk):
         self.forms: dict[ProjectType, ProjectForm] = {}
         self.libraries: dict[ProjectType, LibraryPanel] = {}
         self.active_project_type = ProjectType.BUSINESS
+        self.active_tab_key: ProjectType | str = ProjectType.BUSINESS
         self._tab_change_guard = False
         self._reported_project_load_errors: tuple[tuple[str, str], ...] = ()
         self._configure_styles()
@@ -677,6 +1035,11 @@ class Factory(tk.Tk):
             library.pack(fill="both", expand=True)
             self.forms[project_type] = form
             self.libraries[project_type] = library
+        bulk_page = tk.Frame(self.notebook, bg=INK)
+        self.notebook.add(bulk_page, text="BULK UPLOAD")
+        self.bulk_upload = BulkUploadPanel(bulk_page, self)
+        self.bulk_upload.pack(fill="both", expand=True, padx=7, pady=10)
+        self.tab_keys: list[ProjectType | str] = [*self.tab_types, "bulk_upload"]
         self.notebook.bind("<<NotebookTabChanged>>", self._on_tab_changed)
 
         self.status = tk.Label(self, text="READY", bg="#0b0d11", fg=MUTED, anchor="w", padx=18, font=("Segoe UI Semibold", 8))
@@ -1028,17 +1391,24 @@ class Factory(tk.Tk):
     def _on_tab_changed(self, _event=None) -> None:
         if self._tab_change_guard or not hasattr(self, "notebook"):
             return
-        target = self.tab_types[self.notebook.index(self.notebook.select())]
-        previous = self.active_project_type
-        if target is previous:
+        target = self.tab_keys[self.notebook.index(self.notebook.select())]
+        previous = self.active_tab_key
+        if target == previous:
             return
-        form = self.forms[previous]
-        if form.is_dirty() and not self._resolve_unsaved(form, "switch tabs"):
+        if isinstance(previous, ProjectType):
+            form = self.forms[previous]
+        else:
+            form = None
+        if form is not None and form.is_dirty() and not self._resolve_unsaved(form, "switch tabs"):
             self._tab_change_guard = True
-            self.notebook.select(self.tab_types.index(previous))
+            self.notebook.select(self.tab_keys.index(previous))
             self._tab_change_guard = False
             return
-        self.active_project_type = target
+        self.active_tab_key = target
+        if isinstance(target, ProjectType):
+            self.active_project_type = target
+        else:
+            self.bulk_upload.refresh_campaigns()
         self._update_actions()
 
     def _run_async(self, message: str, worker, complete) -> None:
