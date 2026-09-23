@@ -1,0 +1,27 @@
+CRISPY BITS DESKTOP v3.5.3 — OPERATOR QUICK GUIDE
+==================================================
+
+CHANNEL MASTER MAKER'S MARK
+
+Every Channel Master preview and newly generated public machine automatically
+displays the approved Crispy Bits artwork as a small maker's mark above the
+existing customer title/ticker plaque. There is no additional desktop field,
+setting or project data to maintain.
+
+HEADER AND MACHINE BEHAVIOUR
+
+The customer title remains the primary identity and transitions to the configured
+ticker exactly as before. The maker's mark remains static and does not participate
+in the ticker, reel, landing, video or control lifecycle.
+
+EXISTING PROJECTS
+
+Open an existing Channel Master project in v3.5.3 and use Preview to inspect the
+maker's mark. Publish or republish only when you intentionally want the generated
+public machine to receive this presentation update. Existing public URLs and QR
+destinations remain stable.
+
+VERSION NOTE
+
+Projects saved with v3.5.3 should continue to be edited with v3.5.3 or a later
+compatible release unless backward editing has specifically been verified.

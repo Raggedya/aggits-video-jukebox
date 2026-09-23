@@ -1,0 +1,24 @@
+CRISPY BITS DESKTOP v3.5.3
+================================
+
+NEW
+
+- Channel Master machines now display the approved Crispy Bits artwork as a
+  small, static maker's mark centred above the existing title/ticker plaque.
+- The packaged artwork has a transparent background and remains in its supplied
+  colours across every Channel Master palette.
+
+PRESERVED
+
+- The customer/channel title remains the primary identity, and the existing
+  title-to-ticker timing, animation, direction, speed and lifecycle are unchanged.
+- Reel artwork, bronze title plaque, lever, spin mathematics, landing, video
+  system, controls, CTA, contact and palette behaviour are unchanged.
+- Business, Music, Tourism and Banjo public presentation are unchanged.
+- Existing project data, UUIDs, slugs, public URLs and QR destinations require
+  no migration.
+
+CODE SIGNING
+
+This release contains embedded Windows product and version metadata but is
+unsigned because no trusted code-signing certificate is configured.
