@@ -14,6 +14,12 @@ The customer title remains the primary identity and transitions to the configure
 ticker exactly as before. The maker's mark remains static and does not participate
 in the ticker, reel, landing, video or control lifecycle.
 
+LOWER MAKER'S SIGNATURE
+
+A small brass star, CRISPY BITS name and © CLEARLIGHTCREATIVE2020 signature sit
+quietly in the black area below the controls. The treatment is decorative,
+non-interactive and fixed across all Channel Master palettes.
+
 EXISTING PROJECTS
 
 Open an existing Channel Master project in v3.5.3 and use Preview to inspect the

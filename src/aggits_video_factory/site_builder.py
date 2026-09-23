@@ -379,6 +379,12 @@ def build_project_site(project: Project, destination: Path) -> Path:
         ),
         "{{BANJO_SPONSOR_AREA_MARKUP}}": banjo_sponsor_area_markup,
         "{{CHANNEL_MASTER_CONTACT_MARKUP}}": channel_master_contact_markup,
+        "{{CHANNEL_MASTER_FOOTER_MARKUP}}": (
+            '<footer class="channel-master-footer-mark" aria-hidden="true">'
+            '<div class="channel-master-footer-ornament"><span>✷</span></div>'
+            '<strong>CRISPY BITS</strong><small>© CLEARLIGHTCREATIVE2020</small></footer>'
+            if project.project_type is ProjectType.CHANNEL_MASTER else ""
+        ),
         "{{CHANNEL_MASTER_TITLE_PLAQUE_MARKUP}}": channel_master_title_plaque_markup,
         "{{MACHINE_TITLE}}": html.escape(project.title),
         "{{INITIAL_REEL_INSTRUCTION}}": initial_reel_instruction,

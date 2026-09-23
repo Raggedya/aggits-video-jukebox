@@ -146,6 +146,13 @@ button:focus-visible,a:focus-visible{outline:3px solid #fff0b3;outline-offset:3p
 .music-machine[data-project-type="channel_master"] .control-button b{white-space:normal;overflow-wrap:anywhere;font-size:clamp(7px,1.9vw,12px)}
 .music-machine[data-project-type="channel_master"] .channel-master-contact{display:flex;justify-content:center;margin:0 clamp(8px,1.8vw,14px) 16px;padding-top:4px}
 .music-machine[data-project-type="channel_master"] .channel-master-contact a{min-width:min(100%,260px);box-sizing:border-box;border:1px solid #d5aa5f;border-radius:8px;padding:12px 18px;color:#f3e4ba;background:linear-gradient(var(--theme-primary),var(--theme-secondary));box-shadow:inset 0 1px rgba(255,236,187,.19),0 3px 7px #000;text-align:center;text-decoration:none;font:900 12px/1 var(--font-display);letter-spacing:.08em}
+.music-machine[data-project-type="channel_master"] .channel-master-footer-mark{display:grid;width:clamp(88px,18%,132px);margin:clamp(22px,4vw,34px) auto clamp(28px,6vw,48px);color:#d4ad68;background:transparent;text-align:center;pointer-events:none;user-select:none}
+.music-machine[data-project-type="channel_master"] .channel-master-footer-ornament{display:flex;align-items:center;gap:7px;color:#c7984f;text-shadow:0 1px #2b1709,0 -1px rgba(255,226,158,.38)}
+.music-machine[data-project-type="channel_master"] .channel-master-footer-ornament::before,.music-machine[data-project-type="channel_master"] .channel-master-footer-ornament::after{content:"";flex:1 1 auto;height:1px;background:linear-gradient(90deg,transparent,#a87536)}
+.music-machine[data-project-type="channel_master"] .channel-master-footer-ornament::after{background:linear-gradient(90deg,#a87536,transparent)}
+.music-machine[data-project-type="channel_master"] .channel-master-footer-ornament span{font:400 12px/1 Georgia,serif}
+.music-machine[data-project-type="channel_master"] .channel-master-footer-mark strong{margin-top:5px;color:#e0c188;font:900 clamp(8px,1.45vw,10px)/1 var(--font-display);letter-spacing:.2em;text-indent:.2em;text-shadow:0 1px 1px #000}
+.music-machine[data-project-type="channel_master"] .channel-master-footer-mark small{margin-top:4px;color:#a88b59;font:700 clamp(5.5px,1vw,7px)/1 var(--font-copy);letter-spacing:.035em;white-space:nowrap}
 
 /* BANJO'S WORLD OF CARS — isolated fourth-project presentation. */
 .banjo-header-character,.banjo-choice-overlay,.video-stage video[data-sponsor-player]{display:none}

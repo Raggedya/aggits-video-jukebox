@@ -330,12 +330,19 @@ class ChannelMasterWorkflowTests(unittest.TestCase):
         self.assertIn("channel-master-header-ticker", page)
         self.assertIn('class="channel-master-maker-mark" aria-hidden="true"', page)
         self.assertIn('assets/channel-master/crispy-bits-maker-mark-approved.png', page)
+        self.assertIn('class="channel-master-footer-mark" aria-hidden="true"', page)
+        self.assertIn('<span>✷</span>', page)
+        self.assertEqual(page.count('>CRISPY BITS<'), 1)
+        self.assertEqual(page.count('>© CLEARLIGHTCREATIVE2020<'), 1)
+        footer = page.split('class="channel-master-footer-mark"', 1)[1].split('</footer>', 1)[0]
+        self.assertNotIn("href=", footer)
+        self.assertNotIn("<button", footer)
         self.assertIn('data-channel-master-title-plaque aria-hidden="true">CHANNEL MASTER FIXTURE</div>', page)
         self.assertIn("CONTACT US", page)
         for rejected in ('data-action="home"', 'data-action="sound"', 'data-shop-plaque-prompt',
                          'class="customer-story"', 'class="brand-signature"', "BANJO'S", "banjo-header-character"):
             self.assertNotIn(rejected, page)
-        self.assertNotIn("CRISPY BITS", page)
+        self.assertNotIn("POWERED BY", page)
         self.assertIn("--theme-primary:#123E52", page)
         self.assertEqual(payload["projectType"], "channel_master")
         self.assertEqual(payload["videoCount"], 1)
@@ -405,6 +412,13 @@ class ChannelMasterWorkflowTests(unittest.TestCase):
         self.assertIn("pointer-events:none", maker_rule)
         self.assertIn("width:clamp(72px,13vw,104px)", maker_rule)
         self.assertNotIn("channel-master-maker-mark", SCRIPT)
+        footer_rule = CSS.split(
+            '.music-machine[data-project-type="channel_master"] .channel-master-footer-mark{', 1
+        )[1].split("}", 1)[0]
+        self.assertNotIn("var(--theme-", footer_rule)
+        self.assertIn("width:clamp(88px,18%,132px)", footer_rule)
+        self.assertIn("pointer-events:none", footer_rule)
+        self.assertNotIn("channel-master-footer-mark", SCRIPT)
 
     def test_approved_maker_mark_is_transparent_hash_protected_and_packaged(self):
         asset = ROOT / "static" / "channel-master" / "crispy-bits-maker-mark-approved.png"
@@ -539,6 +553,7 @@ class ChannelMasterWorkflowTests(unittest.TestCase):
                 self.assertNotIn("channel-master-header-ticker", page)
                 self.assertNotIn("channel-master-title-plaque", page)
                 self.assertNotIn("channel-master-maker-mark", page)
+                self.assertNotIn("channel-master-footer-mark", page)
 
 
 if __name__ == "__main__":
