@@ -3,7 +3,7 @@
   "projectType": "channel_master",
   "slug": "raggy-s-one-pan-dinners",
   "title": "RAGGEDY'S SIMPLE DINNERS",
-  "tickerText": "",
+  "tickerText": "HEY MAC, I’M GONNA HAVE A CRACK AT COOKING SOME DIFFERENT STUFF AND TRY A FEW RECIPES WE WOULDN’T NORMALLY THINK OF, SO NATURALLY I BUILT A WHOLE BLOODY MACHINE TO HELP ME DO IT. PULL THE LEVER, SEE WHAT COMES UP AND I’LL GIVE IT A GO. HOPEFULLY IT’S HEALTHY, HOPEFULLY YOU LIKE IT, AND HOPEFULLY I DON’T COMPLETELY STUFF IT UP. IF IT’S NO GOOD, WE’LL JUST PULL THE LEVER AGAIN.",
   "channelId": "UCy_iF2lqOucgmK1BLCl-6vQ",
   "channelTitle": "Recipe30",
   "channelUrl": "https://www.youtube.com/channel/UCy_iF2lqOucgmK1BLCl-6vQ",
@@ -13,9 +13,9 @@
     "customerName": "RAGGEDY'S SIMPLE DINNERS",
     "customerLogo": "https://yt3.ggpht.com/ytc/AIdro_kN6BJcEPtFCvqXQMgYha37s_JNXrh8fTDKJLKdO-reSkQ=s800-c-k-c0x00ffffff-no-rj",
     "customerTheme": "cinematic-customer",
-    "tagline": "",
+    "tagline": "HEY MAC, I’M GONNA HAVE A CRACK AT COOKING SOME DIFFERENT STUFF AND TRY A FEW RECIPES WE WOULDN’T NORMALLY THINK OF, SO NATURALLY I BUILT A WHOLE BLOODY MACHINE TO HELP ME DO IT. PULL THE LEVER, SEE WHAT COMES UP AND I’LL GIVE IT A GO. HOPEFULLY IT’S HEALTHY, HOPEFULLY YOU LIKE IT, AND HOPEFULLY I DON’T COMPLETELY STUFF IT UP. IF IT’S NO GOOD, WE’LL JUST PULL THE LEVER AGAIN.",
     "customerTagline": "MORE STORIES • MORE TO DISCOVER",
-    "customerStory": "",
+    "customerStory": "HEY MAC, I’M GONNA HAVE A CRACK AT COOKING SOME DIFFERENT STUFF AND TRY A FEW RECIPES WE WOULDN’T NORMALLY THINK OF, SO NATURALLY I BUILT A WHOLE BLOODY MACHINE TO HELP ME DO IT. PULL THE LEVER, SEE WHAT COMES UP AND I’LL GIVE IT A GO. HOPEFULLY IT’S HEALTHY, HOPEFULLY YOU LIKE IT, AND HOPEFULLY I DON’T COMPLETELY STUFF IT UP. IF IT’S NO GOOD, WE’LL JUST PULL THE LEVER AGAIN.",
     "customerStorySections": [],
     "youtubeChannel": "https://www.youtube.com/channel/UCy_iF2lqOucgmK1BLCl-6vQ",
     "subscribeURL": "https://www.youtube.com/channel/UCy_iF2lqOucgmK1BLCl-6vQ?sub_confirmation=1",
@@ -720,14 +720,14 @@
     }
   ],
   "channelMasterConfig": {
-    "tickerText": "",
+    "tickerText": "HEY MAC, I’M GONNA HAVE A CRACK AT COOKING SOME DIFFERENT STUFF AND TRY A FEW RECIPES WE WOULDN’T NORMALLY THINK OF, SO NATURALLY I BUILT A WHOLE BLOODY MACHINE TO HELP ME DO IT. PULL THE LEVER, SEE WHAT COMES UP AND I’LL GIVE IT A GO. HOPEFULLY IT’S HEALTHY, HOPEFULLY YOU LIKE IT, AND HOPEFULLY I DON’T COMPLETELY STUFF IT UP. IF IT’S NO GOOD, WE’LL JUST PULL THE LEVER AGAIN.",
     "palette": {
-      "name": "MIDNIGHT",
+      "name": "BURGUNDY",
       "customPrimary": null,
       "customAccent": null,
-      "resolvedPrimary": "#172033",
-      "resolvedSecondary": "#080B12",
-      "resolvedAccent": "#6D80AF"
+      "resolvedPrimary": "#4B1724",
+      "resolvedSecondary": "#17070C",
+      "resolvedAccent": "#A85769"
     },
     "primaryAction": {
       "type": "visit_website",
