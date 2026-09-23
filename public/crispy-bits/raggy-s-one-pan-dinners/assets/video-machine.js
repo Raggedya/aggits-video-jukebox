@@ -831,7 +831,9 @@ if (machine) {
   }
 
   async function share() {
-    const data = {title: document.title, text: current ? `${titleOnly(current)} — ${machineIdentity}` : document.title, url: activeProjectType === 'banjo' ? location.href : (current?.url || location.href)};
+    const canonicalUrl = document.querySelector('link[rel="canonical"]')?.href || location.href;
+    const jukeboxTitle = machineIdentity || document.title;
+    const data = {title: jukeboxTitle, text: jukeboxTitle, url: canonicalUrl};
     try {
       if (navigator.share) await navigator.share(data);
       else {
