@@ -21,8 +21,8 @@
     "subscribeURL": "https://www.youtube.com/channel/UC3PJDshBPw_iQpV6rfrfIvQ?sub_confirmation=1",
     "primaryCTA": "VIEW ON YOUTUBE",
     "primaryAction": {
-      "type": "soundcloud",
-      "displayLabel": "SOUNDCLOUD",
+      "type": "more_info",
+      "displayLabel": "MORE INFO",
       "destinationURL": "https://www.youtube.com/watch?v=BoOFMPHWsuI",
       "enabled": true
     }
@@ -293,8 +293,8 @@
       "resolvedAccent": "#6D80AF"
     },
     "primaryAction": {
-      "type": "soundcloud",
-      "displayLabel": "SOUNDCLOUD",
+      "type": "more_info",
+      "displayLabel": "MORE INFO",
       "destinationURL": "https://www.youtube.com/watch?v=BoOFMPHWsuI",
       "enabled": true
     },
