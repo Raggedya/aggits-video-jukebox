@@ -21,8 +21,8 @@
     "subscribeURL": "https://www.youtube.com/channel/UCTDxBomnGHvW5_wilYOWZhA?sub_confirmation=1",
     "primaryCTA": "VIEW ON YOUTUBE",
     "primaryAction": {
-      "type": "spotify",
-      "displayLabel": "LISTEN ON SPOTIFY",
+      "type": "bandcamp",
+      "displayLabel": "BUY ON BANDCAMP",
       "destinationURL": "https://thecigarrillos.bandcamp.com/",
       "enabled": true
     }
@@ -454,8 +454,8 @@
       "resolvedAccent": "#6D80AF"
     },
     "primaryAction": {
-      "type": "spotify",
-      "displayLabel": "LISTEN ON SPOTIFY",
+      "type": "bandcamp",
+      "displayLabel": "BUY ON BANDCAMP",
       "destinationURL": "https://thecigarrillos.bandcamp.com/",
       "enabled": true
     },
