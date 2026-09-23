@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import html
+import hashlib
 import json
 import re
 import shutil
@@ -185,6 +186,9 @@ def build_project_site(project: Project, destination: Path) -> Path:
     if assets.exists():
         shutil.rmtree(assets)
     shutil.copytree(resource_path("static"), assets)
+    video_machine_asset_version = hashlib.sha256(
+        (assets / "video-machine.js").read_bytes()
+    ).hexdigest()[:12]
     sponsor_logo_public_url = ""
     if project.project_type is ProjectType.BANJO:
         character = assets / "banjo" / "banjo-approved-header.png"
@@ -275,6 +279,7 @@ def build_project_site(project: Project, destination: Path) -> Path:
         )
     replacements = {
         "{{META_DESCRIPTION}}": html.escape(description, quote=True),
+        "{{VIDEO_MACHINE_ASSET_VERSION}}": video_machine_asset_version,
         "{{CANONICAL_URL}}": html.escape(canonical, quote=True),
         "{{SOCIAL_IMAGE_URL}}": html.escape(social_url, quote=True),
         "{{SOCIAL_IMAGE_TYPE}}": social_image_type,
