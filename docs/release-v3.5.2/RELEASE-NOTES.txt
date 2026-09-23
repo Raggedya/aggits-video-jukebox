@@ -1,0 +1,27 @@
+CRISPY BITS DESKTOP v3.5.2
+================================
+
+NEW
+
+- Channel Master machines now display a small, permanent engraved bronze title
+  plaque centred on the lower edge of the reel frame.
+- The plaque automatically uses the existing project title, includes restrained
+  mechanical fasteners and adjusts its typography for longer valid titles.
+- SHARE now consistently shares the stable jukebox URL rather than the selected
+  YouTube video, with versioned machine JavaScript to prevent stale browser
+  assets after publication updates.
+
+PRESERVED
+
+- The existing Channel Master header, title-to-ticker lifecycle and ticker
+  behaviour are unchanged.
+- Reel artwork, geometry, lever, spin mathematics, landing, video system,
+  controls, CTA, contact and palette behaviour are unchanged.
+- Business, Music, Tourism and Banjo public presentation are unchanged.
+- Existing project data, UUIDs, slugs, public URLs and QR destinations require
+  no migration.
+
+CODE SIGNING
+
+This release contains embedded Windows product and version metadata but is
+unsigned because no trusted code-signing certificate is configured.

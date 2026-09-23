@@ -1,0 +1,26 @@
+CRISPY BITS DESKTOP v3.5.2 — OPERATOR QUICK GUIDE
+==================================================
+
+CHANNEL MASTER TITLE PLAQUE
+
+Every Channel Master preview and published machine automatically displays its
+existing project title on a small engraved bronze name plate attached to the
+bottom centre of the reel frame. There is no additional desktop field, setting
+or project data to maintain. Editing the normal project Title updates both the
+existing header and the plaque through the normal save and preview flow.
+
+HEADER AND MACHINE BEHAVIOUR
+
+The existing Channel Master header still shows the project title and transitions
+to the configured ticker exactly as before. The plaque remains static while the
+header ticker runs and while the reel spins, lands, changes videos or re-spins.
+
+SHARING
+
+The SHARE control shares the stable jukebox page address. It does not share the
+currently selected YouTube video address.
+
+VERSION NOTE
+
+Projects saved with v3.5.2 should continue to be edited with v3.5.2 or a later
+compatible release unless backward editing has specifically been verified.

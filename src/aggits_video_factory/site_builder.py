@@ -268,6 +268,18 @@ def build_project_site(project: Project, destination: Path) -> Path:
             '<section class="channel-master-contact" data-channel-master-contact>'
             f'<a href="{contact_url}" target="_blank" rel="noopener noreferrer">CONTACT US</a></section>'
         )
+    channel_master_title_plaque_markup = ""
+    if project.project_type is ProjectType.CHANNEL_MASTER:
+        title_length = len(project.title.strip())
+        fit_class = (
+            " channel-master-title-plaque--very-long" if title_length > 42
+            else " channel-master-title-plaque--long" if title_length > 28
+            else ""
+        )
+        channel_master_title_plaque_markup = (
+            f'<div class="channel-master-title-plaque{fit_class}" '
+            f'data-channel-master-title-plaque aria-hidden="true">{html.escape(project.title)}</div>'
+        )
     machine_theme_attribute = ""
     if channel_master_config:
         machine_theme_attribute = (
@@ -361,6 +373,7 @@ def build_project_site(project: Project, destination: Path) -> Path:
         ),
         "{{BANJO_SPONSOR_AREA_MARKUP}}": banjo_sponsor_area_markup,
         "{{CHANNEL_MASTER_CONTACT_MARKUP}}": channel_master_contact_markup,
+        "{{CHANNEL_MASTER_TITLE_PLAQUE_MARKUP}}": channel_master_title_plaque_markup,
         "{{MACHINE_TITLE}}": html.escape(project.title),
         "{{INITIAL_REEL_INSTRUCTION}}": initial_reel_instruction,
         "{{STORY_HEADER_MARKUP}}": story_header_markup,

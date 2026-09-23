@@ -325,6 +325,7 @@ class ChannelMasterWorkflowTests(unittest.TestCase):
         self.assertIn("CHANNEL MASTER FIXTURE", page)
         self.assertIn("FIRST • SECOND", page)
         self.assertIn("channel-master-header-ticker", page)
+        self.assertIn('data-channel-master-title-plaque aria-hidden="true">CHANNEL MASTER FIXTURE</div>', page)
         self.assertIn("CONTACT US", page)
         for rejected in ('data-action="home"', 'data-action="sound"', 'data-shop-plaque-prompt',
                          'class="customer-story"', 'class="brand-signature"', "BANJO'S", "banjo-header-character"):
@@ -337,6 +338,41 @@ class ChannelMasterWorkflowTests(unittest.TestCase):
         self.assertEqual(payload["channelMasterConfig"]["contact"]["url"], "https://example.com/contact")
         self.assertNotIn("customLabel", payload["channelMasterConfig"]["primaryAction"])
         self.assertNotIn("banjoConfig", payload)
+        for duplicate_field in ("plaqueTitle", "plaqueText", "shortTitle", "reelTitle"):
+            self.assertNotIn(duplicate_field, payload)
+
+    def test_title_plaque_is_escaped_static_scoped_and_uses_length_fitting(self):
+        for title, fit_class in (
+            ("SHORT TITLE", ""),
+            ("A MEDIUM LENGTH CHANNEL MASTER TITLE", "channel-master-title-plaque--long"),
+            ("A VERY LONG BUT VALID CHANNEL MASTER PROJECT TITLE FOR DISPLAY", "channel-master-title-plaque--very-long"),
+        ):
+            with self.subTest(title=title), tempfile.TemporaryDirectory() as temporary:
+                item = master_project()
+                item.title = title
+                destination = Path(temporary)
+                build_project_site(item, destination)
+                page = (destination / "index.html").read_text(encoding="utf-8")
+                plaque_opening = page.split('data-channel-master-title-plaque', 1)[0].rsplit('<div', 1)[-1]
+                if fit_class:
+                    self.assertIn(fit_class, plaque_opening)
+                else:
+                    self.assertNotIn("channel-master-title-plaque--", plaque_opening)
+
+        unsafe = master_project()
+        unsafe.title = "MASTER <SCRIPT> & CO"
+        with tempfile.TemporaryDirectory() as temporary:
+            destination = Path(temporary)
+            build_project_site(unsafe, destination)
+            page = (destination / "index.html").read_text(encoding="utf-8")
+        self.assertIn("MASTER &lt;SCRIPT&gt; &amp; CO", page)
+        self.assertNotIn("MASTER <SCRIPT> & CO", page)
+        plaque_rule = CSS.split(
+            '.music-machine[data-project-type="channel_master"] .channel-master-title-plaque{', 1
+        )[1].split("}", 1)[0]
+        self.assertNotIn("var(--theme-", plaque_rule)
+        self.assertIn("pointer-events:none", plaque_rule)
+        self.assertNotIn("channel-master-title-plaque", SCRIPT)
 
     def test_empty_ticker_stays_title_only(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -461,9 +497,10 @@ class ChannelMasterWorkflowTests(unittest.TestCase):
             self.assertEqual(library[0]["projectType"], "channel_master")
 
     def test_other_project_types_have_no_channel_master_public_payload(self):
+        from tests.test_banjo_workflow import project as banjo_project
         from tests.test_business_shop_plaque import business_project, music_project
         from tests.test_tourism_workflow import tourism_project
-        for item in (business_project("https://example.com/shop"), music_project(), tourism_project()):
+        for item in (business_project("https://example.com/shop"), music_project(), tourism_project(), banjo_project()):
             with self.subTest(kind=item.project_type.value), tempfile.TemporaryDirectory() as temporary:
                 destination = Path(temporary)
                 build_project_site(item, destination)
@@ -471,6 +508,7 @@ class ChannelMasterWorkflowTests(unittest.TestCase):
                 page = (destination / "index.html").read_text(encoding="utf-8")
                 self.assertNotIn("channelMasterConfig", payload)
                 self.assertNotIn("channel-master-header-ticker", page)
+                self.assertNotIn("channel-master-title-plaque", page)
 
 
 if __name__ == "__main__":
