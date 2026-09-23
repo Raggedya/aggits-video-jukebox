@@ -307,6 +307,12 @@ def build_project_site(project: Project, destination: Path) -> Path:
         ),
         "{{PROJECT_TYPE}}": project.project_type.value,
         "{{MACHINE_THEME_ATTRIBUTE}}": machine_theme_attribute,
+        "{{CHANNEL_MASTER_MAKER_MARK_MARKUP}}": (
+            '<div class="channel-master-maker-mark" aria-hidden="true">'
+            '<img src="assets/channel-master/crispy-bits-maker-mark-approved.png" '
+            'alt="" width="1280" height="432" draggable="false"></div>'
+            if project.project_type is ProjectType.CHANNEL_MASTER else ""
+        ),
         "{{UTILITY_CONTROLS_MARKUP}}": (
             "" if project.project_type in {ProjectType.BANJO, ProjectType.CHANNEL_MASTER} else
             '<nav class="utility-controls" aria-label="Machine controls">'

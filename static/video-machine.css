@@ -122,7 +122,9 @@ button:focus-visible,a:focus-visible{outline:3px solid #fff0b3;outline-offset:3p
 .music-machine[data-project-type="channel_master"] .customer-backdrop::after{background:linear-gradient(180deg,transparent,rgba(0,0,0,.32) 52%,rgba(0,0,0,.72))}
 .music-machine[data-project-type="channel_master"] .experience-frame{background:linear-gradient(180deg,var(--theme-primary),var(--theme-secondary) 56%,#010202)}
 .music-machine[data-project-type="channel_master"] .experience-frame::before{background:radial-gradient(ellipse at 50% 2%,color-mix(in srgb,var(--theme-accent) 20%,transparent),transparent 34%)}
-.music-machine[data-project-type="channel_master"] .customer-identity{min-height:clamp(68px,12vw,88px);margin-top:12px;background:linear-gradient(180deg,var(--theme-primary),var(--theme-secondary) 78%)}
+.music-machine[data-project-type="channel_master"] .channel-master-maker-mark{position:absolute;left:50%;top:7px;z-index:4;width:clamp(72px,13vw,104px);pointer-events:none;transform:translateX(-50%)}
+.music-machine[data-project-type="channel_master"] .channel-master-maker-mark img{display:block;width:100%;height:auto;object-fit:contain;user-select:none}
+.music-machine[data-project-type="channel_master"] .customer-identity{min-height:clamp(68px,12vw,88px);margin-top:48px;background:linear-gradient(180deg,var(--theme-primary),var(--theme-secondary) 78%)}
 .music-machine[data-project-type="channel_master"] .customer-identity-subtitle{display:none}
 .music-machine[data-project-type="channel_master"] .channel-master-header-ticker{position:absolute;z-index:3;inset:0;display:flex;align-items:center;overflow:hidden;color:#f3ddb0;opacity:0;transition:opacity .55s ease}
 .music-machine[data-project-type="channel_master"] .channel-master-header-ticker[hidden]{display:none}
@@ -203,6 +205,8 @@ button:focus-visible,a:focus-visible{outline:3px solid #fff0b3;outline-offset:3p
   .customer-identity{min-height:56px;margin:40px 3% 5px;padding:7px 10px 8px}
   .customer-identity-copy>strong{font-size:var(--hero-copy-size,25px)}
   .customer-identity-subtitle{width:82%;font-size:clamp(7px,2.15vw,9px);letter-spacing:.3em;text-indent:.3em}
+  .music-machine[data-project-type="channel_master"] .channel-master-maker-mark{top:6px;width:76px}
+  .music-machine[data-project-type="channel_master"] .customer-identity{margin-top:40px}
   .music-machine[data-project-type="banjo"] .customer-identity{padding-left:86px;min-height:72px}
   .music-machine[data-project-type="banjo"] .banjo-header-character{width:78px}
   .music-machine[data-project-type="banjo"] .banjo-header-character img{height:250%;top:-3%}

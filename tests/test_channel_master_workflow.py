@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import tempfile
 import tkinter as tk
 import unittest
 from pathlib import Path
 from unittest import mock
+
+from PIL import Image
 
 from aggits_video_factory.business_workflow import assemble_channel_master_project
 from aggits_video_factory.config import (
@@ -325,6 +328,8 @@ class ChannelMasterWorkflowTests(unittest.TestCase):
         self.assertIn("CHANNEL MASTER FIXTURE", page)
         self.assertIn("FIRST • SECOND", page)
         self.assertIn("channel-master-header-ticker", page)
+        self.assertIn('class="channel-master-maker-mark" aria-hidden="true"', page)
+        self.assertIn('assets/channel-master/crispy-bits-maker-mark-approved.png', page)
         self.assertIn('data-channel-master-title-plaque aria-hidden="true">CHANNEL MASTER FIXTURE</div>', page)
         self.assertIn("CONTACT US", page)
         for rejected in ('data-action="home"', 'data-action="sound"', 'data-shop-plaque-prompt',
@@ -393,6 +398,30 @@ class ChannelMasterWorkflowTests(unittest.TestCase):
         self.assertIn("plaqueDestination = primaryActionDestination", SCRIPT)
         self.assertIn("if (activeProjectType === 'channel_master') plaqueDestination = ''", SCRIPT)
         self.assertIn("startChannelMasterHeaderTicker();", SCRIPT)
+        maker_rule = CSS.split(
+            '.music-machine[data-project-type="channel_master"] .channel-master-maker-mark{', 1
+        )[1].split("}", 1)[0]
+        self.assertNotIn("var(--theme-", maker_rule)
+        self.assertIn("pointer-events:none", maker_rule)
+        self.assertIn("width:clamp(72px,13vw,104px)", maker_rule)
+        self.assertNotIn("channel-master-maker-mark", SCRIPT)
+
+    def test_approved_maker_mark_is_transparent_hash_protected_and_packaged(self):
+        asset = ROOT / "static" / "channel-master" / "crispy-bits-maker-mark-approved.png"
+        self.assertEqual(
+            hashlib.sha256(asset.read_bytes()).hexdigest().upper(),
+            "68B1EACDD4BE7F58BE0F7884226F0CF2FC398188B46CFB905F4888C10C2D5632",
+        )
+        with Image.open(asset) as image:
+            self.assertEqual(image.mode, "RGBA")
+            self.assertEqual(image.size, (1280, 432))
+            self.assertEqual(image.getchannel("A").getextrema(), (0, 255))
+        with tempfile.TemporaryDirectory() as temporary:
+            destination = Path(temporary)
+            build_project_site(master_project(), destination)
+            packaged = destination / "assets" / "channel-master" / asset.name
+            self.assertTrue(packaged.is_file())
+            self.assertEqual(packaged.read_bytes(), asset.read_bytes())
 
     def test_desktop_declares_exact_five_tabs_and_required_channel_master_controls(self):
         self.assertIn(
@@ -509,6 +538,7 @@ class ChannelMasterWorkflowTests(unittest.TestCase):
                 self.assertNotIn("channelMasterConfig", payload)
                 self.assertNotIn("channel-master-header-ticker", page)
                 self.assertNotIn("channel-master-title-plaque", page)
+                self.assertNotIn("channel-master-maker-mark", page)
 
 
 if __name__ == "__main__":
