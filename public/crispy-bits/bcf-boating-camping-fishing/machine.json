@@ -23,7 +23,7 @@
     "primaryAction": {
       "type": "custom",
       "displayLabel": "CLEARANCE",
-      "destinationURL": "https://www.bcf.com.au/clearanc",
+      "destinationURL": "https://www.bcf.com.au/clearance",
       "enabled": true
     }
   },
@@ -456,7 +456,7 @@
     "primaryAction": {
       "type": "custom",
       "displayLabel": "CLEARANCE",
-      "destinationURL": "https://www.bcf.com.au/clearanc",
+      "destinationURL": "https://www.bcf.com.au/clearance",
       "enabled": true,
       "customLabel": "CLEARANCE"
     },
