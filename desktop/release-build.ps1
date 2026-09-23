@@ -74,7 +74,7 @@ try {
 finally {
     Pop-Location
 }
-$workerTestCount = 22
+$workerTestCount = 26
 
 $versionFile = Join-Path $buildRoot "windows-version-info.txt"
 Invoke-Checked { & $python (Join-Path $projectRoot "tools\generate_version_resource.py") $versionFile } "Windows version-resource generation"

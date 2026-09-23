@@ -1,0 +1,29 @@
+CRISPY BITS DESKTOP v3.6.0
+================================
+
+NEW
+
+- BULK UPLOAD is now the sixth desktop tab and provides an operator-only
+  campaign factory for creating up to 20 ordinary Channel Master prospects.
+- Campaign CSV import/export, validation, explicit build approval and separate
+  publication approval keep prospect selection under operator control.
+- Verified publications can be packaged with individual QR codes, an internal
+  A4 QR sheet, 1080 x 1350 prospect cards, ZIP files, a manifest and final CSV.
+- EMAIL CAMPAIGN TO ME sends one authenticated operator package through the
+  dedicated Worker route. The destination is fixed server-side and cannot be
+  supplied or changed by campaign data.
+
+PRESERVED
+
+- Each generated machine is an ordinary Channel Master project with its own
+  stable UUID, slug, public URL and QR destination.
+- Business, Music, Tourism, Banjo and existing Channel Master projects retain
+  their current behaviour.
+- Reel geometry, lever mechanics, selection, landing, title/ticker, video and
+  existing publication behaviour are unchanged.
+- No project-schema migration is required.
+
+CODE SIGNING
+
+This release contains embedded Windows product and version metadata but is
+unsigned because no trusted code-signing certificate is configured.

@@ -1,0 +1,40 @@
+CRISPY BITS DESKTOP v3.6.0 — OPERATOR QUICK GUIDE
+==================================================
+
+BULK UPLOAD CAMPAIGNS
+
+Open BULK UPLOAD to create a campaign or import a verified UTF-8 campaign CSV.
+The desktop does not scrape or invent prospects. Review the candidate details,
+run VALIDATE and explicitly approve only the rows you want to build.
+
+BUILD AND REVIEW
+
+BUILD APPROVED creates ordinary Channel Master projects for approved rows, using
+the existing YouTube service and the 50-video Channel Master limit. Inspect each
+machine in the Library and use the campaign review controls before approving it
+for publication. Building a campaign does not publish it.
+
+PUBLISH AND PACKAGE
+
+BULK PUBLISH APPROVED requires the separate publication approval state. After
+the selected machines have verified live URLs, GENERATE QR PACKAGE creates the
+campaign CSV, manifest, individual QR codes, an internal A4 QR sheet, prospect
+cards and ZIP packages. Prospect outreach remains manual.
+
+OPERATOR EMAIL
+
+EMAIL CAMPAIGN TO ME sends one campaign package through the authenticated
+Cloudflare Worker. The recipient is fixed by the Worker's secure server-side
+OWNER_EMAIL configuration; CSV content cannot redirect the email. RETRY EMAIL
+is available after a recoverable delivery failure.
+
+EXISTING PROJECTS
+
+Existing Business, Music, Tourism, Banjo and Channel Master projects remain
+compatible. Their UUIDs, slugs, live URLs and QR destinations are unchanged.
+
+VERSION NOTE
+
+Projects and campaigns saved with v3.6.0 should continue to be edited with
+v3.6.0 or a later compatible release unless backward editing has specifically
+been verified.
