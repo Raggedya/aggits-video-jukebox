@@ -398,14 +398,47 @@ class BusinessWorkflowTests(unittest.TestCase):
     def test_publication_readiness_requires_machine_and_qr(self):
         with tempfile.TemporaryDirectory() as temporary:
             publisher = Publisher(ProjectStore(Path(temporary)))
-            machine = Mock(ok=True)
+            machine_bytes = b'{"slug":"test-business-a"}'
+            machine = Mock(ok=True, content=machine_bytes)
             machine.json.return_value = {"slug": "test-business-a"}
             qr = Mock(ok=True, content=b"\x89PNG\r\n\x1a\ncontent")
-            with patch("aggits_video_factory.publisher.requests.get", side_effect=[machine, qr]) as get:
+            commit_machine = Mock(ok=True, content=machine_bytes)
+            commit_machine.json.return_value = {"slug": "test-business-a"}
+            commit_qr = Mock(ok=True, content=qr.content)
+            with patch("aggits_video_factory.publisher.requests.get", side_effect=[machine, qr, commit_machine, commit_qr]) as get:
                 publisher._wait_for_publication("test-business-a", "revision-one", timeout=1)
-            self.assertEqual(get.call_count, 2)
+            self.assertEqual(get.call_count, 4)
             self.assertIn("machine.json", get.call_args_list[0].args[0])
             self.assertIn("qr-card.png", get.call_args_list[1].args[0])
+            self.assertIn("raw.githubusercontent.com", get.call_args_list[2].args[0])
+
+            stale_machine = Mock(ok=True, content=b'{"slug":"test-business-a","title":"stale"}')
+            stale_machine.json.return_value = {"slug": "test-business-a", "title": "stale"}
+            with patch(
+                "aggits_video_factory.publisher.requests.get",
+                side_effect=[stale_machine, qr, commit_machine, commit_qr],
+            ):
+                self.assertFalse(publisher._publication_ready("test-business-a", "revision-one"))
+
+    def test_delivery_retries_revision_propagation_with_fresh_nonce(self):
+        project = business_project()
+        project.published_url = "https://raggedya.github.io/aggits-video-jukebox/crispy-bits/test-business-a/"
+        project.publication_revision = "a" * 40
+        project.status = "published"
+        pending = Mock(ok=False, status_code=409)
+        pending.json.return_value = {"ok": False, "error": "published_revision_mismatch"}
+        sent = Mock(ok=True, status_code=201)
+        sent.json.return_value = {"ok": True, "id": "delivery-one"}
+        with patch("aggits_video_factory.delivery.requests.post", side_effect=[pending, sent]) as post, \
+                patch("aggits_video_factory.delivery.time.sleep") as sleep:
+            result = request_delivery(project, "owner@example.com", secret="test-secret")
+        self.assertTrue(result["ok"])
+        self.assertEqual(post.call_count, 2)
+        self.assertNotEqual(
+            post.call_args_list[0].kwargs["headers"]["x-crispy-nonce"],
+            post.call_args_list[1].kwargs["headers"]["x-crispy-nonce"],
+        )
+        sleep.assert_called_once_with(5.0)
 
     def test_music_generation_requires_a_configured_primary_cta(self):
         project = Project(

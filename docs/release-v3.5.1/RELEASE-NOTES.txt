@@ -1,0 +1,25 @@
+CRISPY BITS DESKTOP v3.5.1
+================================
+
+FIXED
+
+- Publication verification now waits until the exact live machine and QR card
+  match the exact Git commit that was pushed before automatic email delivery.
+- Delivery automatically retries short GitHub Pages propagation mismatches with
+  fresh authenticated nonces, preventing a temporary stale page from leaving a
+  successfully published project marked as Delivery Failed.
+- Channel Master channel review and initial selection are capped at 50 videos.
+  The previous 100-video review pool is no longer created.
+
+PRESERVED
+
+- Existing project UUIDs, slugs, public URLs and QR destinations.
+- Existing Business, Music, Tourism, Banjo and Channel Master presentation.
+- Delivery HMAC authentication, replay protection, recipient authority and
+  idempotency.
+- Proven reel, lever, spin mathematics, landing behaviour and video players.
+
+CODE SIGNING
+
+This release contains embedded Windows product and version metadata but is
+unsigned because no trusted code-signing certificate is configured.

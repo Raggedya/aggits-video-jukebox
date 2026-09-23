@@ -1,0 +1,36 @@
+CRISPY BITS DESKTOP v3.5.1 — OPERATOR QUICK GUIDE
+==================================================
+
+PROJECT TYPES
+
+The desktop provides BUSINESS, MUSIC, TOURISM, BANJO and CHANNEL MASTER.
+Choose the matching tab, complete its required fields, analyse or add YouTube
+content, review the included videos, save, and build a local preview.
+
+CHANNEL MASTER VIDEO LIMIT
+
+Adding a YouTube channel to Channel Master now prepares no more than 50 videos
+for review. Up to 50 may be included in the finished machine. Use EDIT YOUTUBE
+VIDEOS to exclude, restore or replace videos later without changing the stable
+project identity, public URL or QR destination.
+
+AUTOMATIC DELIVERY
+
+After publishing, the desktop waits until the exact live machine and QR card
+match the pushed Git revision. The authenticated delivery then sends the link
+and QR email automatically. Short GitHub Pages propagation delays are retried
+automatically. Do not publish again while the desktop is verifying the live
+revision.
+
+LIBRARY AND RECOVERY
+
+Use the Library actions to open, edit videos, preview, publish, check live
+status, republish, unpublish, create a QR code, or retry delivery where the
+action applies. If publication remains VERIFICATION PENDING after the normal
+wait, use CHECK LIVE STATUS rather than publishing a duplicate revision.
+
+VERSION NOTE
+
+Projects deliberately saved with v3.5.1 should continue to be edited with
+v3.5.1 or a later compatible release unless backward editing has specifically
+been verified.

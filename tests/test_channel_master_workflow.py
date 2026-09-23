@@ -93,6 +93,7 @@ class ChannelMasterModelTests(unittest.TestCase):
         self.assertEqual(ProjectType.CHANNEL_MASTER.value, "channel_master")
         self.assertEqual(video_limit_for_project_type(ProjectType.CHANNEL_MASTER), 50)
         self.assertEqual(MAX_CHANNEL_MASTER_VIDEOS, 50)
+        self.assertEqual(MAX_CHANNEL_MASTER_REVIEW_VIDEOS, 50)
         self.assertEqual(MAX_CHANNEL_MASTER_TICKER_LENGTH, 1500)
         for kind, expected in (
             (ProjectType.BUSINESS, 30), (ProjectType.MUSIC, 30),
@@ -108,7 +109,7 @@ class ChannelMasterModelTests(unittest.TestCase):
             master_project(count=51)
         source_catalogue = [video(i) for i in range(60)]
         review_pool = merge_video_selections([], source_catalogue, MAX_CHANNEL_MASTER_REVIEW_VIDEOS)
-        self.assertEqual(len(review_pool), 60)
+        self.assertEqual(len(review_pool), 50)
         self.assertEqual(
             [item.video_id for item in merge_video_selections([video(0)], [video(0), video(1)], 50)],
             [video(0).video_id, video(1).video_id],

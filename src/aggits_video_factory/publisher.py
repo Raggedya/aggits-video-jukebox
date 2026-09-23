@@ -12,7 +12,7 @@ from uuid import uuid4
 
 import requests
 
-from .config import GITHUB_REMOTE, PUBLIC_BASE_URL, PUBLIC_PATH
+from .config import GITHUB_OWNER, GITHUB_REMOTE, GITHUB_REPOSITORY, PUBLIC_BASE_URL, PUBLIC_PATH
 from .diagnostics import get_logger
 from .models import Project, ProjectType, PublicationOperation, utc_now
 from .social_preview import social_preview_filename
@@ -348,13 +348,29 @@ class Publisher:
         raise PublishError("GitHub accepted the removal, but the public machine still could not be confirmed absent within four minutes.")
 
     def _publication_ready(self, slug: str, revision: str) -> bool:
-        machine_url = f"{PUBLIC_BASE_URL}/{slug}/machine.json?revision={revision}"
-        qr_url = f"{PUBLIC_BASE_URL}/{slug}/qr-card.png?revision={revision}"
+        cache_buster = time.time_ns()
+        machine_url = f"{PUBLIC_BASE_URL}/{slug}/machine.json?revision={revision}&verification={cache_buster}"
+        qr_url = f"{PUBLIC_BASE_URL}/{slug}/qr-card.png?revision={revision}&verification={cache_buster}"
+        commit_base = (
+            f"https://raw.githubusercontent.com/{GITHUB_OWNER}/{GITHUB_REPOSITORY}/"
+            f"{revision}/public/{PUBLIC_PATH}/{slug}"
+        )
         try:
             machine_response = requests.get(machine_url, timeout=15, headers={"cache-control": "no-cache"})
-            machine_ready = machine_response.ok and machine_response.json().get("slug") == slug
-            qr_response = requests.get(qr_url, timeout=15, headers={"cache-control": "no-cache"}) if machine_ready else None
-            return bool(qr_response and qr_response.ok and qr_response.content.startswith(b"\x89PNG\r\n\x1a\n"))
+            qr_response = requests.get(qr_url, timeout=15, headers={"cache-control": "no-cache"})
+            commit_machine_response = requests.get(f"{commit_base}/machine.json", timeout=15, headers={"cache-control": "no-cache"})
+            commit_qr_response = requests.get(f"{commit_base}/qr-card.png", timeout=15, headers={"cache-control": "no-cache"})
+            if not all(response.ok for response in (machine_response, qr_response, commit_machine_response, commit_qr_response)):
+                return False
+            live_machine = machine_response.json()
+            commit_machine = commit_machine_response.json()
+            return bool(
+                live_machine.get("slug") == slug
+                and commit_machine.get("slug") == slug
+                and machine_response.content == commit_machine_response.content
+                and qr_response.content.startswith(b"\x89PNG\r\n\x1a\n")
+                and qr_response.content == commit_qr_response.content
+            )
         except (requests.RequestException, AttributeError, TypeError, ValueError):
             return False
 

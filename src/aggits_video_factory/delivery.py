@@ -17,6 +17,9 @@ from .models import DeliveryRecord, Project, ProjectType, utc_now
 
 
 DELIVERY_PATH = "/api/deliveries"
+DELIVERY_VERIFICATION_RETRY_CODES = {"published_assets_not_ready", "published_revision_mismatch"}
+DELIVERY_VERIFICATION_ATTEMPTS = 13
+DELIVERY_VERIFICATION_RETRY_DELAY = 5.0
 EMAIL_PATTERN = re.compile(r"^[^\s@<>,;:\"()\[\]\\]+@[^\s@<>,;:\"()\[\]\\]+\.[^\s@<>,;:\"()\[\]\\]+$")
 
 
@@ -131,32 +134,44 @@ def request_delivery(
         }[project.project_type],
     }
     body = json.dumps(payload, separators=(",", ":"), sort_keys=True, ensure_ascii=False).encode("utf-8")
-    stamp = str(int(time.time() if timestamp is None else timestamp))
-    request_nonce = nonce or secrets.token_hex(16)
-    signature = sign_delivery_request(str(secret or ""), stamp, request_nonce, body)
     if urlparse(DELIVERY_ENDPOINT).path != DELIVERY_PATH:
         raise DeliveryError("The configured delivery endpoint is invalid.", code="invalid_delivery_endpoint")
-    headers = {
-        "content-type": "application/json",
-        "x-crispy-timestamp": stamp,
-        "x-crispy-nonce": request_nonce,
-        "x-crispy-signature": signature,
-    }
     logger = get_logger()
     logger.info("Delivery request slug=%s revision=%s recipient=%s", project.slug, project.publication_revision, _redact_email(recipient))
-    try:
-        response = requests.post(DELIVERY_ENDPOINT, data=body, headers=headers, timeout=timeout)
-    except requests.RequestException as error:
-        logger.warning("Delivery response unknown slug=%s error=%s", project.slug, type(error).__name__)
-        raise DeliveryError(
-            "The delivery service response was not received. Delivery status is unknown; Retry Email is safe.",
-            code="delivery_response_unknown",
-            uncertain=True,
-        ) from error
-    try:
-        response_body = response.json()
-    except ValueError:
-        response_body = {}
+    for attempt in range(DELIVERY_VERIFICATION_ATTEMPTS):
+        stamp = str(int(time.time() if timestamp is None else timestamp))
+        request_nonce = nonce if attempt == 0 and nonce else secrets.token_hex(16)
+        signature = sign_delivery_request(str(secret or ""), stamp, request_nonce, body)
+        headers = {
+            "content-type": "application/json",
+            "x-crispy-timestamp": stamp,
+            "x-crispy-nonce": request_nonce,
+            "x-crispy-signature": signature,
+        }
+        try:
+            response = requests.post(DELIVERY_ENDPOINT, data=body, headers=headers, timeout=timeout)
+        except requests.RequestException as error:
+            logger.warning("Delivery response unknown slug=%s error=%s", project.slug, type(error).__name__)
+            raise DeliveryError(
+                "The delivery service response was not received. Delivery status is unknown; Retry Email is safe.",
+                code="delivery_response_unknown",
+                uncertain=True,
+            ) from error
+        try:
+            response_body = response.json()
+        except ValueError:
+            response_body = {}
+        response_code = str(response_body.get("error") or "") if isinstance(response_body, dict) else ""
+        if response.status_code == 409 and response_code in DELIVERY_VERIFICATION_RETRY_CODES and attempt + 1 < DELIVERY_VERIFICATION_ATTEMPTS:
+            logger.info(
+                "Delivery waiting for exact live revision slug=%s attempt=%s/%s",
+                project.slug,
+                attempt + 1,
+                DELIVERY_VERIFICATION_ATTEMPTS,
+            )
+            time.sleep(DELIVERY_VERIFICATION_RETRY_DELAY)
+            continue
+        break
     if response.status_code == 401:
         logger.warning("Delivery authentication failed slug=%s", project.slug)
         raise DeliveryError("Delivery authentication failed.", code="delivery_authentication_failed")
