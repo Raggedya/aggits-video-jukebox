@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en-AU">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#061712">
+  <meta name="description" content="Pull the lever on the Crispy Bits Trivia prototype.">
+  <link rel="stylesheet" href="assets/trivia-machine.css">
+  <script type="module" src="assets/trivia-machine.js"></script>
+  <title>CRISPY BITS TRIVIA</title>
+</head>
+<body>
+  <main class="music-machine video-discovery" data-machine-state="BOOT" data-video-open="false" data-project-type="trivia" data-landing-count="0" style="--theme-primary:#172033;--theme-secondary:#080b12;--theme-accent:#6d80af" aria-label="Crispy Bits Trivia">
+    <div class="customer-backdrop" aria-hidden="true"></div>
+    <div class="experience-frame">
+      <div class="utility-controls">
+        <span aria-hidden="true"></span>
+        <button type="button" data-action="sound" aria-pressed="true"><span data-sound-icon aria-hidden="true">♪</span><b data-sound-label>SOUND ON</b></button>
+      </div>
+
+      <div class="trivia-maker-mark" aria-hidden="true"><img src="assets/channel-master/crispy-bits-maker-mark-approved.png" alt="" width="1280" height="432" draggable="false"></div>
+
+      <header class="customer-identity" data-trivia-header-state="title">
+        <h1 class="customer-identity-copy"><strong data-machine-title>CRISPY BITS TRIVIA</strong></h1>
+        <div class="trivia-header-ticker" data-trivia-header-ticker aria-hidden="true" hidden><span data-trivia-header-ticker-copy></span></div>
+        <span class="customer-identity-subtitle" aria-hidden="true">PULL • PICK • PLAY</span>
+      </header>
+
+      <section class="discovery-zone" aria-label="Trivia category reel">
+        <div class="reel-and-lever">
+          <i class="payline-arrow payline-arrow--left" aria-hidden="true"></i>
+          <div class="reel-bank" aria-label="Single cylindrical trivia category reel" aria-live="polite">
+            <div class="reel" data-reel="0"><div class="reel-strip"><span></span><strong>PULL THE LEVER  ──────→</strong><span></span></div></div>
+            <div class="reel-glass" aria-hidden="true"></div>
+            <div class="payline" aria-hidden="true"></div>
+            <div class="trivia-title-plaque" data-trivia-title-plaque aria-hidden="true">CRISPY BITS TRIVIA</div>
+          </div>
+          <i class="payline-arrow payline-arrow--right" aria-hidden="true"></i>
+          <button class="lever" type="button" aria-label="Pull the lever to pick a trivia category" aria-describedby="machine-instructions">
+            <img src="assets/music-machine/aggits-lever.webp" alt="" draggable="false">
+          </button>
+        </div>
+      </section>
+
+      <section class="video-stage trivia-stage" data-video-stage aria-label="Future trivia and video stage" aria-hidden="true">
+        <div class="video-stage-frame">
+          <div class="video-stage-placeholder">
+            <span data-stage-title>TRIVIA STAGE RESERVED</span>
+            <small data-stage-copy>THE QUESTION INTERFACE AND YOUTUBE PLAYER ARRIVE IN MILESTONE 2</small>
+          </div>
+          <div class="video-shutter video-shutter--left" aria-hidden="true"></div>
+          <div class="video-shutter video-shutter--right" aria-hidden="true"></div>
+        </div>
+      </section>
+
+      <section class="content-card" data-content-card aria-live="polite">
+        <div class="content-logo-shell" aria-hidden="true"><span data-content-monogram>?</span></div>
+        <div class="content-copy">
+          <h2 data-winner-title>YOUR TRIVIA CATEGORY</h2>
+          <p class="content-meta" data-content-meta>SPIN • PICK • PLAY</p>
+          <p class="content-description" data-content-description>Pull the lever to test the independent Trivia Machine shell.</p>
+        </div>
+        <span class="youtube-cta" aria-disabled="true" aria-hidden="true">MILESTONE 2</span>
+      </section>
+
+      <section class="machine-controls" aria-label="Trivia machine controls">
+        <button type="button" class="control-button" data-action="share" disabled><span class="control-icon" aria-hidden="true">↗</span><b>SHARE</b></button>
+        <button type="button" class="control-button control-button--primary" data-action="play" disabled><span class="control-icon" aria-hidden="true">▶</span><b>PLAY VIDEO</b></button>
+        <button type="button" class="control-button" data-action="trivia" disabled><span class="control-icon" aria-hidden="true">?</span><b>TRIVIA SOON</b></button>
+        <button type="button" class="control-button" data-action="spin-again" disabled><span class="control-icon" aria-hidden="true">↻</span><b>RE-SPIN</b></button>
+      </section>
+
+      <footer class="trivia-footer-mark" aria-hidden="true"><div class="trivia-footer-ornament"><span>✷</span></div><strong>CRISPY BITS</strong><small>TRIVIA MACHINE • MILESTONE 1</small></footer>
+    </div>
+    <p id="machine-instructions" class="visually-hidden">Pull the lever or press Re-Spin. The reel lands on a placeholder trivia category, then reveals the reserved lower stage.</p>
+    <p class="machine-status visually-hidden" role="status" aria-live="assertive">Loading the trivia machine.</p>
+  </main>
+</body>
+</html>

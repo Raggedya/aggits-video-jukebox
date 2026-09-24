@@ -1,0 +1,57 @@
+{
+  "schemaVersion": 1,
+  "machine": {
+    "title": "CRISPY BITS TRIVIA",
+    "tickerText": "CRISPY BITS TRIVIA • PULL THE LEVER • PICK A CATEGORY • THE QUESTION ROUND ARRIVES IN MILESTONE 2 •"
+  },
+  "reelEntries": [
+    {
+      "id": "general-knowledge",
+      "label": "GENERAL KNOWLEDGE",
+      "stageTitle": "GENERAL KNOWLEDGE",
+      "stageCopy": "The trivia question interface arrives in Milestone 2."
+    },
+    {
+      "id": "music",
+      "label": "MUSIC",
+      "stageTitle": "MUSIC",
+      "stageCopy": "The trivia question interface arrives in Milestone 2."
+    },
+    {
+      "id": "movies-tv",
+      "label": "MOVIES & TV",
+      "stageTitle": "MOVIES & TV",
+      "stageCopy": "The trivia question interface arrives in Milestone 2."
+    },
+    {
+      "id": "history",
+      "label": "HISTORY",
+      "stageTitle": "HISTORY",
+      "stageCopy": "The trivia question interface arrives in Milestone 2."
+    },
+    {
+      "id": "science-nature",
+      "label": "SCIENCE & NATURE",
+      "stageTitle": "SCIENCE & NATURE",
+      "stageCopy": "The trivia question interface arrives in Milestone 2."
+    },
+    {
+      "id": "sport",
+      "label": "SPORT",
+      "stageTitle": "SPORT",
+      "stageCopy": "The trivia question interface arrives in Milestone 2."
+    },
+    {
+      "id": "food-drink",
+      "label": "FOOD & DRINK",
+      "stageTitle": "FOOD & DRINK",
+      "stageCopy": "The trivia question interface arrives in Milestone 2."
+    },
+    {
+      "id": "wild-card",
+      "label": "WILD CARD",
+      "stageTitle": "WILD CARD",
+      "stageCopy": "The trivia question interface arrives in Milestone 2."
+    }
+  ]
+}
