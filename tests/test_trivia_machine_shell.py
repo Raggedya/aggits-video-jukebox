@@ -6,6 +6,18 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 TRIVIA = ROOT / "crispy-bits" / "trivia-machine"
+DATA = json.loads((TRIVIA / "data" / "trivia-data.json").read_text(encoding="utf-8"))
+HTML = (TRIVIA / "index.html").read_text(encoding="utf-8")
+SCRIPT = (TRIVIA / "assets" / "trivia-machine.js").read_text(encoding="utf-8")
+CSS = (TRIVIA / "assets" / "trivia-machine.css").read_text(encoding="utf-8")
+
+
+def _questions() -> list[dict[str, object]]:
+    return [
+        question
+        for pack in DATA["questionPacks"]
+        for question in pack["questions"]
+    ]
 
 
 def test_trivia_machine_is_an_independent_static_application() -> None:
@@ -28,40 +40,141 @@ def test_proven_spin_and_mechanics_modules_are_byte_identical_copies() -> None:
         assert (TRIVIA / "assets" / filename).read_bytes() == (ROOT / "static" / filename).read_bytes()
 
 
-def test_trivia_content_is_external_and_contains_no_question_system() -> None:
-    data = json.loads((TRIVIA / "data" / "trivia-data.json").read_text(encoding="utf-8"))
-    assert data["machine"]["title"] == "CRISPY BITS TRIVIA"
-    assert len(data["reelEntries"]) >= 3
-    assert all({"id", "label", "stageTitle", "stageCopy"} <= entry.keys() for entry in data["reelEntries"])
-    assert "questions" not in data
+def test_schema_contains_exactly_five_temporary_questions_in_a_separate_pack() -> None:
+    questions = _questions()
+    assert DATA["schemaVersion"] == 2
+    assert len(DATA["questionPacks"]) == 1
+    assert DATA["questionPacks"][0]["temporary"] is True
+    assert len(questions) == 5
+    assert all(question["temporary"] is True for question in questions)
+    assert "Which planet is commonly known" not in HTML
+    assert "Which planet is commonly known" not in SCRIPT
 
 
-def test_controller_reuses_spin_engine_landing_and_lever_mechanics() -> None:
-    script = (TRIVIA / "assets" / "trivia-machine.js").read_text(encoding="utf-8")
-    assert "spinSingleReel({" in script
-    assert "leverResistance(progress)" in script
-    assert "MUSIC_MACHINE_REEL_PROFILE.leverTrigger" in script
-    assert "showLanding(winner)" in script
-    assert "scheduleStageReveal(entry)" in script
-    assert "data/trivia-data.json" in script
-    assert "[data-action=\"spin-again\"]" in script
+def test_all_five_approved_modes_have_one_test_question() -> None:
+    expected = {
+        "general": ("GENERAL", "Give me anything.", "green"),
+        "nerd": ("NERD", "Make me work for it.", "blue"),
+        "weird": ("WEIRD", "That’s actually true?", "purple"),
+        "unhinged": ("UNHINGED", "How did this even happen?", "orange"),
+        "serial-killer": ("SERIAL KILLER", "Enter the dark side.", "red"),
+    }
+    actual = {
+        mode["id"]: (mode["label"], mode["tagline"], mode["colour"])
+        for mode in DATA["modes"]
+    }
+    assert actual == expected
+    assert {question["mode"] for question in _questions()} == set(expected)
 
 
-def test_shell_has_expected_framework_without_trivia_questions() -> None:
-    html = (TRIVIA / "index.html").read_text(encoding="utf-8")
-    assert "CRISPY BITS TRIVIA" in html
-    assert 'data-project-type="trivia"' in html
-    assert 'data-reel="0"' in html
-    assert 'class="lever"' in html
-    assert 'data-video-stage' in html
-    assert 'data-action="spin-again"' in html
-    assert "TRIVIA SOON" in html
-    assert "question-card" not in html
+def test_question_schema_has_every_required_game_and_source_field() -> None:
+    required = {
+        "id",
+        "mode",
+        "category",
+        "reelLabel",
+        "question",
+        "answers",
+        "correctAnswer",
+        "explanation",
+        "crispyBit1",
+        "crispyBit2",
+        "whoaFact",
+        "sourceName",
+        "sourceUrl",
+    }
+    for question in _questions():
+        assert required <= question.keys()
+        assert set(question["answers"]) == {"A", "B", "C", "D"}
+        assert question["correctAnswer"] in question["answers"]
+        assert str(question["sourceUrl"]).startswith("https://")
 
 
-def test_trivia_styles_are_explicitly_scoped() -> None:
-    css = (TRIVIA / "assets" / "trivia-machine.css").read_text(encoding="utf-8")
-    assert '@import url("./video-machine.css")' in css
-    assert css.count('[data-project-type="trivia"]') >= 20
-    assert '[data-project-type="banjo"]' not in css
-    assert '[data-project-type="channel_master"]' not in css
+def test_only_one_fixture_exercises_the_optional_youtube_path() -> None:
+    questions_with_video = [
+        question for question in _questions() if question.get("youtubeVideoId")
+    ]
+    assert len(questions_with_video) == 1
+    assert len(questions_with_video[0]["youtubeVideoId"]) == 11
+    assert "youtubeVideoId" not in next(
+        question for question in _questions() if question["mode"] == "nerd"
+    )
+
+
+def test_controller_reuses_frozen_spin_landing_and_lever_mechanics() -> None:
+    assert "spinSingleReel({" in SCRIPT
+    assert "leverResistance(progress)" in SCRIPT
+    assert "MUSIC_MACHINE_REEL_PROFILE.leverTrigger" in SCRIPT
+    assert "showLanding(winner)" in SCRIPT
+    assert "scheduleQuestionReveal(question)" in SCRIPT
+    assert "data/trivia-data.json" in SCRIPT
+
+
+def test_mode_selection_and_surprise_me_are_functional_not_background_art() -> None:
+    assert 'data-mode-selection' in HTML
+    assert 'data-mode-grid' in HTML
+    assert 'data-action="surprise-mode"' in HTML
+    assert "modes[Math.floor(Math.random() * modes.length)]" in SCRIPT
+    assert "enterMode(mode)" in SCRIPT
+    assert "button.dataset.mode = mode.id" in SCRIPT
+    assert "trivia-mode-button--green" in CSS
+    assert "trivia-mode-button--red" in CSS
+
+
+def test_question_chamber_has_four_answers_and_single_submission_lock() -> None:
+    assert HTML.count("data-answer=\"") == 4
+    assert all(f'data-answer="{key}"' in HTML for key in "ABCD")
+    assert "if (answered || !currentQuestion" in SCRIPT
+    assert "answered = true" in SCRIPT
+    assert "button.disabled = true" in SCRIPT
+
+
+def test_correct_and_incorrect_reveals_and_crispy_bits_ticker_are_present() -> None:
+    assert "key === currentQuestion.correctAnswer" in SCRIPT
+    assert "is-correct" in SCRIPT
+    assert "is-incorrect" in SCRIPT
+    assert "CORRECT!" in SCRIPT
+    assert "NOT THIS TIME" in SCRIPT
+    assert "CRISPY BIT ★" in SCRIPT
+    assert "★ WHOA ★" in SCRIPT
+
+
+def test_watch_video_is_conditional_and_uses_privacy_enhanced_youtube_embed() -> None:
+    assert 'data-action="watch-video" hidden disabled' in HTML
+    assert "watchVideoButton.hidden = !hasVideo" in SCRIPT
+    assert "if (!answered || !currentQuestion?.youtubeVideoId) return" in SCRIPT
+    assert "https://www.youtube-nocookie.com/embed/" in SCRIPT
+
+
+def test_next_re_spin_and_change_mode_are_logically_separate() -> None:
+    assert 'data-action="next-question"' in HTML
+    assert 'data-action="spin-again"' in HTML
+    assert 'data-action="change-mode"' in HTML
+    assert "function nextQuestion()" in SCRIPT
+    assert "function changeMode()" in SCRIPT
+    assert "reSpinButton.addEventListener('click', () => void spin())" in SCRIPT
+    assert "machine.dataset.appView = 'mode-select'" in SCRIPT
+
+
+def test_shell_retains_milestone_one_framework_and_has_no_qr_artwork() -> None:
+    assert "CRISPY BITS TRIVIA" in HTML
+    assert 'data-project-type="trivia"' in HTML
+    assert 'data-reel="0"' in HTML
+    assert 'class="lever"' in HTML
+    assert 'data-video-stage' in HTML
+    assert "qr-card" not in HTML.lower()
+    assert "qr-code" not in HTML.lower()
+
+
+def test_mobile_layout_stacks_modes_answers_and_post_controls() -> None:
+    assert "@media (max-width:560px)" in CSS
+    assert '.trivia-mode-grid{grid-template-columns:1fr' in CSS
+    assert '.trivia-answers{grid-template-columns:1fr' in CSS
+    assert '.trivia-post-controls{grid-template-columns:repeat(2' in CSS
+
+
+def test_trivia_styles_remain_explicitly_scoped() -> None:
+    assert '@import url("./video-machine.css")' in CSS
+    assert CSS.count('[data-project-type="trivia"]') >= 55
+    assert '[data-project-type="banjo"]' not in CSS
+    assert '[data-project-type="channel_master"]' not in CSS

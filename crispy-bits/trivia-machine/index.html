@@ -4,15 +4,31 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#061712">
-  <meta name="description" content="Pull the lever on the Crispy Bits Trivia prototype.">
+  <meta name="description" content="Pull the lever and play Crispy Bits Trivia.">
   <link rel="stylesheet" href="assets/trivia-machine.css">
   <script type="module" src="assets/trivia-machine.js"></script>
   <title>CRISPY BITS TRIVIA</title>
 </head>
 <body>
-  <main class="music-machine video-discovery" data-machine-state="BOOT" data-video-open="false" data-project-type="trivia" data-landing-count="0" style="--theme-primary:#172033;--theme-secondary:#080b12;--theme-accent:#6d80af" aria-label="Crispy Bits Trivia">
+  <main class="music-machine video-discovery" data-machine-state="BOOT" data-video-open="false" data-project-type="trivia" data-app-view="mode-select" data-answer-state="unanswered" data-landing-count="0" data-question-render-count="0" style="--theme-primary:#172033;--theme-secondary:#080b12;--theme-accent:#6d80af" aria-label="Crispy Bits Trivia">
     <div class="customer-backdrop" aria-hidden="true"></div>
-    <div class="experience-frame">
+
+    <section class="trivia-mode-screen" data-mode-selection aria-labelledby="mode-selection-title">
+      <div class="trivia-mode-panel">
+        <div class="trivia-mode-brand" aria-hidden="true"><img src="assets/channel-master/crispy-bits-maker-mark-approved.png" alt="" width="1280" height="432" draggable="false"></div>
+        <p class="trivia-mode-kicker">CHOOSE YOUR GAME</p>
+        <h1 id="mode-selection-title">CRISPY BITS TRIVIA</h1>
+        <p class="trivia-mode-intro">Pick your flavour of trouble.</p>
+        <div class="trivia-mode-grid" data-mode-grid aria-label="Trivia modes"></div>
+        <button class="trivia-mode-button trivia-mode-button--surprise" type="button" data-action="surprise-mode" disabled>
+          <strong>SURPRISE ME</strong>
+          <span>Let the machine decide.</span>
+        </button>
+        <p class="trivia-mode-status" data-mode-status role="status">Loading the game modes…</p>
+      </div>
+    </section>
+
+    <div class="experience-frame" data-machine-shell hidden>
       <div class="utility-controls">
         <span aria-hidden="true"></span>
         <button type="button" data-action="sound" aria-pressed="true"><span data-sound-icon aria-hidden="true">♪</span><b data-sound-label>SOUND ON</b></button>
@@ -23,31 +39,45 @@
       <header class="customer-identity" data-trivia-header-state="title">
         <h1 class="customer-identity-copy"><strong data-machine-title>CRISPY BITS TRIVIA</strong></h1>
         <div class="trivia-header-ticker" data-trivia-header-ticker aria-hidden="true" hidden><span data-trivia-header-ticker-copy></span></div>
-        <span class="customer-identity-subtitle" aria-hidden="true">PULL • PICK • PLAY</span>
+        <span class="customer-identity-subtitle" data-selected-mode-label aria-hidden="true">PULL • PICK • PLAY</span>
       </header>
 
-      <section class="discovery-zone" aria-label="Trivia category reel">
+      <section class="discovery-zone" aria-label="Trivia topic reel">
         <div class="reel-and-lever">
           <i class="payline-arrow payline-arrow--left" aria-hidden="true"></i>
-          <div class="reel-bank" aria-label="Single cylindrical trivia category reel" aria-live="polite">
+          <div class="reel-bank" aria-label="Single cylindrical trivia topic reel" aria-live="polite">
             <div class="reel" data-reel="0"><div class="reel-strip"><span></span><strong>PULL THE LEVER  ──────→</strong><span></span></div></div>
             <div class="reel-glass" aria-hidden="true"></div>
             <div class="payline" aria-hidden="true"></div>
             <div class="trivia-title-plaque" data-trivia-title-plaque aria-hidden="true">CRISPY BITS TRIVIA</div>
           </div>
           <i class="payline-arrow payline-arrow--right" aria-hidden="true"></i>
-          <button class="lever" type="button" aria-label="Pull the lever to pick a trivia category" aria-describedby="machine-instructions">
+          <button class="lever" type="button" aria-label="Pull the lever to pick a trivia topic" aria-describedby="machine-instructions">
             <img src="assets/music-machine/aggits-lever.webp" alt="" draggable="false">
           </button>
         </div>
       </section>
 
-      <section class="video-stage trivia-stage" data-video-stage aria-label="Future trivia and video stage" aria-hidden="true">
+      <section class="video-stage trivia-stage" data-video-stage aria-label="Trivia question chamber" aria-hidden="true">
         <div class="video-stage-frame">
-          <div class="video-stage-placeholder">
-            <span data-stage-title>TRIVIA STAGE RESERVED</span>
-            <small data-stage-copy>THE QUESTION INTERFACE AND YOUTUBE PLAYER ARRIVE IN MILESTONE 2</small>
-          </div>
+          <article class="trivia-chamber" data-question-chamber>
+            <p class="trivia-topic" data-question-topic>TOPIC</p>
+            <h2 data-question-text>Pull the lever to reveal a question.</h2>
+            <div class="trivia-answers" aria-label="Answer choices">
+              <button type="button" data-answer="A"><b>A</b><span data-answer-text="A"></span></button>
+              <button type="button" data-answer="B"><b>B</b><span data-answer-text="B"></span></button>
+              <button type="button" data-answer="C"><b>C</b><span data-answer-text="C"></span></button>
+              <button type="button" data-answer="D"><b>D</b><span data-answer-text="D"></span></button>
+            </div>
+            <div class="trivia-answer-result" data-answer-result hidden>
+              <strong data-result-heading></strong>
+              <p data-result-explanation></p>
+              <a data-question-source href="#" target="_blank" rel="noopener noreferrer">SOURCE</a>
+            </div>
+            <div class="trivia-video-wrap" data-trivia-video-wrap hidden>
+              <iframe data-youtube-player title="Optional YouTube enrichment video" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen referrerpolicy="origin-when-cross-origin"></iframe>
+            </div>
+          </article>
           <div class="video-shutter video-shutter--left" aria-hidden="true"></div>
           <div class="video-shutter video-shutter--right" aria-hidden="true"></div>
         </div>
@@ -56,24 +86,24 @@
       <section class="content-card" data-content-card aria-live="polite">
         <div class="content-logo-shell" aria-hidden="true"><span data-content-monogram>?</span></div>
         <div class="content-copy">
-          <h2 data-winner-title>YOUR TRIVIA CATEGORY</h2>
-          <p class="content-meta" data-content-meta>SPIN • PICK • PLAY</p>
-          <p class="content-description" data-content-description>Pull the lever to test the independent Trivia Machine shell.</p>
+          <h2 data-winner-title>YOUR TRIVIA TOPIC</h2>
+          <p class="content-meta" data-content-meta>CHOOSE A MODE • PULL THE LEVER</p>
+          <p class="content-description" data-content-description>The selected topic and question will appear after the reel lands.</p>
         </div>
-        <span class="youtube-cta" aria-disabled="true" aria-hidden="true">MILESTONE 2</span>
+        <span class="youtube-cta" aria-disabled="true" aria-hidden="true">5 TEST QUESTIONS</span>
       </section>
 
-      <section class="machine-controls" aria-label="Trivia machine controls">
-        <button type="button" class="control-button" data-action="share" disabled><span class="control-icon" aria-hidden="true">↗</span><b>SHARE</b></button>
-        <button type="button" class="control-button control-button--primary" data-action="play" disabled><span class="control-icon" aria-hidden="true">▶</span><b>PLAY VIDEO</b></button>
-        <button type="button" class="control-button" data-action="trivia" disabled><span class="control-icon" aria-hidden="true">?</span><b>TRIVIA SOON</b></button>
+      <section class="machine-controls trivia-post-controls" data-post-controls aria-label="Post-question controls" hidden>
+        <button type="button" class="control-button control-button--primary" data-action="watch-video" hidden disabled><span class="control-icon" aria-hidden="true">▶</span><b>WATCH VIDEO</b></button>
+        <button type="button" class="control-button" data-action="next-question" disabled><span class="control-icon" aria-hidden="true">→</span><b>NEXT QUESTION</b></button>
         <button type="button" class="control-button" data-action="spin-again" disabled><span class="control-icon" aria-hidden="true">↻</span><b>RE-SPIN</b></button>
+        <button type="button" class="control-button" data-action="change-mode" disabled><span class="control-icon" aria-hidden="true">◇</span><b>CHANGE MODE</b></button>
       </section>
 
-      <footer class="trivia-footer-mark" aria-hidden="true"><div class="trivia-footer-ornament"><span>✷</span></div><strong>CRISPY BITS</strong><small>TRIVIA MACHINE • MILESTONE 1</small></footer>
+      <footer class="trivia-footer-mark" aria-hidden="true"><div class="trivia-footer-ornament"><span>✷</span></div><strong>CRISPY BITS</strong><small>TRIVIA MACHINE • MILESTONE 2</small></footer>
     </div>
-    <p id="machine-instructions" class="visually-hidden">Pull the lever or press Re-Spin. The reel lands on a placeholder trivia category, then reveals the reserved lower stage.</p>
-    <p class="machine-status visually-hidden" role="status" aria-live="assertive">Loading the trivia machine.</p>
+    <p id="machine-instructions" class="visually-hidden">Choose a mode, pull the lever, answer the question, discover the Crispy Bits, then choose what happens next.</p>
+    <p class="machine-status visually-hidden" role="status" aria-live="assertive">Loading the trivia game.</p>
   </main>
 </body>
 </html>

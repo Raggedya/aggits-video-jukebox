@@ -1,57 +1,106 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "machine": {
     "title": "CRISPY BITS TRIVIA",
-    "tickerText": "CRISPY BITS TRIVIA • PULL THE LEVER • PICK A CATEGORY • THE QUESTION ROUND ARRIVES IN MILESTONE 2 •"
+    "defaultTickerText": "CHOOSE A MODE • PULL THE LEVER • PICK A TOPIC • ANSWER THE QUESTION • DISCOVER THE CRISPY BITS •"
   },
-  "reelEntries": [
+  "modes": [
+    {"id": "general", "label": "GENERAL", "tagline": "Give me anything.", "colour": "green"},
+    {"id": "nerd", "label": "NERD", "tagline": "Make me work for it.", "colour": "blue"},
+    {"id": "weird", "label": "WEIRD", "tagline": "That’s actually true?", "colour": "purple"},
+    {"id": "unhinged", "label": "UNHINGED", "tagline": "How did this even happen?", "colour": "orange"},
+    {"id": "serial-killer", "label": "SERIAL KILLER", "tagline": "Enter the dark side.", "colour": "red"}
+  ],
+  "questionPacks": [
     {
-      "id": "general-knowledge",
-      "label": "GENERAL KNOWLEDGE",
-      "stageTitle": "GENERAL KNOWLEDGE",
-      "stageCopy": "The trivia question interface arrives in Milestone 2."
-    },
-    {
-      "id": "music",
-      "label": "MUSIC",
-      "stageTitle": "MUSIC",
-      "stageCopy": "The trivia question interface arrives in Milestone 2."
-    },
-    {
-      "id": "movies-tv",
-      "label": "MOVIES & TV",
-      "stageTitle": "MOVIES & TV",
-      "stageCopy": "The trivia question interface arrives in Milestone 2."
-    },
-    {
-      "id": "history",
-      "label": "HISTORY",
-      "stageTitle": "HISTORY",
-      "stageCopy": "The trivia question interface arrives in Milestone 2."
-    },
-    {
-      "id": "science-nature",
-      "label": "SCIENCE & NATURE",
-      "stageTitle": "SCIENCE & NATURE",
-      "stageCopy": "The trivia question interface arrives in Milestone 2."
-    },
-    {
-      "id": "sport",
-      "label": "SPORT",
-      "stageTitle": "SPORT",
-      "stageCopy": "The trivia question interface arrives in Milestone 2."
-    },
-    {
-      "id": "food-drink",
-      "label": "FOOD & DRINK",
-      "stageTitle": "FOOD & DRINK",
-      "stageCopy": "The trivia question interface arrives in Milestone 2."
-    },
-    {
-      "id": "wild-card",
-      "label": "WILD CARD",
-      "stageTitle": "WILD CARD",
-      "stageCopy": "The trivia question interface arrives in Milestone 2."
+      "id": "milestone-2-temporary-test-pack",
+      "label": "Milestone 2 temporary test pack",
+      "version": 1,
+      "temporary": true,
+      "questions": [
+        {
+          "id": "TEMP-M2-GENERAL-001",
+          "temporary": true,
+          "mode": "general",
+          "category": "Space",
+          "reelLabel": "SPACE",
+          "question": "Which planet is commonly known as the Red Planet?",
+          "answers": {"A": "Venus", "B": "Mars", "C": "Jupiter", "D": "Mercury"},
+          "correctAnswer": "B",
+          "explanation": "Mars looks red because iron minerals in its soil oxidise, or rust.",
+          "crispyBit1": "Mars has two small moons: Phobos and Deimos.",
+          "crispyBit2": "A Martian day is about 24 hours and 37 minutes long.",
+          "whoaFact": "Olympus Mons on Mars is the largest known volcano in the solar system.",
+          "sourceName": "NASA Science — Mars",
+          "sourceUrl": "https://science.nasa.gov/mars/",
+          "youtubeVideoId": "M7lc1UVf-VE",
+          "youtubeUrl": "https://www.youtube.com/watch?v=M7lc1UVf-VE"
+        },
+        {
+          "id": "TEMP-M2-NERD-001",
+          "temporary": true,
+          "mode": "nerd",
+          "category": "Computing",
+          "reelLabel": "COMPUTING",
+          "question": "In computing, what does CPU stand for?",
+          "answers": {"A": "Central Processing Unit", "B": "Computer Power Utility", "C": "Core Program User", "D": "Central Protocol Upload"},
+          "correctAnswer": "A",
+          "explanation": "The CPU is the primary processor that executes instructions in a computer.",
+          "crispyBit1": "Modern CPUs can contain multiple processing cores.",
+          "crispyBit2": "A CPU’s clock speed is commonly measured in gigahertz.",
+          "whoaFact": "A modern processor can perform billions of clock cycles every second.",
+          "sourceName": "IBM — Central Processing Unit",
+          "sourceUrl": "https://www.ibm.com/think/topics/central-processing-unit"
+        },
+        {
+          "id": "TEMP-M2-WEIRD-001",
+          "temporary": true,
+          "mode": "weird",
+          "category": "Animal Oddities",
+          "reelLabel": "ANIMAL ODDITIES",
+          "question": "Which animal has three hearts?",
+          "answers": {"A": "Elephant", "B": "Penguin", "C": "Octopus", "D": "Platypus"},
+          "correctAnswer": "C",
+          "explanation": "An octopus has one systemic heart and two branchial hearts that pump blood through its gills.",
+          "crispyBit1": "Octopus blood is blue because it uses copper-rich haemocyanin.",
+          "crispyBit2": "Most of an octopus’s neurons are located in its arms.",
+          "whoaFact": "An octopus can taste using receptors in its suckers.",
+          "sourceName": "Smithsonian Ocean — Octopus",
+          "sourceUrl": "https://ocean.si.edu/ocean-life/invertebrates/octopus"
+        },
+        {
+          "id": "TEMP-M2-UNHINGED-001",
+          "temporary": true,
+          "mode": "unhinged",
+          "category": "History Gone Wild",
+          "reelLabel": "HISTORY GONE WILD",
+          "question": "Which conflict is commonly described as history’s shortest war?",
+          "answers": {"A": "The Anglo-Zanzibar War", "B": "The Falklands War", "C": "The Winter War", "D": "The Six-Day War"},
+          "correctAnswer": "A",
+          "explanation": "The Anglo-Zanzibar War of 1896 ended in less than an hour.",
+          "crispyBit1": "The conflict began on the morning of 27 August 1896.",
+          "crispyBit2": "Its duration is usually given as roughly 38 to 45 minutes.",
+          "whoaFact": "It was over before many modern feature films would reach their halfway point.",
+          "sourceName": "Encyclopaedia Britannica — Anglo-Zanzibar War",
+          "sourceUrl": "https://www.britannica.com/event/Anglo-Zanzibar-War"
+        },
+        {
+          "id": "TEMP-M2-SERIAL-001",
+          "temporary": true,
+          "mode": "serial-killer",
+          "category": "Forensics",
+          "reelLabel": "FORENSICS",
+          "question": "What does the forensic term rigor mortis describe?",
+          "answers": {"A": "Muscles becoming stiff after death", "B": "Blood settling under gravity", "C": "The body cooling after death", "D": "The drying of the cornea"},
+          "correctAnswer": "A",
+          "explanation": "Rigor mortis is the post-mortem stiffening of muscles caused by chemical changes in muscle tissue.",
+          "crispyBit1": "Rigor mortis is one of several post-mortem changes used in forensic assessment.",
+          "crispyBit2": "Temperature and physical conditions can affect how quickly it develops.",
+          "whoaFact": "It is never used alone to determine an exact time of death.",
+          "sourceName": "NCBI Bookshelf — Evaluation of Postmortem Changes",
+          "sourceUrl": "https://www.ncbi.nlm.nih.gov/books/NBK539741/"
+        }
+      ]
     }
   ]
 }
