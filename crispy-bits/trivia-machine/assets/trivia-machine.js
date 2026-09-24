@@ -1,10 +1,11 @@
 import { populateSingleReel, spinSingleReel, ARTIST_SINGLE_REEL_PROFILE } from './single-reel-engine.js';
 import { MUSIC_MACHINE_REEL_PROFILE, leverResistance } from './machine-mechanics-core.js';
+import { ANSWER_KEYS, validateTriviaData } from './trivia-data-validator.js';
+import { buildReelTopics, createRotationPicker } from './trivia-content-rotation.js';
 
 const DATA_URL = 'data/trivia-data.json';
 const REVEAL_DELAY_MS = 950;
 const HEADER_TITLE_MS = 10000;
-const ANSWER_KEYS = Object.freeze(['A', 'B', 'C', 'D']);
 const machine = document.querySelector('[data-project-type="trivia"]');
 
 if (!machine) throw new Error('trivia_machine_root_missing');
@@ -48,11 +49,11 @@ const soundLabel = machine.querySelector('[data-sound-label]');
 let config = null;
 let modes = [];
 let allQuestions = [];
-let entries = [];
+let selectedModeQuestions = [];
+let topics = [];
 let selectedMode = null;
 let currentQuestion = null;
 let selectedAnswer = null;
-let shuffleBag = [];
 let revealTimer = 0;
 let headerTimer = 0;
 let spinning = false;
@@ -61,11 +62,14 @@ let soundEnabled = (() => {
   try { return sessionStorage.getItem('crispyBitsSound') !== 'off'; } catch { return true; }
 })();
 let reelMotorAudio = null;
+const topicPicker = createRotationPicker();
+const modeQuestionPicker = createRotationPicker();
+const topicQuestionPickers = new Map();
 
 const reducedMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 const identityFor = entry => entry.id;
 const labelFor = entry => entry.reelLabel;
-const randomEntry = () => entries[Math.floor(Math.random() * entries.length)];
+const randomTopic = () => topics[Math.floor(Math.random() * topics.length)];
 
 function setStatus(message) {
   status.textContent = message;
@@ -77,31 +81,32 @@ function setReelLabel(node, label) {
   node.classList.toggle('is-very-long', label.length > 26);
 }
 
-function refillShuffleBag() {
-  shuffleBag = [...entries];
-  for (let index = shuffleBag.length - 1; index > 0; index -= 1) {
-    const swap = Math.floor(Math.random() * (index + 1));
-    [shuffleBag[index], shuffleBag[swap]] = [shuffleBag[swap], shuffleBag[index]];
-  }
-  if (currentQuestion && shuffleBag.length > 1 && shuffleBag.at(-1)?.id === currentQuestion.id) {
-    [shuffleBag[0], shuffleBag[shuffleBag.length - 1]] = [shuffleBag.at(-1), shuffleBag[0]];
-  }
-}
-
-function nextEntry() {
-  if (!shuffleBag.length) refillShuffleBag();
-  return shuffleBag.pop();
-}
-
 function renderReel(entry) {
   populateSingleReel({
     reel,
     entry,
-    pickRandom: used => entries.find(candidate => !used.has(candidate.id) && candidate.id !== entry.id) || randomEntry(),
+    pickRandom: used => topics.find(candidate => !used.has(candidate.id) && candidate.id !== entry.id) || randomTopic(),
     labelFor,
     identityFor,
     setLabel: setReelLabel,
   });
+}
+
+function selectQuestionForTopic(topic) {
+  const candidates = selectedModeQuestions.filter(question => question.reelLabel === topic.reelLabel);
+  if (!candidates.length) return null;
+  const eligible = candidates.length > 1 && currentQuestion
+    ? candidates.filter(question => question.id !== currentQuestion.id)
+    : candidates;
+  if (!topicQuestionPickers.has(topic.id)) topicQuestionPickers.set(topic.id, createRotationPicker());
+  return topicQuestionPickers.get(topic.id).next(eligible.length ? eligible : candidates);
+}
+
+function selectNextQuestionInMode() {
+  const eligible = selectedModeQuestions.length > 1 && currentQuestion
+    ? selectedModeQuestions.filter(question => question.id !== currentQuestion.id)
+    : selectedModeQuestions;
+  return modeQuestionPicker.next(eligible.length ? eligible : selectedModeQuestions);
 }
 
 function machineAudio(name) {
@@ -206,7 +211,7 @@ function renderQuestion(question) {
   questionTopic.textContent = question.category;
   questionText.textContent = question.question;
   ANSWER_KEYS.forEach(key => {
-    machine.querySelector(`[data-answer-text="${key}"]`).textContent = question.answers[key];
+    machine.querySelector(`[data-answer-text="${key}"]`).textContent = question[`answer${key}`];
   });
   machine.dataset.currentQuestionId = question.id;
   machine.dataset.questionRenderCount = String(Number(machine.dataset.questionRenderCount || 0) + 1);
@@ -225,25 +230,33 @@ function scheduleQuestionReveal(question) {
   revealTimer = window.setTimeout(() => renderQuestion(question), reducedMotion() ? 40 : REVEAL_DELAY_MS);
 }
 
-function showLanding(question, countLanding = true) {
+function showLanding(topic, countLanding = true) {
+  const question = selectQuestionForTopic(topic);
+  if (!question) {
+    machine.dataset.machineState = 'CONTENT_ERROR';
+    setStatus('No approved question is available for that topic. Re-spin or change mode.');
+    spinning = false;
+    lever.disabled = false;
+    return;
+  }
   currentQuestion = question;
-  winnerTitle.textContent = question.reelLabel;
+  winnerTitle.textContent = topic.reelLabel;
   contentMeta.textContent = `${selectedMode.label} MODE • TOPIC SELECTED`;
   contentDescription.textContent = `${question.category}: answer the question when the chamber opens.`;
-  machine.dataset.selectedEntryId = question.id;
+  machine.dataset.selectedEntryId = topic.id;
   if (countLanding) {
     machine.dataset.landingCount = String(Number(machine.dataset.landingCount || 0) + 1);
   }
   machine.dataset.machineState = 'LANDED';
-  setStatus(`${question.reelLabel} selected. The trivia chamber is opening.`);
+  setStatus(`${topic.reelLabel} selected. The trivia chamber is opening.`);
   machine.dispatchEvent(new CustomEvent('crispy-bits:trivia-landed', {
-    detail: { entryId: question.id, mode: selectedMode.id },
+    detail: { topicId: topic.id, mode: selectedMode.id },
   }));
   scheduleQuestionReveal(question);
 }
 
 async function spin() {
-  if (spinning || !entries.length) return;
+  if (spinning || !topics.length) return;
   spinning = true;
   resetAnswerUI();
   closeStage();
@@ -252,12 +265,12 @@ async function spin() {
   setTickerText(`${selectedMode.label} MODE ★ THE REEL IS SPINNING ★`, true);
   setStatus('The trivia reel is spinning.');
   startReelSound();
-  const winner = nextEntry();
+  const winner = topicPicker.next(topics);
   await spinSingleReel({
     reel,
     finalEntry: winner,
     stopAfter: reducedMotion() ? ARTIST_SINGLE_REEL_PROFILE.reducedMotionDuration : ARTIST_SINGLE_REEL_PROFILE.duration,
-    pickRandom: randomEntry,
+    pickRandom: randomTopic,
     renderRows: renderReel,
     onStop: stopReelSound,
   });
@@ -291,7 +304,7 @@ function answerQuestion(key) {
   contentDescription.textContent = currentQuestion.explanation;
   setTickerText(crispyBitsTicker(currentQuestion), true);
   postControls.hidden = false;
-  const hasVideo = Boolean(currentQuestion.youtubeVideoId);
+  const hasVideo = Boolean(currentQuestion.videoId);
   watchVideoButton.hidden = !hasVideo;
   watchVideoButton.disabled = !hasVideo;
   nextQuestionButton.disabled = false;
@@ -305,9 +318,10 @@ function answerQuestion(key) {
 }
 
 function watchVideo() {
-  if (!answered || !currentQuestion?.youtubeVideoId) return;
-  const videoId = currentQuestion.youtubeVideoId;
+  if (!answered || !currentQuestion?.videoId) return;
+  const videoId = currentQuestion.videoId;
   if (!/^[A-Za-z0-9_-]{11}$/.test(videoId)) return;
+  youtubePlayer.title = [currentQuestion.videoTitle, currentQuestion.videoChannel].filter(Boolean).join(' — ') || 'Optional YouTube enrichment video';
   youtubePlayer.src = `https://www.youtube-nocookie.com/embed/${videoId}?autoplay=1&rel=0`;
   videoWrap.hidden = false;
   machine.dataset.videoActive = 'true';
@@ -315,9 +329,10 @@ function watchVideo() {
 }
 
 function nextQuestion() {
-  if (!answered || !entries.length) return;
-  const question = nextEntry();
-  renderReel(question);
+  if (!answered || !selectedModeQuestions.length) return;
+  const question = selectNextQuestionInMode();
+  const topic = topics.find(candidate => candidate.reelLabel === question.reelLabel);
+  renderReel(topic);
   winnerTitle.textContent = question.reelLabel;
   contentMeta.textContent = `${selectedMode.label} MODE • NEXT QUESTION`;
   contentDescription.textContent = `${question.category}: choose one answer.`;
@@ -334,8 +349,11 @@ function changeMode() {
   resetAnswerUI();
   selectedMode = null;
   currentQuestion = null;
-  entries = [];
-  shuffleBag = [];
+  selectedModeQuestions = [];
+  topics = [];
+  topicPicker.reset();
+  modeQuestionPicker.reset();
+  topicQuestionPickers.clear();
   machine.dataset.appView = 'mode-select';
   machine.dataset.machineState = 'MODE_SELECT';
   delete machine.dataset.selectedMode;
@@ -354,9 +372,12 @@ function enterMode(mode) {
     return;
   }
   selectedMode = mode;
-  entries = modeQuestions;
+  selectedModeQuestions = modeQuestions;
+  topics = buildReelTopics(modeQuestions);
   currentQuestion = null;
-  shuffleBag = [];
+  topicPicker.reset();
+  modeQuestionPicker.reset();
+  topicQuestionPickers.clear();
   machine.dataset.selectedMode = mode.id;
   machine.dataset.appView = 'machine';
   machine.dataset.machineState = 'IDLE';
@@ -369,7 +390,7 @@ function enterMode(mode) {
   winnerTitle.textContent = 'YOUR TRIVIA TOPIC';
   contentMeta.textContent = `${mode.label} MODE • PULL THE LEVER`;
   contentDescription.textContent = 'The selected topic and question will appear after the reel lands.';
-  renderReel(entries[0]);
+  renderReel(topics[0]);
   startHeaderForMode(mode);
   lever.disabled = false;
   setStatus(`${mode.label} mode selected. Pull the lever.`);
@@ -394,25 +415,6 @@ function renderModes() {
   modeStatus.textContent = 'Choose a mode to enter the machine.';
 }
 
-function validateData(data) {
-  if (data?.schemaVersion !== 2 || !Array.isArray(data.modes) || data.modes.length !== 5) {
-    throw new Error('trivia_data_modes_invalid');
-  }
-  const questions = data.questionPacks?.flatMap(pack => pack.questions || []) || [];
-  if (questions.length !== 5) throw new Error('trivia_data_test_questions_invalid');
-  const modeIds = new Set(data.modes.map(mode => mode.id));
-  questions.forEach(question => {
-    if (!modeIds.has(question.mode) || !question.id || !question.reelLabel || !question.question) {
-      throw new Error('trivia_question_identity_invalid');
-    }
-    if (!ANSWER_KEYS.every(key => typeof question.answers?.[key] === 'string')) {
-      throw new Error('trivia_question_answers_invalid');
-    }
-    if (!ANSWER_KEYS.includes(question.correctAnswer)) throw new Error('trivia_question_correct_answer_invalid');
-  });
-  return questions;
-}
-
 function resetLever() {
   lever.style.transform = 'translateY(-50%)';
 }
@@ -422,7 +424,7 @@ function bindLever() {
   let startY = 0;
   let triggered = false;
   lever.addEventListener('pointerdown', event => {
-    if (spinning || !entries.length) return;
+    if (spinning || !topics.length) return;
     pointerId = event.pointerId;
     startY = event.clientY;
     triggered = false;
@@ -459,8 +461,16 @@ async function load() {
     const response = await fetch(DATA_URL, { cache: 'no-store' });
     if (!response.ok) throw new Error(`trivia_data_${response.status}`);
     config = await response.json();
-    allQuestions = validateData(config);
-    modes = config.modes;
+    const validation = validateTriviaData(config);
+    if (!validation.activePack) throw new Error('trivia_active_pack_invalid');
+    allQuestions = [...validation.approvedQuestions];
+    modes = config.modes.filter(mode => validation.activePack.availableModes.includes(mode.id));
+    machine.dataset.activePackId = validation.activePack.packId;
+    machine.dataset.activePackVersion = String(validation.activePack.packVersion);
+    const invalidQuestionIds = new Set(validation.diagnostics.map(item => item.questionId).filter(Boolean));
+    machine.dataset.invalidQuestionCount = String(invalidQuestionIds.size);
+    validation.diagnostics.forEach(item => console.warn(`[Trivia data: ${item.code}] ${item.message}`));
+    if (!allQuestions.length) throw new Error('trivia_no_approved_questions');
     titleNode.textContent = config.machine.title;
     plaque.textContent = config.machine.title;
     renderModes();

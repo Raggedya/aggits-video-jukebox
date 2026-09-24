@@ -9,6 +9,8 @@ TRIVIA = ROOT / "crispy-bits" / "trivia-machine"
 DATA = json.loads((TRIVIA / "data" / "trivia-data.json").read_text(encoding="utf-8"))
 HTML = (TRIVIA / "index.html").read_text(encoding="utf-8")
 SCRIPT = (TRIVIA / "assets" / "trivia-machine.js").read_text(encoding="utf-8")
+VALIDATOR = (TRIVIA / "assets" / "trivia-data-validator.js").read_text(encoding="utf-8")
+ROTATION = (TRIVIA / "assets" / "trivia-content-rotation.js").read_text(encoding="utf-8")
 CSS = (TRIVIA / "assets" / "trivia-machine.css").read_text(encoding="utf-8")
 
 
@@ -23,14 +25,18 @@ def _questions() -> list[dict[str, object]]:
 def test_trivia_machine_is_an_independent_static_application() -> None:
     required = {
         "index.html",
+        "package.json",
         "data/trivia-data.json",
         "assets/trivia-machine.css",
         "assets/trivia-machine.js",
+        "assets/trivia-data-validator.js",
+        "assets/trivia-content-rotation.js",
         "assets/video-machine.css",
         "assets/single-reel-engine.js",
         "assets/machine-mechanics-core.js",
         "assets/music-machine/aggits-reel-v2.webp",
         "assets/music-machine/aggits-lever.webp",
+        "tests/trivia-data-validator.test.mjs",
     }
     assert all((TRIVIA / relative).is_file() for relative in required)
 
@@ -42,11 +48,22 @@ def test_proven_spin_and_mechanics_modules_are_byte_identical_copies() -> None:
 
 def test_schema_contains_exactly_five_temporary_questions_in_a_separate_pack() -> None:
     questions = _questions()
-    assert DATA["schemaVersion"] == 2
+    assert DATA["schemaVersion"] == 3
     assert len(DATA["questionPacks"]) == 1
-    assert DATA["questionPacks"][0]["temporary"] is True
+    pack = DATA["questionPacks"][0]
+    assert DATA["activePackId"] == pack["packId"]
+    assert {
+        "packId",
+        "packName",
+        "packVersion",
+        "description",
+        "availableModes",
+        "questions",
+    } <= pack.keys()
+    assert pack["temporary"] is True
     assert len(questions) == 5
     assert all(question["temporary"] is True for question in questions)
+    assert all(str(question["id"]).startswith("TEMP-M3-") for question in questions)
     assert "Which planet is commonly known" not in HTML
     assert "Which planet is commonly known" not in SCRIPT
 
@@ -74,7 +91,10 @@ def test_question_schema_has_every_required_game_and_source_field() -> None:
         "category",
         "reelLabel",
         "question",
-        "answers",
+        "answerA",
+        "answerB",
+        "answerC",
+        "answerD",
         "correctAnswer",
         "explanation",
         "crispyBit1",
@@ -82,21 +102,28 @@ def test_question_schema_has_every_required_game_and_source_field() -> None:
         "whoaFact",
         "sourceName",
         "sourceUrl",
+        "difficulty",
+        "status",
     }
     for question in _questions():
         assert required <= question.keys()
-        assert set(question["answers"]) == {"A", "B", "C", "D"}
-        assert question["correctAnswer"] in question["answers"]
+        assert all(question[f"answer{key}"] for key in "ABCD")
+        assert question["correctAnswer"] in "ABCD"
+        assert question["difficulty"] in {"easy", "medium", "hard"}
+        assert question["status"] in {"draft", "approved", "retired"}
         assert str(question["sourceUrl"]).startswith("https://")
 
 
 def test_only_one_fixture_exercises_the_optional_youtube_path() -> None:
     questions_with_video = [
-        question for question in _questions() if question.get("youtubeVideoId")
+        question for question in _questions() if question.get("videoId")
     ]
     assert len(questions_with_video) == 1
-    assert len(questions_with_video[0]["youtubeVideoId"]) == 11
-    assert "youtubeVideoId" not in next(
+    assert len(questions_with_video[0]["videoId"]) == 11
+    assert questions_with_video[0]["videoTitle"]
+    assert questions_with_video[0]["videoChannel"]
+    assert questions_with_video[0]["videoReason"]
+    assert "videoId" not in next(
         question for question in _questions() if question["mode"] == "nerd"
     )
 
@@ -106,8 +133,41 @@ def test_controller_reuses_frozen_spin_landing_and_lever_mechanics() -> None:
     assert "leverResistance(progress)" in SCRIPT
     assert "MUSIC_MACHINE_REEL_PROFILE.leverTrigger" in SCRIPT
     assert "showLanding(winner)" in SCRIPT
+    assert "selectQuestionForTopic(topic)" in SCRIPT
     assert "scheduleQuestionReveal(question)" in SCRIPT
     assert "data/trivia-data.json" in SCRIPT
+    assert "validateTriviaData(config)" in SCRIPT
+    assert "validation.approvedQuestions" in SCRIPT
+    assert "createRotationPicker" in SCRIPT
+    assert SCRIPT.index("await spinSingleReel({") < SCRIPT.index("showLanding(winner)")
+
+
+def test_validator_enforces_production_content_readiness() -> None:
+    expected_diagnostics = {
+        "question_id_duplicate",
+        "question_mode_invalid",
+        "question_answers_invalid",
+        "correct_answer_invalid",
+        "source_url_invalid",
+        "video_id_invalid",
+        "video_metadata_without_id",
+        "difficulty_invalid",
+        "status_invalid",
+    }
+    assert all(code in VALIDATOR for code in expected_diagnostics)
+    assert "question.status === 'approved'" in VALIDATOR
+    assert "activePackId" in VALIDATOR
+    assert "availableModes" in VALIDATOR
+
+
+def test_question_rotation_is_separate_from_mechanical_landing() -> None:
+    assert "function selectQuestionForTopic(topic)" in SCRIPT
+    landing = SCRIPT.split("function showLanding(topic, countLanding = true)", 1)[1].split("function answerQuestion", 1)[0]
+    assert "selectQuestionForTopic(topic)" in landing
+    assert "lastIdentity" in ROTATION
+    assert "if (bag.length > 1" in ROTATION
+    assert "buildReelTopics" in ROTATION
+    assert DATA["activePackId"] not in SCRIPT
 
 
 def test_mode_selection_and_surprise_me_are_functional_not_background_art() -> None:
@@ -142,8 +202,12 @@ def test_correct_and_incorrect_reveals_and_crispy_bits_ticker_are_present() -> N
 def test_watch_video_is_conditional_and_uses_privacy_enhanced_youtube_embed() -> None:
     assert 'data-action="watch-video" hidden disabled' in HTML
     assert "watchVideoButton.hidden = !hasVideo" in SCRIPT
-    assert "if (!answered || !currentQuestion?.youtubeVideoId) return" in SCRIPT
+    assert "if (!answered || !currentQuestion?.videoId) return" in SCRIPT
     assert "https://www.youtube-nocookie.com/embed/" in SCRIPT
+    assert "videoTitle" in SCRIPT
+    assert "videoChannel" in SCRIPT
+    assert "videoReason" not in SCRIPT
+    assert "videoReason" not in HTML
 
 
 def test_next_re_spin_and_change_mode_are_logically_separate() -> None:
