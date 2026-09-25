@@ -21,6 +21,7 @@ from .social_preview import (
     replace_social_preview,
     social_preview_filename,
 )
+from .white_label import package_white_label_logo
 
 
 BRASS = "#b88a4f"
@@ -171,14 +172,15 @@ def create_qr_card(project: Project, destination: Path) -> None:
 def build_project_site(project: Project, destination: Path) -> Path:
     if project.project_type not in {
         ProjectType.BUSINESS, ProjectType.MUSIC, ProjectType.TOURISM,
-        ProjectType.BANJO, ProjectType.CHANNEL_MASTER,
+        ProjectType.BANJO, ProjectType.CHANNEL_MASTER, ProjectType.WHITE_LABEL,
     }:
         raise ValueError(f"Unsupported project type: {project.project_type!r}.")
     primary_cta = project_primary_cta(project)
     music_cta = project.music_config.primary_cta if project.music_config else None
     tourism_config = project.tourism_config if project.project_type is ProjectType.TOURISM else None
     banjo_config = project.banjo_config if project.project_type is ProjectType.BANJO else None
-    channel_master_config = project.channel_master_config if project.project_type is ProjectType.CHANNEL_MASTER else None
+    channel_product = project.project_type in {ProjectType.CHANNEL_MASTER, ProjectType.WHITE_LABEL}
+    channel_master_config = project.channel_master_config if channel_product else None
     if project.project_type is ProjectType.MUSIC and primary_cta is None:
         raise ValueError("A Music project requires a configured primary CTA before generation.")
     destination.mkdir(parents=True, exist_ok=True)
@@ -186,6 +188,11 @@ def build_project_site(project: Project, destination: Path) -> Path:
     if assets.exists():
         shutil.rmtree(assets)
     shutil.copytree(resource_path("static"), assets)
+    white_label_logo_public_url = ""
+    if project.project_type is ProjectType.WHITE_LABEL:
+        if not project.white_label_config:
+            raise ValueError("Please upload a logo before generating this White Label project.")
+        white_label_logo_public_url = package_white_label_logo(project.white_label_config, assets)
     video_machine_asset_version = hashlib.sha256(
         (assets / "video-machine.js").read_bytes()
     ).hexdigest()[:12]
@@ -215,7 +222,7 @@ def build_project_site(project: Project, destination: Path) -> Path:
         raise ValueError("A project must include at least one video before generation.")
     social_title = project.title.strip() or BRAND_NAME
     description = (
-        f"Hit it. Discover {social_title}." if project.project_type is ProjectType.CHANNEL_MASTER
+        f"Hit it. Discover {social_title}." if channel_product
         else f"Hit it. Discover {social_title} with Crispy Bits."
     )
     if project.project_type is ProjectType.BANJO:
@@ -228,7 +235,7 @@ def build_project_site(project: Project, destination: Path) -> Path:
         social_image_alt = f"{social_title} — Crispy Bits social preview"
     story_sections = _story_sections(project.ticker_text, project.title, project.project_type)
     banjo_ticker = _banjo_ticker_text(project.ticker_text) if project.project_type is ProjectType.BANJO else ""
-    channel_master_ticker = _banjo_ticker_text(project.ticker_text) if project.project_type is ProjectType.CHANNEL_MASTER else ""
+    channel_master_ticker = _banjo_ticker_text(project.ticker_text) if channel_product else ""
     primary_action_label = primary_cta.display_label if primary_cta else ("SHOW BANJO" if project.project_type is ProjectType.BANJO else "PRIMARY ACTION")
     primary_action_aria = (
         "Show Banjo your car"
@@ -269,7 +276,7 @@ def build_project_site(project: Project, destination: Path) -> Path:
             f'<a href="{contact_url}" target="_blank" rel="noopener noreferrer">CONTACT US</a></section>'
         )
     channel_master_title_plaque_markup = ""
-    if project.project_type is ProjectType.CHANNEL_MASTER:
+    if channel_product:
         title_length = len(project.title.strip())
         fit_class = (
             " channel-master-title-plaque--very-long" if title_length > 42
@@ -299,22 +306,32 @@ def build_project_site(project: Project, destination: Path) -> Path:
         "{{SOCIAL_IMAGE_HEIGHT}}": str(social_image_height),
         "{{SOCIAL_IMAGE_ALT}}": html.escape(social_image_alt, quote=True),
         "{{SOCIAL_TITLE}}": html.escape(social_title, quote=True),
-        "{{DOCUMENT_TITLE}}": html.escape(social_title if project.project_type is ProjectType.CHANNEL_MASTER else f"{social_title} | Crispy Bits"),
+        "{{DOCUMENT_TITLE}}": html.escape(social_title if channel_product else f"{social_title} | Crispy Bits"),
         "{{MACHINE_LABEL}}": html.escape(
-            project.title if project.project_type is ProjectType.CHANNEL_MASTER
+            project.title if channel_product
             else BANJO_TITLE if project.project_type is ProjectType.BANJO
             else f"{project.title} CRISPY BITS Video Jukebox", quote=True
         ),
         "{{PROJECT_TYPE}}": project.project_type.value,
         "{{MACHINE_THEME_ATTRIBUTE}}": machine_theme_attribute,
         "{{CHANNEL_MASTER_MAKER_MARK_MARKUP}}": (
-            '<div class="channel-master-maker-mark" aria-hidden="true">'
-            '<img src="assets/channel-master/crispy-bits-maker-mark-approved.png" '
-            'alt="" width="1280" height="432" draggable="false"></div>'
-            if project.project_type is ProjectType.CHANNEL_MASTER else ""
+            (
+                '<div class="white-label-customer-logo" data-white-label-customer-logo>'
+                f'<img src="{html.escape(white_label_logo_public_url, quote=True)}" '
+                f'alt="{html.escape(project.title, quote=True)} logo" '
+                f'width="{project.white_label_config.width}" height="{project.white_label_config.height}" '
+                'draggable="false"></div>'
+            )
+            if project.project_type is ProjectType.WHITE_LABEL
+            else (
+                '<div class="channel-master-maker-mark" aria-hidden="true">'
+                '<img src="assets/channel-master/crispy-bits-maker-mark-approved.png" '
+                'alt="" width="1280" height="432" draggable="false"></div>'
+                if project.project_type is ProjectType.CHANNEL_MASTER else ""
+            )
         ),
         "{{UTILITY_CONTROLS_MARKUP}}": (
-            "" if project.project_type in {ProjectType.BANJO, ProjectType.CHANNEL_MASTER} else
+            "" if project.project_type in {ProjectType.BANJO, ProjectType.CHANNEL_MASTER, ProjectType.WHITE_LABEL} else
             '<nav class="utility-controls" aria-label="Machine controls">'
             '<button type="button" data-action="home"><span aria-hidden="true">⌂</span><b>HOME</b></button>'
             '<button type="button" data-action="sound" aria-pressed="true"><span data-sound-icon aria-hidden="true">♪</span><b data-sound-label>SOUND ON</b></button>'
@@ -380,10 +397,14 @@ def build_project_site(project: Project, destination: Path) -> Path:
         "{{BANJO_SPONSOR_AREA_MARKUP}}": banjo_sponsor_area_markup,
         "{{CHANNEL_MASTER_CONTACT_MARKUP}}": channel_master_contact_markup,
         "{{CHANNEL_MASTER_FOOTER_MARKUP}}": (
-            '<footer class="channel-master-footer-mark" aria-hidden="true">'
-            '<div class="channel-master-footer-ornament"><span>✷</span></div>'
-            '<strong>CRISPY BITS</strong><small>© CLEARLIGHTCREATIVE2020</small></footer>'
-            if project.project_type is ProjectType.CHANNEL_MASTER else ""
+            '<footer class="white-label-powered-by" aria-label="Powered by Crispy Bits">'
+            '<small>POWERED BY</small><strong>CRISPY BITS</strong></footer>'
+            if project.project_type is ProjectType.WHITE_LABEL else (
+                '<footer class="channel-master-footer-mark" aria-hidden="true">'
+                '<div class="channel-master-footer-ornament"><span>✷</span></div>'
+                '<strong>CRISPY BITS</strong><small>© CLEARLIGHTCREATIVE2020</small></footer>'
+                if project.project_type is ProjectType.CHANNEL_MASTER else ""
+            )
         ),
         "{{CHANNEL_MASTER_TITLE_PLAQUE_MARKUP}}": channel_master_title_plaque_markup,
         "{{MACHINE_TITLE}}": html.escape(project.title),
@@ -397,7 +418,7 @@ def build_project_site(project: Project, destination: Path) -> Path:
     template = resource_path("templates/machine.html").read_text(encoding="utf-8")
     for token, value in replacements.items():
         template = template.replace(token, value)
-    if project.project_type is ProjectType.CHANNEL_MASTER:
+    if channel_product:
         template = re.sub(
             r'\s*<strong class="customer-identity-shop".*?</strong>', "", template,
             count=1, flags=re.DOTALL,
@@ -425,7 +446,7 @@ def build_project_site(project: Project, destination: Path) -> Path:
     shop_url = project.business_config.shop_url if project.business_config else None
     customer_config = {
         "customerName": project.title,
-        "customerLogo": project.channel_thumbnail,
+        "customerLogo": white_label_logo_public_url or project.channel_thumbnail,
         "customerTheme": "cinematic-customer",
         "tagline": project.ticker_text,
         "customerTagline": "MORE STORIES • MORE TO DISCOVER",
@@ -545,7 +566,7 @@ def build_project_site(project: Project, destination: Path) -> Path:
                 ],
             },
         }
-    if project.project_type is ProjectType.CHANNEL_MASTER and channel_master_config:
+    if channel_product and channel_master_config:
         cta = channel_master_config.primary_cta
         payload["channelMasterConfig"] = {
             "tickerText": channel_master_ticker,
@@ -567,6 +588,15 @@ def build_project_site(project: Project, destination: Path) -> Path:
                 "url": channel_master_config.contact_url or "",
                 "enabled": bool(channel_master_config.contact_url),
             },
+        }
+    if project.project_type is ProjectType.WHITE_LABEL and project.white_label_config:
+        payload["whiteLabelConfig"] = {
+            "logoAssetUrl": white_label_logo_public_url,
+            "originalFilename": project.white_label_config.original_filename,
+            "mediaType": project.white_label_config.media_type,
+            "width": project.white_label_config.width,
+            "height": project.white_label_config.height,
+            "poweredBy": "CRISPY BITS",
         }
     (destination / "machine.json").write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     create_qr_card(project, destination / "qr-card.png")

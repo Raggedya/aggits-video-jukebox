@@ -27,6 +27,7 @@ class ProjectType(str, Enum):
     TOURISM = "tourism"
     BANJO = "banjo"
     CHANNEL_MASTER = "channel_master"
+    WHITE_LABEL = "white_label"
 
 
 class PrimaryCtaType(str, Enum):
@@ -458,6 +459,55 @@ class ChannelMasterConfig:
 
 
 @dataclass(slots=True)
+class WhiteLabelConfig:
+    """Project-private customer branding layered over Channel Master."""
+
+    logo_asset_path: str
+    original_filename: str = ""
+    media_type: str = ""
+    width: int = 0
+    height: int = 0
+    extra_fields: dict[str, Any] = field(default_factory=dict, repr=False)
+
+    def __post_init__(self) -> None:
+        self.logo_asset_path = str(self.logo_asset_path or "").strip()
+        if not self.logo_asset_path:
+            raise ProjectValidationError("Please upload a logo before saving this White Label project.")
+        self.original_filename = Path(str(self.original_filename or "")).name
+        self.media_type = str(self.media_type or "").strip().lower()
+        self.width = int(self.width or 0)
+        self.height = int(self.height or 0)
+        if self.width < 0 or self.height < 0:
+            raise ProjectValidationError("White Label logo dimensions cannot be negative.")
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            **self.extra_fields,
+            "logo_asset_path": self.logo_asset_path,
+            "original_filename": self.original_filename,
+            "media_type": self.media_type,
+            "width": self.width,
+            "height": self.height,
+        }
+
+    @classmethod
+    def from_dict(cls, value: dict[str, Any] | None) -> "WhiteLabelConfig":
+        source = dict(value or {})
+        known = {
+            "logo_asset_path", "logoAssetPath", "original_filename", "originalFilename",
+            "media_type", "mediaType", "width", "height",
+        }
+        return cls(
+            logo_asset_path=str(source.get("logo_asset_path", source.get("logoAssetPath", "")) or ""),
+            original_filename=str(source.get("original_filename", source.get("originalFilename", "")) or ""),
+            media_type=str(source.get("media_type", source.get("mediaType", "")) or ""),
+            width=int(source.get("width") or 0),
+            height=int(source.get("height") or 0),
+            extra_fields=_extra_fields(source, known),
+        )
+
+
+@dataclass(slots=True)
 class BanjoChoice:
     video_id: str
     display_title: str = ""
@@ -620,7 +670,7 @@ def project_primary_cta(project: "Project") -> PrimaryCta | None:
         return project.music_config.primary_cta if project.music_config else None
     if project.project_type is ProjectType.BANJO:
         return None
-    if project.project_type is ProjectType.CHANNEL_MASTER:
+    if project.project_type in {ProjectType.CHANNEL_MASTER, ProjectType.WHITE_LABEL}:
         return project.channel_master_config.primary_cta if project.channel_master_config else None
     config = project.tourism_config
     if not config:
@@ -642,7 +692,7 @@ def allowed_primary_cta_types(project_type: ProjectType | str) -> frozenset[Prim
         return MUSIC_CTA_TYPES
     if kind is ProjectType.TOURISM:
         return TOURISM_CTA_TYPES
-    if kind is ProjectType.CHANNEL_MASTER:
+    if kind in {ProjectType.CHANNEL_MASTER, ProjectType.WHITE_LABEL}:
         return CHANNEL_MASTER_CTA_TYPES
     return frozenset()
 
@@ -715,6 +765,7 @@ class Project:
     tourism_config: TourismConfig | None = None
     banjo_config: BanjoConfig | None = None
     channel_master_config: ChannelMasterConfig | None = None
+    white_label_config: WhiteLabelConfig | None = None
     source_channel_url: str = ""
     manual_video_urls: list[str] = field(default_factory=list)
     excluded_video_ids: list[str] = field(default_factory=list)
@@ -760,7 +811,7 @@ class Project:
         if len(self.ticker_text) > ticker_limit:
             label = (
                 "Banjo Ticker Text" if self.project_type is ProjectType.BANJO
-                else "Ticker Text" if self.project_type is ProjectType.CHANNEL_MASTER
+                else "Ticker Text" if self.project_type in {ProjectType.CHANNEL_MASTER, ProjectType.WHITE_LABEL}
                 else "Bio / Story Information"
             )
             raise ProjectValidationError(f"{label} cannot exceed {ticker_limit} characters.")
@@ -770,19 +821,19 @@ class Project:
             _optional_http_url(url, "Additional URL") or "" for url in self.additional_urls if str(url or "").strip()
         ]
         if self.project_type is ProjectType.BUSINESS:
-            if self.music_config is not None or self.tourism_config is not None or self.banjo_config is not None or self.channel_master_config is not None:
+            if self.music_config is not None or self.tourism_config is not None or self.banjo_config is not None or self.channel_master_config is not None or self.white_label_config is not None:
                 raise ProjectValidationError("A Business project cannot have another project type's configuration.")
             self.business_config = self.business_config or BusinessConfig()
         elif self.project_type is ProjectType.MUSIC:
-            if self.business_config is not None or self.tourism_config is not None or self.banjo_config is not None or self.channel_master_config is not None:
+            if self.business_config is not None or self.tourism_config is not None or self.banjo_config is not None or self.channel_master_config is not None or self.white_label_config is not None:
                 raise ProjectValidationError("A Music project cannot have another project type's configuration.")
             self.music_config = self.music_config or MusicConfig()
         elif self.project_type is ProjectType.TOURISM:
-            if self.business_config is not None or self.music_config is not None or self.banjo_config is not None or self.channel_master_config is not None:
+            if self.business_config is not None or self.music_config is not None or self.banjo_config is not None or self.channel_master_config is not None or self.white_label_config is not None:
                 raise ProjectValidationError("A Tourism project cannot have another project type's configuration.")
             self.tourism_config = self.tourism_config or TourismConfig()
         elif self.project_type is ProjectType.BANJO:
-            if self.business_config is not None or self.music_config is not None or self.tourism_config is not None or self.channel_master_config is not None:
+            if self.business_config is not None or self.music_config is not None or self.tourism_config is not None or self.channel_master_config is not None or self.white_label_config is not None:
                 raise ProjectValidationError("A Banjo project cannot have Business, Music or Tourism configuration.")
             if self.title != "BANJO'S WORLD OF CARS":
                 raise ProjectValidationError("Banjo project title must be exactly BANJO'S WORLD OF CARS.")
@@ -791,12 +842,22 @@ class Project:
             for choice in self.banjo_config.banjos_choice:
                 if known_ids and choice.video_id not in known_ids:
                     raise ProjectValidationError("Banjo's Choice must reference a video in the Banjo YouTube catalogue.")
-        else:
+        elif self.project_type is ProjectType.CHANNEL_MASTER:
             if self.business_config is not None or self.music_config is not None or self.tourism_config is not None or self.banjo_config is not None:
                 raise ProjectValidationError("A Channel Master project cannot have another project type's configuration.")
+            if self.white_label_config is not None:
+                raise ProjectValidationError("A Channel Master project cannot have White Label configuration.")
             self.channel_master_config = self.channel_master_config or ChannelMasterConfig()
             if not self.channel_master_config.primary_cta or not self.channel_master_config.primary_cta.destination_url:
                 raise ProjectValidationError("Channel Master Primary CTA URL is required.")
+        else:
+            if self.business_config is not None or self.music_config is not None or self.tourism_config is not None or self.banjo_config is not None:
+                raise ProjectValidationError("A White Label project cannot have another project type's configuration.")
+            self.channel_master_config = self.channel_master_config or ChannelMasterConfig()
+            if not self.channel_master_config.primary_cta or not self.channel_master_config.primary_cta.destination_url:
+                raise ProjectValidationError("White Label Primary CTA URL is required.")
+            if self.white_label_config is None:
+                raise ProjectValidationError("Please upload a logo before saving this White Label project.")
         primary_cta = project_primary_cta(self)
         if primary_cta and primary_cta.cta_type not in allowed_primary_cta_types(self.project_type):
             raise ProjectValidationError(
@@ -825,6 +886,7 @@ class Project:
             "tourism_config": self.tourism_config.to_dict() if self.tourism_config else None,
             "banjo_config": self.banjo_config.to_dict() if self.banjo_config else None,
             "channel_master_config": self.channel_master_config.to_dict() if self.channel_master_config else None,
+            "white_label_config": self.white_label_config.to_dict() if self.white_label_config else None,
             "source_channel_url": self.source_channel_url,
             "manual_video_urls": list(self.manual_video_urls),
             "excluded_video_ids": list(self.excluded_video_ids),
@@ -849,7 +911,7 @@ class Project:
             "schemaVersion", "slug", "title", "ticker_text", "tickerText", "channel_url", "channelUrl",
             "channel_id", "channelId", "channel_title", "channelTitle", "channel_thumbnail", "channelThumbnail",
             "id", "project_id", "projectId", "project_type", "projectType", "additional_urls", "additionalUrls",
-            "business_config", "businessConfig", "music_config", "musicConfig", "tourism_config", "tourismConfig", "banjo_config", "banjoConfig", "channel_master_config", "channelMasterConfig",
+            "business_config", "businessConfig", "music_config", "musicConfig", "tourism_config", "tourismConfig", "banjo_config", "banjoConfig", "channel_master_config", "channelMasterConfig", "white_label_config", "whiteLabelConfig",
             "source_channel_url", "sourceChannelUrl",
             "manual_video_urls", "manualVideoUrls", "excluded_video_ids", "excludedVideoIds", "videos", "status",
             "created_at", "createdAt", "updated_at", "updatedAt", "published_at", "publishedAt", "published_url",
@@ -862,6 +924,7 @@ class Project:
         tourism_value = value.get("tourism_config", value.get("tourismConfig"))
         banjo_value = value.get("banjo_config", value.get("banjoConfig"))
         channel_master_value = value.get("channel_master_config", value.get("channelMasterConfig"))
+        white_label_value = value.get("white_label_config", value.get("whiteLabelConfig"))
         if business_value is not None and not isinstance(business_value, dict):
             raise ProjectValidationError("business_config must be an object or null.")
         if music_value is not None and not isinstance(music_value, dict):
@@ -872,6 +935,8 @@ class Project:
             raise ProjectValidationError("banjo_config must be an object or null.")
         if channel_master_value is not None and not isinstance(channel_master_value, dict):
             raise ProjectValidationError("channel_master_config must be an object or null.")
+        if white_label_value is not None and not isinstance(white_label_value, dict):
+            raise ProjectValidationError("white_label_config must be an object or null.")
         return cls(
             slug=str(value.get("slug") or ""),
             title=str(value.get("title") or ""),
@@ -888,6 +953,7 @@ class Project:
             tourism_config=TourismConfig.from_dict(tourism_value) if tourism_value is not None else None,
             banjo_config=BanjoConfig.from_dict(banjo_value) if banjo_value is not None else None,
             channel_master_config=ChannelMasterConfig.from_dict(channel_master_value) if channel_master_value is not None else None,
+            white_label_config=WhiteLabelConfig.from_dict(white_label_value) if white_label_value is not None else None,
             source_channel_url=str(value.get("source_channel_url") or value.get("sourceChannelUrl") or value.get("channel_url") or value.get("channelUrl") or ""),
             manual_video_urls=[str(item) for item in (value.get("manual_video_urls", value.get("manualVideoUrls", [])) or []) if str(item).strip()],
             excluded_video_ids=[str(item) for item in (value.get("excluded_video_ids", value.get("excludedVideoIds", [])) or []) if str(item).strip()],

@@ -437,9 +437,9 @@ class ChannelMasterWorkflowTests(unittest.TestCase):
             self.assertTrue(packaged.is_file())
             self.assertEqual(packaged.read_bytes(), asset.read_bytes())
 
-    def test_desktop_declares_exact_six_tabs_and_required_channel_master_controls(self):
+    def test_desktop_declares_channel_master_before_white_label_and_bulk_upload(self):
         self.assertIn(
-            "ProjectType.BUSINESS, ProjectType.MUSIC, ProjectType.TOURISM,\n            ProjectType.BANJO, ProjectType.CHANNEL_MASTER",
+            "ProjectType.BUSINESS, ProjectType.MUSIC, ProjectType.TOURISM,\n            ProjectType.BANJO, ProjectType.CHANNEL_MASTER, ProjectType.WHITE_LABEL",
             DESKTOP,
         )
         self.assertIn('self.notebook.add(bulk_page, text="BULK UPLOAD")', DESKTOP)

@@ -10,8 +10,9 @@ from .banjo import BANJO_TITLE, validate_sponsor_logo, validate_sponsor_mp4
 from .config import MAX_BANJO_VIDEOS, MAX_CHANNEL_MASTER_VIDEOS, ticker_limit_for_project_type
 from .models import (
     BusinessConfig, ChannelMasterConfig, MusicConfig, PrimaryCta, PrimaryCtaType, Project, ProjectType,
-    TourismConfig, project_primary_cta, utc_now,
+    TourismConfig, WhiteLabelConfig, project_primary_cta, utc_now,
 )
+from .white_label import inspect_white_label_logo
 from .youtube_api import YouTubeClient
 
 
@@ -77,6 +78,7 @@ CTA_CHOICES_BY_PROJECT = {
     ProjectType.TOURISM: TOURISM_CTA_CHOICES,
     ProjectType.BANJO: (),
     ProjectType.CHANNEL_MASTER: CHANNEL_MASTER_CTA_CHOICES,
+    ProjectType.WHITE_LABEL: CHANNEL_MASTER_CTA_CHOICES,
 }
 CTA_LABEL_TO_TYPE_BY_PROJECT = {kind: dict(choices) for kind, choices in CTA_CHOICES_BY_PROJECT.items()}
 CTA_TYPE_TO_LABEL_BY_PROJECT = {kind: {cta_type: label for label, cta_type in choices} for kind, choices in CTA_CHOICES_BY_PROJECT.items()}
@@ -92,7 +94,7 @@ def manual_url_limit_for_project_type(project_type: ProjectType | str) -> int:
     kind = ProjectType(project_type)
     if kind is ProjectType.BANJO:
         return MAX_BANJO_VIDEOS
-    if kind is ProjectType.CHANNEL_MASTER:
+    if kind in {ProjectType.CHANNEL_MASTER, ProjectType.WHITE_LABEL}:
         return MAX_CHANNEL_MASTER_VIDEOS
     return MAX_INDIVIDUAL_VIDEO_URLS
 
@@ -129,6 +131,7 @@ class ProjectFormValues:
     custom_primary: str = "#172033"
     custom_accent: str = "#6D80AF"
     contact_url: str = ""
+    custom_logo_path: str = ""
 
     def comparable(self) -> tuple[object, ...]:
         return (
@@ -156,6 +159,7 @@ class ProjectFormValues:
             self.custom_primary,
             self.custom_accent,
             self.contact_url,
+            self.custom_logo_path,
         )
 
 
@@ -170,6 +174,7 @@ class ValidatedProjectForm:
     music_config: MusicConfig | None
     tourism_config: TourismConfig | None
     channel_master_config: ChannelMasterConfig | None = None
+    white_label_config: WhiteLabelConfig | None = None
     banjo_choice_urls: list[str] = field(default_factory=list)
     banjo_choice_titles: list[str] = field(default_factory=list)
     banjo_choice_active: list[bool] = field(default_factory=list)
@@ -281,7 +286,7 @@ def validate_project_form(values: ProjectFormValues, project_type: ProjectType |
         raise FormValidationError(
             "channel_url",
             "Add a YouTube channel URL or an individual YouTube video."
-            if project_type is ProjectType.CHANNEL_MASTER
+            if project_type in {ProjectType.CHANNEL_MASTER, ProjectType.WHITE_LABEL}
             else "Add a YouTube channel URL, an individual YouTube video, or a Banjo's Choice video.",
         )
 
@@ -290,7 +295,7 @@ def validate_project_form(values: ProjectFormValues, project_type: ProjectType |
     if len(story_text) > ticker_limit:
         label = (
             "Banjo Ticker Text" if project_type is ProjectType.BANJO
-            else "Ticker Text" if project_type is ProjectType.CHANNEL_MASTER
+            else "Ticker Text" if project_type in {ProjectType.CHANNEL_MASTER, ProjectType.WHITE_LABEL}
             else "Bio / Story Information"
         )
         raise FormValidationError("story_text", f"{label} cannot exceed {ticker_limit} characters.")
@@ -368,6 +373,7 @@ def validate_project_form(values: ProjectFormValues, project_type: ProjectType |
             custom_label=values.custom_label if cta_type is PrimaryCtaType.CUSTOM else None,
         )
         channel_master_config = None
+        white_label_config = None
         if project_type is ProjectType.BUSINESS:
             legacy_shop_url = destination_url if cta_type is PrimaryCtaType.SHOP_NOW and destination_url else values.shop_url
             business_config = BusinessConfig(shop_url=legacy_shop_url or None, primary_cta=primary_cta)
@@ -402,6 +408,21 @@ def validate_project_form(values: ProjectFormValues, project_type: ProjectType |
                 primary_cta=primary_cta,
                 contact_url=values.contact_url,
             )
+            if project_type is ProjectType.WHITE_LABEL:
+                logo_path = str(values.custom_logo_path or "").strip()
+                if not logo_path:
+                    raise FormValidationError("custom_logo", "Please upload a logo before saving this White Label project.")
+                try:
+                    details = inspect_white_label_logo(Path(logo_path))
+                except ValueError as error:
+                    raise FormValidationError("custom_logo", str(error)) from error
+                white_label_config = WhiteLabelConfig(
+                    logo_asset_path=str(details.source),
+                    original_filename=details.source.name,
+                    media_type=details.media_type,
+                    width=details.width,
+                    height=details.height,
+                )
 
         # Project construction is the authoritative validation for shared URL
         # limits and type-specific configuration.
@@ -419,6 +440,7 @@ def validate_project_form(values: ProjectFormValues, project_type: ProjectType |
             music_config=music_config,
             tourism_config=tourism_config,
             channel_master_config=channel_master_config,
+            white_label_config=white_label_config,
             source_channel_url=channel_url,
             manual_video_urls=manual_urls,
         )
@@ -461,6 +483,7 @@ def validate_project_form(values: ProjectFormValues, project_type: ProjectType |
         music_config=validated.music_config,
         tourism_config=validated.tourism_config,
         channel_master_config=validated.channel_master_config,
+        white_label_config=validated.white_label_config,
     )
 
 
@@ -488,7 +511,11 @@ def project_to_form_values(project: Project) -> ProjectFormValues:
         )
     cta = project_primary_cta(project)
     default_label = DEFAULT_CTA_LABEL_BY_PROJECT[project.project_type]
-    channel_master = project.channel_master_config if project.project_type is ProjectType.CHANNEL_MASTER else None
+    channel_master = (
+        project.channel_master_config
+        if project.project_type in {ProjectType.CHANNEL_MASTER, ProjectType.WHITE_LABEL}
+        else None
+    )
     return ProjectFormValues(
         title=project.title,
         channel_url=project.source_channel_url or project.channel_url,
@@ -505,6 +532,11 @@ def project_to_form_values(project: Project) -> ProjectFormValues:
         custom_primary=channel_master.custom_primary or "#172033" if channel_master else "#172033",
         custom_accent=channel_master.custom_accent or "#6D80AF" if channel_master else "#6D80AF",
         contact_url=channel_master.contact_url or "" if channel_master else "",
+        custom_logo_path=(
+            project.white_label_config.logo_asset_path
+            if project.project_type is ProjectType.WHITE_LABEL and project.white_label_config
+            else ""
+        ),
     )
 
 

@@ -201,7 +201,7 @@ async function handleDelivery(request, env) {
   const slug = safeSlug(body.slug);
   const revision = String(body.revision || "").trim();
   const requestedProjectType = String(body.projectType || "");
-  const projectType = ["business", "music", "tourism", "banjo", "channel_master"].includes(requestedProjectType) ? requestedProjectType : legacy && !requestedProjectType ? "business" : "";
+  const projectType = ["business", "music", "tourism", "banjo", "channel_master", "white_label"].includes(requestedProjectType) ? requestedProjectType : legacy && !requestedProjectType ? "business" : "";
   const brandPath = "/crispy-bits";
   const requestedUrl = String(body.publicUrl || "").replace(/\/+$/, "") + "/";
   const expectedUrl = `${String(env.PUBLIC_BASE_URL || "").replace(/\/+$/, "")}${brandPath}/${slug}/`;

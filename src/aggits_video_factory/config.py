@@ -32,14 +32,22 @@ MAX_CHANNEL_MASTER_TICKER_LENGTH = 1500
 def video_limit_for_project_type(project_type: object) -> int:
     """Return the included-video limit without changing existing project policy."""
     value = getattr(project_type, "value", project_type)
-    limits = {"banjo": MAX_BANJO_VIDEOS, "channel_master": MAX_CHANNEL_MASTER_VIDEOS}
+    limits = {
+        "banjo": MAX_BANJO_VIDEOS,
+        "channel_master": MAX_CHANNEL_MASTER_VIDEOS,
+        "white_label": MAX_CHANNEL_MASTER_VIDEOS,
+    }
     return limits.get(str(value).lower(), MAX_VIDEOS)
 
 
 def ticker_limit_for_project_type(project_type: object) -> int:
     """Keep existing project ticker limits while allowing Banjo editorial copy."""
     value = getattr(project_type, "value", project_type)
-    limits = {"banjo": MAX_BANJO_TICKER_LENGTH, "channel_master": MAX_CHANNEL_MASTER_TICKER_LENGTH}
+    limits = {
+        "banjo": MAX_BANJO_TICKER_LENGTH,
+        "channel_master": MAX_CHANNEL_MASTER_TICKER_LENGTH,
+        "white_label": MAX_CHANNEL_MASTER_TICKER_LENGTH,
+    }
     return limits.get(str(value).lower(), MAX_TICKER_LENGTH)
 
 

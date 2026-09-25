@@ -98,14 +98,14 @@ def candidate(number: int, *, approved: bool = True, handle: str | None = None) 
 
 
 class BulkCampaignTests(unittest.TestCase):
-    def test_six_tab_desktop_smoke_and_bulk_controls_at_supported_sizes(self):
+    def test_seven_tab_desktop_smoke_and_bulk_controls_at_supported_sizes(self):
         with tempfile.TemporaryDirectory() as temporary:
             store = ProjectStore(Path(temporary))
             with patch("desktop.video_jukebox_factory.ProjectStore", return_value=store):
                 app = Factory()
             app.withdraw()
             try:
-                self.assertEqual([app.notebook.tab(index, "text") for index in range(app.notebook.index("end"))], ["BUSINESS", "MUSIC", "TOURISM", "BANJO", "CHANNEL MASTER", "BULK UPLOAD"])
+                self.assertEqual([app.notebook.tab(index, "text") for index in range(app.notebook.index("end"))], ["BUSINESS", "MUSIC", "TOURISM", "BANJO", "CHANNEL MASTER", "WHITE LABEL", "BULK UPLOAD"])
                 app.notebook.select(5)
                 for width, height in ((1320, 820), (1120, 720)):
                     app.geometry(f"{width}x{height}")

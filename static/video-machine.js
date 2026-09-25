@@ -438,7 +438,7 @@ if (machine) {
       ? `Sponsored content from ${banjoConfig.sponsor.title}.`
       : video.description || `A closer look at ${label} from ${video.channelTitle || machineIdentity}.`;
     const logoSource = channelThumbnail || video.thumbnailUrl;
-    if (!isSponsor && logoSource && activeProjectType !== 'channel_master') {
+    if (!isSponsor && logoSource && !['channel_master', 'white_label'].includes(activeProjectType)) {
       contentLogo.src = logoSource;
       contentLogo.alt = `${video.channelTitle || machineIdentity} logo`;
       contentLogo.hidden = false;
@@ -462,7 +462,7 @@ if (machine) {
       'aria-label',
       activeProjectType === 'banjo'
         ? 'Show Banjo your car'
-        : activeProjectType === 'channel_master'
+        : ['channel_master', 'white_label'].includes(activeProjectType)
           ? primaryActionDestination ? primaryActionLabel : `${primaryActionLabel || 'Primary action'} unavailable`
           : 'Contextual action unavailable',
     );
@@ -998,7 +998,7 @@ if (machine) {
 
   function configureShopPlaque() {
     stopShopPlaqueCycle();
-    if (activeProjectType === 'banjo' || activeProjectType === 'channel_master') {
+    if (activeProjectType === 'banjo' || activeProjectType === 'channel_master' || activeProjectType === 'white_label') {
       shopPlaqueEnabled = false;
       shopPlaque.classList.remove('is-shop-enabled');
       shopPlaque.removeAttribute('role');
@@ -1035,7 +1035,7 @@ if (machine) {
   }
 
   function startChannelMasterHeaderTicker() {
-    if (activeProjectType !== 'channel_master' || channelMasterHeaderTickerStarted || !channelMasterHeaderTicker || !channelMasterHeaderTickerCopy?.textContent?.trim()) return;
+    if (!['channel_master', 'white_label'].includes(activeProjectType) || channelMasterHeaderTickerStarted || !channelMasterHeaderTicker || !channelMasterHeaderTickerCopy?.textContent?.trim()) return;
     channelMasterHeaderTickerStarted = true;
     channelMasterHeaderTickerTimer = window.setTimeout(() => {
       shopPlaque.dataset.shopPlaqueState = 'channel-master-ticker';
@@ -1231,6 +1231,7 @@ if (machine) {
         : String(primaryAction.displayLabel || '').trim() || 'PRIMARY ACTION';
       plaqueDestination = primaryActionDestination;
       if (activeProjectType === 'channel_master') plaqueDestination = '';
+      if (activeProjectType === 'white_label') plaqueDestination = '';
       if (shopPlaqueLabel) shopPlaqueLabel.textContent = primaryActionLabel;
       if (shopPlaquePrompt) sizeClass(shopPlaquePrompt, primaryActionLabel);
       const primaryActionText = primaryActionButton.querySelector('b');
@@ -1247,8 +1248,8 @@ if (machine) {
       primaryActionButton.dataset.ctaType = activeProjectType === 'banjo' ? 'show_banjo' : String(primaryAction.type || '');
       primaryActionButton.dataset.ctaLabel = primaryActionLabel;
       shopPlaque.dataset.ctaPlacement = 'top';
-      shopPlaque.dataset.ctaType = ['banjo', 'channel_master'].includes(activeProjectType) ? 'editorial_ticker' : String(primaryAction.type || '');
-      shopPlaque.dataset.ctaLabel = activeProjectType === 'channel_master' ? machineIdentity : primaryActionLabel;
+      shopPlaque.dataset.ctaType = ['banjo', 'channel_master', 'white_label'].includes(activeProjectType) ? 'editorial_ticker' : String(primaryAction.type || '');
+      shopPlaque.dataset.ctaLabel = ['channel_master', 'white_label'].includes(activeProjectType) ? machineIdentity : primaryActionLabel;
       masterStorySections = [];
       channelThumbnail = String(config.channelThumbnail || '').trim();
       catalogue = Array.isArray(config.videos) ? config.videos.filter(video => video?.videoId) : [];
@@ -1261,11 +1262,11 @@ if (machine) {
       observeBanjoSponsorArea();
       document.title = activeProjectType === 'banjo'
         ? "BANJO'S WORLD OF CARS"
-        : activeProjectType === 'channel_master'
+        : ['channel_master', 'white_label'].includes(activeProjectType)
           ? String(config.title || 'CHANNEL MASTER')
           : `${config.title || 'Video Jukebox'} — CRISPY BITS`;
       setCustomerBackdrop(catalogue[0]);
-      if (channelThumbnail && activeProjectType !== 'channel_master') {
+      if (channelThumbnail && !['channel_master', 'white_label'].includes(activeProjectType)) {
         contentLogo.src = channelThumbnail;
         contentLogo.alt = `${config.channelTitle || config.title} logo`;
         contentLogo.hidden = false;

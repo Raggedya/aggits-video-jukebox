@@ -67,6 +67,7 @@ from aggits_video_factory.store import ProjectStore, slugify
 from aggits_video_factory.supplementary_sources import retrieve_supplementary_sources
 from aggits_video_factory.youtube_api import YouTubeClient, YouTubeError, merge_video_selections
 from aggits_video_factory.video_editor import VideoEditError, VideoSelectionSession
+from aggits_video_factory.white_label import inspect_white_label_logo, materialize_white_label_logo
 
 
 INK = "#111318"
@@ -129,20 +130,22 @@ class ProjectForm(tk.Frame):
         self.custom_primary_var = tk.StringVar(value="#172033")
         self.custom_accent_var = tk.StringVar(value="#6D80AF")
         self.contact_url_var = tk.StringVar()
+        self.custom_logo_var = tk.StringVar()
+        self._custom_logo_preview_image: ImageTk.PhotoImage | None = None
         self.field_widgets: dict[str, tk.Widget] = {}
         row = 1
         row = self._entry_row(row, "Title", self.title_var, "title")
         if self.project_type is ProjectType.BANJO:
             self.field_widgets["title"].configure(state="readonly", readonlybackground="#101217")
-        channel_label = "YouTube Channel URL (Optional)" if self.project_type in {ProjectType.MUSIC, ProjectType.BANJO, ProjectType.CHANNEL_MASTER} else "YouTube Channel URL"
+        channel_label = "YouTube Channel URL (Optional)" if self.project_type in {ProjectType.MUSIC, ProjectType.BANJO, ProjectType.CHANNEL_MASTER, ProjectType.WHITE_LABEL} else "YouTube Channel URL"
         row = self._entry_row(row, channel_label, self.channel_var, "channel_url")
         self.ticker_limit = ticker_limit_for_project_type(self.project_type)
         if self.project_type is not ProjectType.BANJO:
             for index, variable in enumerate(self.additional_vars, start=1):
-                label = f"Additional URL {index}" if self.project_type is ProjectType.CHANNEL_MASTER else f"Additional Web Page {index}"
+                label = f"Additional URL {index}" if self.project_type in {ProjectType.CHANNEL_MASTER, ProjectType.WHITE_LABEL} else f"Additional Web Page {index}"
                 row = self._entry_row(row, label, variable, "additional_urls")
 
-            cta_heading = "Primary CTA" if self.project_type is ProjectType.CHANNEL_MASTER else "Primary Call to Action"
+            cta_heading = "Primary CTA" if self.project_type in {ProjectType.CHANNEL_MASTER, ProjectType.WHITE_LABEL} else "Primary Call to Action"
             tk.Label(self, text=cta_heading, bg=PANEL, fg=CREAM, anchor="e", font=("Segoe UI", 9)).grid(row=row, column=0, sticky="e", padx=(22, 12), pady=5)
             self.cta_combo = ttk.Combobox(
                 self, textvariable=self.cta_var,
@@ -153,14 +156,14 @@ class ProjectForm(tk.Frame):
             self.cta_combo.bind("<<ComboboxSelected>>", lambda _event: self._update_custom_visibility())
             self.field_widgets["cta_type"] = self.cta_combo
             row += 1
-            destination_label = "Primary CTA URL" if self.project_type is ProjectType.CHANNEL_MASTER else "CTA Destination URL"
+            destination_label = "Primary CTA URL" if self.project_type in {ProjectType.CHANNEL_MASTER, ProjectType.WHITE_LABEL} else "CTA Destination URL"
             row = self._entry_row(row, destination_label, self.destination_var, "destination_url")
             self.custom_row = row
-            custom_label = "Custom CTA Label" if self.project_type is ProjectType.CHANNEL_MASTER else "Custom Button Label"
+            custom_label = "Custom CTA Label" if self.project_type in {ProjectType.CHANNEL_MASTER, ProjectType.WHITE_LABEL} else "Custom Button Label"
             row = self._entry_row(row, custom_label, self.custom_label_var, "custom_label")
 
             bio_label = (
-                "Ticker Text" if self.project_type is ProjectType.CHANNEL_MASTER
+                "Ticker Text" if self.project_type in {ProjectType.CHANNEL_MASTER, ProjectType.WHITE_LABEL}
                 else "Bio / About" if self.project_type is ProjectType.TOURISM
                 else "Bio / Story Information"
             )
@@ -175,8 +178,10 @@ class ProjectForm(tk.Frame):
             self.story_count.grid(row=1, column=0, sticky="e", pady=(3, 0))
             self.field_widgets["story_text"] = self.story_text
             row += 1
-            if self.project_type is ProjectType.CHANNEL_MASTER:
+            if self.project_type in {ProjectType.CHANNEL_MASTER, ProjectType.WHITE_LABEL}:
                 row = self._build_channel_master_fields(row)
+            if self.project_type is ProjectType.WHITE_LABEL:
+                row = self._build_white_label_fields(row)
         else:
             self.custom_row = -1
             tk.Label(self, text="Banjo Ticker Text", bg=PANEL, fg=CREAM, anchor="ne", font=("Segoe UI", 9)).grid(row=row, column=0, sticky="ne", padx=(22, 12), pady=(8, 5))
@@ -293,7 +298,7 @@ class ProjectForm(tk.Frame):
         return row
 
     def _update_palette_preview(self) -> None:
-        if self.project_type is not ProjectType.CHANNEL_MASTER or not hasattr(self, "palette_swatches"):
+        if self.project_type not in {ProjectType.CHANNEL_MASTER, ProjectType.WHITE_LABEL} or not hasattr(self, "palette_swatches"):
             return
         custom = self.palette_var.get() == "CUSTOM"
         for field_name in ("custom_primary", "custom_accent"):
@@ -309,6 +314,97 @@ class ProjectForm(tk.Frame):
             colours = (PANEL_2, INK, BRASS)
         for swatch, colour in zip(self.palette_swatches, colours):
             swatch.configure(bg=colour)
+
+    def _build_white_label_fields(self, row: int) -> int:
+        tk.Label(
+            self, text="CUSTOM BRANDING", bg=PANEL_2, fg=BRASS, anchor="w",
+            font=("Segoe UI Semibold", 10), padx=11, pady=8,
+        ).grid(row=row, column=0, columnspan=2, sticky="ew", padx=22, pady=(10, 5))
+        row += 1
+        tk.Label(self, text="Custom Logo", bg=PANEL, fg=CREAM, anchor="ne", font=("Segoe UI", 9)).grid(
+            row=row, column=0, sticky="ne", padx=(22, 12), pady=5,
+        )
+        shell = tk.Frame(self, bg=PANEL)
+        shell.grid(row=row, column=1, sticky="ew", padx=(0, 22), pady=5)
+        shell.columnconfigure(0, weight=1)
+        self.custom_logo_preview = tk.Label(
+            shell, text="NO LOGO SELECTED", width=30, height=5, bg="#101217", fg=MUTED,
+            relief="flat", highlightbackground=DEEP_BRASS, highlightthickness=1,
+            font=("Segoe UI Semibold", 8), compound="center",
+        )
+        self.custom_logo_preview.grid(row=0, column=0, columnspan=2, sticky="ew")
+        self.custom_logo_button = tk.Button(
+            shell, text="UPLOAD LOGO", command=self._choose_white_label_logo,
+            bg=PANEL_2, fg=CREAM, activebackground="#303641", activeforeground=PAPER,
+            relief="flat", bd=0, font=("Segoe UI Semibold", 8), padx=10, pady=7, cursor="hand2",
+        )
+        self.custom_logo_button.grid(row=1, column=0, sticky="w", pady=(7, 0))
+        self.custom_logo_remove = tk.Button(
+            shell, text="REMOVE LOGO", command=self._remove_white_label_logo,
+            bg=PANEL_2, fg=CREAM, activebackground="#303641", activeforeground=PAPER,
+            relief="flat", bd=0, font=("Segoe UI Semibold", 8), padx=10, pady=7, cursor="hand2",
+        )
+        self.custom_logo_remove.grid(row=1, column=1, sticky="e", pady=(7, 0))
+        tk.Label(
+            shell, text="Transparent PNG recommended for best results.", bg=PANEL, fg=MUTED,
+            anchor="w", font=("Segoe UI", 8),
+        ).grid(row=2, column=0, columnspan=2, sticky="ew", pady=(6, 0))
+        self.field_widgets["custom_logo"] = self.custom_logo_button
+        self._update_white_label_logo_preview()
+        return row + 1
+
+    def _choose_white_label_logo(self) -> None:
+        selected = filedialog.askopenfilename(
+            parent=self,
+            title="Choose White Label customer logo",
+            filetypes=[
+                ("Supported images", "*.png *.jpg *.jpeg *.webp"),
+                ("PNG image", "*.png"),
+                ("All files", "*.*"),
+            ],
+        )
+        if not selected:
+            return
+        try:
+            inspect_white_label_logo(Path(selected))
+        except ValueError as error:
+            messagebox.showerror(DESKTOP_TITLE, str(error), parent=self)
+            return
+        self.custom_logo_var.set(selected)
+        self._update_white_label_logo_preview()
+        if Path(selected).suffix.lower() != ".png":
+            messagebox.showwarning(
+                DESKTOP_TITLE,
+                "This logo can be used, but a transparent PNG is recommended for best results.",
+                parent=self,
+            )
+
+    def _remove_white_label_logo(self) -> None:
+        self.custom_logo_var.set("")
+        self._update_white_label_logo_preview()
+
+    def _update_white_label_logo_preview(self) -> None:
+        if self.project_type is not ProjectType.WHITE_LABEL or not hasattr(self, "custom_logo_preview"):
+            return
+        path = Path(self.custom_logo_var.get()) if self.custom_logo_var.get().strip() else None
+        self._custom_logo_preview_image = None
+        if path and path.is_file():
+            try:
+                with Image.open(path) as source:
+                    image = source.convert("RGBA")
+                    image.thumbnail((260, 76), Image.Resampling.LANCZOS)
+                    self._custom_logo_preview_image = ImageTk.PhotoImage(image, master=self)
+                self.custom_logo_preview.configure(
+                    image=self._custom_logo_preview_image, text=path.name, compound="top", fg=CREAM,
+                )
+                self.custom_logo_button.configure(text="CHANGE LOGO")
+                self.custom_logo_remove.configure(state="normal")
+                return
+            except OSError:
+                pass
+        self.custom_logo_preview.configure(image="", text="NO LOGO SELECTED", compound="center", fg=MUTED)
+        self.custom_logo_button.configure(text="UPLOAD LOGO")
+        self.custom_logo_remove.configure(state="disabled")
 
     def _build_banjo_fields(self, row: int) -> int:
         heading = tk.Label(self, text="BANJO'S CHOICE AWARDS — MAXIMUM 4", bg=PANEL_2, fg=BRASS, anchor="w", font=("Segoe UI Semibold", 10), padx=11, pady=8)
@@ -443,6 +539,7 @@ class ProjectForm(tk.Frame):
             custom_primary=self.custom_primary_var.get(),
             custom_accent=self.custom_accent_var.get(),
             contact_url=self.contact_url_var.get(),
+            custom_logo_path=self.custom_logo_var.get(),
         )
 
     def set_values(self, values: ProjectFormValues) -> None:
@@ -479,19 +576,21 @@ class ProjectForm(tk.Frame):
         self.custom_primary_var.set(values.custom_primary)
         self.custom_accent_var.set(values.custom_accent)
         self.contact_url_var.set(values.contact_url)
+        self.custom_logo_var.set(values.custom_logo_path)
         self.story_text.delete("1.0", "end")
         self.story_text.insert("1.0", values.story_text)
         self._story_changed()
         self._toggle_manual(force=bool([url for url in values.manual_video_urls if url]))
         self._update_custom_visibility()
         self._update_palette_preview()
+        self._update_white_label_logo_preview()
         self.clear_validation()
 
     def clear_new(self) -> None:
         self.editing_project_id = None
         values = ProjectFormValues(
             title=BANJO_TITLE if self.project_type is ProjectType.BANJO else "",
-            story_text="" if self.project_type in {ProjectType.BANJO, ProjectType.CHANNEL_MASTER} else ProjectFormValues().story_text,
+            story_text="" if self.project_type in {ProjectType.BANJO, ProjectType.CHANNEL_MASTER, ProjectType.WHITE_LABEL} else ProjectFormValues().story_text,
             cta_label=DEFAULT_CTA_LABEL_BY_PROJECT[self.project_type],
         )
         self.set_values(values)
@@ -504,6 +603,8 @@ class ProjectForm(tk.Frame):
             self.stage_note.configure(text="Channel optional · 40 YouTube videos · 4 awards · 4 sponsor MP4s.")
         elif self.project_type is ProjectType.CHANNEL_MASTER:
             self.stage_note.configure(text="Channel optional · up to 50 YouTube videos · title, ticker, palette and actions.")
+        elif self.project_type is ProjectType.WHITE_LABEL:
+            self.stage_note.configure(text="Channel Master functionality · customer logo required · up to 50 YouTube videos.")
         else:
             self.stage_note.configure(text="Analyse and review videos, then build locally.")
         self.mark_clean()
@@ -535,6 +636,7 @@ class ProjectForm(tk.Frame):
             sponsor_creative_active=list(self._baseline[19]),
             palette=str(self._baseline[20]), custom_primary=str(self._baseline[21]),
             custom_accent=str(self._baseline[22]), contact_url=str(self._baseline[23]),
+            custom_logo_path=str(self._baseline[24]),
         )
         self.set_values(values)
         self.mark_clean()
@@ -1004,7 +1106,7 @@ class Factory(tk.Tk):
         self.notebook.pack(fill="both", expand=True, padx=12, pady=(0, 10))
         self.tab_types: list[ProjectType] = [
             ProjectType.BUSINESS, ProjectType.MUSIC, ProjectType.TOURISM,
-            ProjectType.BANJO, ProjectType.CHANNEL_MASTER,
+            ProjectType.BANJO, ProjectType.CHANNEL_MASTER, ProjectType.WHITE_LABEL,
         ]
         for project_type in self.tab_types:
             page = tk.Frame(self.notebook, bg=INK)
@@ -1481,7 +1583,7 @@ class Factory(tk.Tk):
             return False
         slug = existing.slug if existing else self.store.allocate_slug(BANJO_DEFAULT_SLUG if project_type is ProjectType.BANJO else values.title)
         video_limit = video_limit_for_project_type(project_type)
-        review_limit = MAX_CHANNEL_MASTER_REVIEW_VIDEOS if project_type is ProjectType.CHANNEL_MASTER else video_limit
+        review_limit = MAX_CHANNEL_MASTER_REVIEW_VIDEOS if project_type in {ProjectType.CHANNEL_MASTER, ProjectType.WHITE_LABEL} else video_limit
 
         def worker() -> dict[str, object]:
             client = YouTubeClient(api_key)
@@ -1689,6 +1791,7 @@ class Factory(tk.Tk):
             existing = self.projects.get(editing_project_id) if editing_project_id else None
             project_dir = self.store.project_dir(slug)
             banjo_config = None
+            white_label_config = None
             if project_type is ProjectType.BANJO:
                 banjo_config = materialize_banjo_config(
                     values,
@@ -1696,6 +1799,11 @@ class Factory(tk.Tk):
                     {video.video_id for video in videos},
                     project_dir,
                     existing.banjo_config if existing else None,
+                )
+            if project_type is ProjectType.WHITE_LABEL:
+                white_label_config = materialize_white_label_logo(
+                    values.white_label_config.logo_asset_path,
+                    project_dir,
                 )
             project = assemble_reviewed_project(
                 project_type=project_type,
@@ -1707,6 +1815,7 @@ class Factory(tk.Tk):
                 slug=slug,
                 existing=existing,
                 banjo_config=banjo_config,
+                white_label_config=white_label_config,
             )
             build_project_site(project, project_dir / "site")
             self.store.save_project(project)

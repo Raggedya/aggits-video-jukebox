@@ -185,6 +185,20 @@ test("valid authenticated Channel Master request reuses the protected delivery c
 });
 
 
+test("valid authenticated White Label request reuses the protected delivery contract", async () => {
+  const env = environment();
+  const mock = installFetchMock({ machineProjectType: "white_label", machineTitle: "Golden Robot Records" });
+  try {
+    const body = payload({ projectType: "white_label", title: "Golden Robot Records", productName: "CRISPY BITS WHITE LABEL" });
+    const response = await worker.fetch(signedRequest(body, { nonce: "ad".repeat(16) }), env);
+    assert.equal(response.status, 201);
+    const resend = mock.calls.find((call) => call.url.includes("api.resend.com"));
+    assert.deepEqual(JSON.parse(resend.init.body).to, ["listener@example.com"]);
+    assert.equal(env.DB.deliveries.size, 1);
+  } finally { mock.restore(); }
+});
+
+
 test("missing invalid modified expired and future authentication is rejected without secret disclosure", async () => {
   const now = Math.floor(Date.now() / 1000);
   const cases = [

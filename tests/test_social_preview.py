@@ -23,6 +23,7 @@ from aggits_video_factory.models import (
     ProjectType,
     TourismConfig,
     Video,
+    WhiteLabelConfig,
 )
 from aggits_video_factory.site_builder import build_project_site
 from aggits_video_factory.publisher import _write_library
@@ -120,6 +121,18 @@ def project_for(project_type: ProjectType, title: str = "WRAITH") -> Project:
                 primary_cta=PrimaryCta(PrimaryCtaType.VISIT_WEBSITE, "https://example.com"),
             ),
         )
+    if project_type is ProjectType.WHITE_LABEL:
+        logo = resource_path("static/channel-master/crispy-bits-maker-mark-approved.png")
+        return Project(
+            **common,
+            channel_master_config=ChannelMasterConfig(
+                primary_cta=PrimaryCta(PrimaryCtaType.VISIT_WEBSITE, "https://example.com"),
+            ),
+            white_label_config=WhiteLabelConfig(
+                logo_asset_path=str(logo), original_filename=logo.name,
+                media_type="image/png", width=1280, height=432,
+            ),
+        )
     return Project(**common, banjo_config=BanjoConfig())
 
 
@@ -168,12 +181,12 @@ class UniversalSocialPreviewTests(unittest.TestCase):
                 filename = social_preview_filename(project.title, project.project_type)
                 expected_image = f"{expected_url}{filename}"
                 expected_description = (
-                    f"Hit it. Discover {project.title}." if project_type is ProjectType.CHANNEL_MASTER
+                    f"Hit it. Discover {project.title}." if project_type in {ProjectType.CHANNEL_MASTER, ProjectType.WHITE_LABEL}
                     else f"Hit it. Discover {project.title} with Crispy Bits."
                 )
                 self.assertEqual(
                     parser.title,
-                    project.title if project_type is ProjectType.CHANNEL_MASTER else f"{project.title} | Crispy Bits",
+                    project.title if project_type in {ProjectType.CHANNEL_MASTER, ProjectType.WHITE_LABEL} else f"{project.title} | Crispy Bits",
                 )
                 self.assertEqual(parser.canonical, expected_url)
                 self.assertEqual(parser.meta["og:type"], "website")
@@ -225,6 +238,7 @@ class UniversalSocialPreviewTests(unittest.TestCase):
         self.assertEqual(SOCIAL_PREVIEW_VERSION, "v2")
         self.assertEqual(rendered_cards[ProjectType.BUSINESS], rendered_cards[ProjectType.MUSIC])
         self.assertEqual(rendered_cards[ProjectType.BUSINESS], rendered_cards[ProjectType.TOURISM])
+        self.assertEqual(rendered_cards[ProjectType.BUSINESS], rendered_cards[ProjectType.WHITE_LABEL])
         self.assertNotEqual(rendered_cards[ProjectType.BUSINESS], rendered_cards[ProjectType.BANJO])
         renderer_source = Path(create_social_preview.__code__.co_filename).read_text(encoding="utf-8")
         self.assertNotIn("crispy-bits-social-preview-template.png", renderer_source)

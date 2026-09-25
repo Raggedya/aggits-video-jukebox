@@ -15,6 +15,7 @@ from aggits_video_factory.models import (
     ProjectType,
     TourismConfig,
     Video,
+    WhiteLabelConfig,
 )
 from aggits_video_factory.site_builder import build_project_site
 from aggits_video_factory.social_preview import (
@@ -54,6 +55,7 @@ def project_for(project_type: ProjectType) -> Project:
             ProjectType.TOURISM: "VISIT MERIMBULA",
             ProjectType.BANJO: "BANJO'S WORLD OF CARS",
             ProjectType.CHANNEL_MASTER: "CHANNEL MASTER FIXTURE",
+            ProjectType.WHITE_LABEL: "WHITE LABEL FIXTURE",
         }[project_type],
         ticker_text="Fixture Bio remains below the machine controls.",
         channel_url="https://www.youtube.com/channel/UChero",
@@ -84,6 +86,18 @@ def project_for(project_type: ProjectType) -> Project:
             **common,
             channel_master_config=ChannelMasterConfig(
                 primary_cta=PrimaryCta(PrimaryCtaType.VISIT_WEBSITE, "https://example.com/master")
+            ),
+        )
+    if project_type is ProjectType.WHITE_LABEL:
+        logo = ROOT / "static" / "channel-master" / "crispy-bits-maker-mark-approved.png"
+        return Project(
+            **common,
+            channel_master_config=ChannelMasterConfig(
+                primary_cta=PrimaryCta(PrimaryCtaType.VISIT_WEBSITE, "https://example.com/white-label")
+            ),
+            white_label_config=WhiteLabelConfig(
+                logo_asset_path=str(logo), original_filename=logo.name,
+                media_type="image/png", width=1280, height=432,
             ),
         )
     return Project(**common, banjo_config=BanjoConfig())
@@ -165,7 +179,10 @@ class MachineBrandHierarchyTests(unittest.TestCase):
                 build_project_site(project_for(project_type), destination)
                 page = (destination / "index.html").read_text(encoding="utf-8")
                 self.assertEqual(page.count('class="customer-identity"'), 1)
-                self.assertEqual(page.count('class="brand-signature"'), 0 if project_type is ProjectType.CHANNEL_MASTER else 1)
+                self.assertEqual(
+                    page.count('class="brand-signature"'),
+                    0 if project_type in {ProjectType.CHANNEL_MASTER, ProjectType.WHITE_LABEL} else 1,
+                )
                 self.assertNotIn('class="brand-masthead"', page)
                 self.assertIn("customer-identity-subtitle", page)
                 if project_type is ProjectType.BANJO:
