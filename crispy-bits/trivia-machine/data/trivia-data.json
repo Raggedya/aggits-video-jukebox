@@ -388,7 +388,11 @@
           "sourceUrl": "https://www.smithsonianmag.com/smart-news/why-boston-molasses-disaster-was-so-deadly-180961209/",
           "difficulty": "easy",
           "status": "approved",
-          "subcategory": "Boston"
+          "subcategory": "Boston",
+          "videoTitle": "The Great Molasses Flood feat. Garrett Watts",
+          "videoChannel": "Puppet History Inc",
+          "videoId": "HAZlPuL3Qhw",
+          "videoReason": "Entertaining historical rabbit hole devoted specifically to the Boston Molasses Flood."
         },
         {
           "id": "GOLDEN-WEIRD-004",
@@ -543,7 +547,11 @@
           "sourceUrl": "https://parks.canada.ca/culture/designation/evenement-event/projet-habakkuk",
           "difficulty": "hard",
           "status": "approved",
-          "subcategory": "Project Habakkuk"
+          "subcategory": "Project Habakkuk",
+          "videoTitle": "The Insane Plan to Build an Aircraft Carrier Out of Ice",
+          "videoChannel": "RealLifeLore",
+          "videoId": "CF9af8AtxLY",
+          "videoReason": "Accessible explainer devoted to Project Habakkuk and the proposed pykrete aircraft carrier."
         },
         {
           "id": "GOLDEN-UNHINGED-005",
