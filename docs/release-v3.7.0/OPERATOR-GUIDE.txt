@@ -1,0 +1,37 @@
+CRISPY BITS DESKTOP v3.7.0 — OPERATOR QUICK GUIDE
+==================================================
+
+CREATE A WHITE LABEL PROJECT
+
+Open WHITE LABEL and complete the same title, ticker, video, palette and action
+fields used by Channel Master. White Label supports up to 50 reviewed YouTube
+videos and retains the established Channel Master machine behaviour.
+
+CUSTOM BRANDING
+
+Under CUSTOM BRANDING select UPLOAD LOGO. A transparent PNG is recommended,
+although JPEG and WebP are also supported. The logo preview confirms the selected
+project asset. Use CHANGE LOGO to replace it or REMOVE LOGO to clear it.
+
+The logo is stored inside the individual project. Different White Label projects
+therefore retain different logos. The machine scales the image proportionally
+inside the established top safe area; it is centred and never deliberately
+cropped or stretched.
+
+PREVIEW AND PUBLISH
+
+Preview shows the actual customer logo at the top and POWERED BY CRISPY BITS at
+the bottom. A valid logo is required before saving or publishing. Publishing
+copies a project-specific logo into that machine's own public assets, so another
+White Label publication cannot overwrite it.
+
+EXISTING PROJECTS
+
+Existing Business, Music, Tourism, Banjo and Channel Master projects remain
+compatible. Their UUIDs, slugs, live URLs, QR destinations and public branding
+are unchanged.
+
+VERSION NOTE
+
+Projects saved with v3.7.0 should continue to be edited with v3.7.0 or a later
+compatible release unless backward editing has specifically been verified.

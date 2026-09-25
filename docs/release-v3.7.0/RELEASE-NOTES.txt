@@ -1,0 +1,32 @@
+CRISPY BITS DESKTOP v3.7.0
+================================
+
+NEW
+
+- WHITE LABEL is now available as a dedicated desktop product tab.
+- White Label projects retain Channel Master functionality while allowing a
+  project-specific customer logo to replace the prominent top Crispy Bits mark.
+- UPLOAD LOGO, CHANGE LOGO and REMOVE LOGO controls provide a desktop preview
+  and preserve each project's branding independently.
+- Published White Label machines contain and centre the customer logo without
+  stretching or cropping it, and display a discreet POWERED BY CRISPY BITS
+  attribution at the bottom.
+
+PRESERVED
+
+- Existing Business, Music, Tourism, Banjo and Channel Master projects retain
+  their current behaviour and branding.
+- Reel geometry, lever mechanics, selection, landing, ticker, video, CTA,
+  reporting and publication behaviour are unchanged.
+- The project schema remains version 3 and no data migration is required.
+
+LOGO GUIDANCE
+
+- A transparent PNG is recommended. PNG, JPEG and WebP files up to 5 MB are
+  accepted. A White Label project requires a valid logo before it can be saved
+  or published.
+
+CODE SIGNING
+
+This release contains embedded Windows product and version metadata but is
+unsigned because no trusted code-signing certificate is configured.
