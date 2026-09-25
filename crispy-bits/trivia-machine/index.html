@@ -101,6 +101,10 @@
             <div class="trivia-answer-result" data-answer-result hidden>
               <strong data-result-heading></strong>
               <p data-result-explanation></p>
+              <button type="button" class="trivia-watch-story" data-action="watch-video" aria-label="Watch the story video" hidden disabled>
+                <span class="trivia-watch-story-play" aria-hidden="true"><i></i></span>
+                <span class="trivia-watch-story-label">WATCH THE STORY</span>
+              </button>
               <a data-question-source href="#" target="_blank" rel="noopener noreferrer">SOURCE</a>
             </div>
             <div class="trivia-video-wrap" data-trivia-video-wrap hidden>
@@ -123,7 +127,6 @@
       </section>
 
       <section class="machine-controls trivia-post-controls" data-post-controls aria-label="Post-question controls" hidden>
-        <button type="button" class="control-button control-button--primary" data-action="watch-video" hidden disabled><span class="control-icon" aria-hidden="true">▶</span><b>WATCH VIDEO</b></button>
         <button type="button" class="control-button" data-action="next-question" disabled><span class="control-icon" aria-hidden="true">→</span><b>NEXT QUESTION</b></button>
         <button type="button" class="control-button" data-action="spin-again" disabled><span class="control-icon" aria-hidden="true">↻</span><b>RE-SPIN</b></button>
         <button type="button" class="control-button" data-action="change-mode" disabled><span class="control-icon" aria-hidden="true">◇</span><b>CHANGE MODE</b></button>

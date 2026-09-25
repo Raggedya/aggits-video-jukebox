@@ -246,7 +246,16 @@ def test_correct_and_incorrect_reveals_and_crispy_bits_ticker_are_present() -> N
 
 
 def test_watch_video_is_conditional_and_uses_privacy_enhanced_youtube_embed() -> None:
-    assert 'data-action="watch-video" hidden disabled' in HTML
+    assert 'data-action="watch-video"' in HTML
+    assert 'aria-label="Watch the story video" hidden disabled' in HTML
+    assert "WATCH THE STORY" in HTML
+    result_panel = HTML.split('class="trivia-answer-result"', 1)[1].split("</div>", 1)[0]
+    post_controls = HTML.split('data-post-controls', 1)[1].split("</section>", 1)[0]
+    assert 'data-action="watch-video"' in result_panel
+    assert 'data-action="watch-video"' not in post_controls
+    assert post_controls.count('class="control-button"') == 3
+    assert all(label in post_controls for label in ("NEXT QUESTION", "RE-SPIN", "CHANGE MODE"))
+    assert "WATCH VIDEO" not in HTML
     assert "watchVideoButton.hidden = !hasVideo" in SCRIPT
     assert "if (!answered || !currentQuestion?.videoId) return" in SCRIPT
     assert "https://www.youtube-nocookie.com/embed/" in SCRIPT
@@ -283,7 +292,7 @@ def test_mobile_layout_stacks_modes_answers_and_post_controls() -> None:
     assert "@media (max-width:560px)" in CSS
     assert '.trivia-mode-grid{grid-template-columns:1fr' in CSS
     assert '.trivia-answers{grid-template-columns:1fr' in CSS
-    assert '.trivia-post-controls{grid-template-columns:repeat(2' in CSS
+    assert '.trivia-post-controls{grid-template-columns:repeat(3' in CSS
 
 
 def test_trivia_styles_remain_explicitly_scoped() -> None:
