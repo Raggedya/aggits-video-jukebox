@@ -15,6 +15,8 @@
 
     <section class="trivia-mode-screen" data-mode-selection aria-labelledby="mode-selection-title">
       <div class="trivia-mode-panel">
+        <div class="trivia-mode-finials" aria-hidden="true"><i></i><i></i><i></i></div>
+        <div class="trivia-selector-lever" aria-hidden="true"><i></i><b></b><span></span></div>
         <svg class="trivia-mode-icon-sprite" aria-hidden="true">
           <symbol id="trivia-icon-general" viewBox="0 0 64 64">
             <circle cx="32" cy="32" r="25"></circle><path d="M7 32h50M32 7c9 7 14 15 14 25S41 50 32 57M32 7c-9 7-14 15-14 25s5 18 14 25M12 20h40M12 44h40"></path>
@@ -38,16 +40,19 @@
           <span class="trivia-mode-marquee-flourish" aria-hidden="true">◆</span>
         </div>
         <div class="trivia-mode-prompt">
-          <p>WHAT ARE YOU<br>IN THE MOOD FOR?</p>
+          <p>CHOOSE YOUR POISON</p>
           <span class="trivia-mode-prompt-ornament" aria-hidden="true">◆</span>
         </div>
-        <div class="trivia-mode-grid" data-mode-grid aria-label="Trivia modes"></div>
+        <div class="trivia-mode-bank">
+          <div class="trivia-mode-grid" data-mode-grid aria-label="Trivia modes"></div>
+        </div>
         <button class="trivia-mode-button trivia-mode-button--surprise" type="button" data-action="surprise-mode" disabled>
           <span class="trivia-mode-lamp" aria-hidden="true"></span>
           <svg class="trivia-mode-dice" aria-hidden="true" viewBox="0 0 64 64"><path d="M32 5 56 18v28L32 59 8 46V18Z"></path><path d="m8 18 24 14 24-14M32 32v27"></path><circle cx="24" cy="18" r="2.5"></circle><circle cx="38" cy="14" r="2.5"></circle><circle cx="18" cy="35" r="2.5"></circle><circle cx="25" cy="46" r="2.5"></circle><circle cx="45" cy="35" r="2.5"></circle><circle cx="43" cy="47" r="2.5"></circle></svg>
           <strong>SURPRISE ME</strong>
         </button>
         <div class="trivia-mode-lower-ornament" aria-hidden="true"><span>◆</span></div>
+        <div class="trivia-mode-cabinet-lip" aria-hidden="true"></div>
         <p class="trivia-mode-status visually-hidden" data-mode-status role="status">Loading the game modes…</p>
       </div>
     </section>

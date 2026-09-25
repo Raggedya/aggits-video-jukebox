@@ -208,18 +208,22 @@ def test_mode_selector_matches_the_live_antique_cabinet_structure() -> None:
     assert "trivia-mode-marquee-main" in HTML
     assert ">CRISPY BITS<" in HTML
     assert 'id="mode-selection-title">TRIVIA<' in HTML
-    assert "WHAT ARE YOU<br>IN THE MOOD FOR?" in HTML
+    assert "CHOOSE YOUR POISON" in HTML
     assert all(f'id="trivia-icon-{mode}"' in HTML for mode in (
         "general", "nerd", "weird", "unhinged", "serial-killer"
     ))
     assert "trivia-mode-dice" in HTML
+    assert "trivia-mode-bank" in HTML
     assert "trivia-mode-lower-ornament" in HTML
+    assert "trivia-mode-cabinet-lip" in HTML
+    assert "trivia-selector-lever" in HTML
     assert "CHOOSE YOUR GAME" not in HTML
     assert "Pick your flavour of trouble." not in HTML
     assert "Let the machine decide." not in HTML
     assert "document.createElementNS" in SCRIPT
     assert "trivia-mode-lamp" in SCRIPT
     assert "grid-template-columns:repeat(5" in CSS
+    assert 'url("./trivia-cabinet-patina.webp")' in CSS
     assert "@media (max-width:760px)" in CSS
 
 
