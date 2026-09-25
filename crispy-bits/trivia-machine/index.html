@@ -15,16 +15,40 @@
 
     <section class="trivia-mode-screen" data-mode-selection aria-labelledby="mode-selection-title">
       <div class="trivia-mode-panel">
-        <div class="trivia-mode-brand" aria-hidden="true"><img src="assets/channel-master/crispy-bits-maker-mark-approved.png" alt="" width="1280" height="432" draggable="false"></div>
-        <p class="trivia-mode-kicker">CHOOSE YOUR GAME</p>
-        <h1 id="mode-selection-title">CRISPY BITS TRIVIA</h1>
-        <p class="trivia-mode-intro">Pick your flavour of trouble.</p>
+        <svg class="trivia-mode-icon-sprite" aria-hidden="true">
+          <symbol id="trivia-icon-general" viewBox="0 0 64 64">
+            <circle cx="32" cy="32" r="25"></circle><path d="M7 32h50M32 7c9 7 14 15 14 25S41 50 32 57M32 7c-9 7-14 15-14 25s5 18 14 25M12 20h40M12 44h40"></path>
+          </symbol>
+          <symbol id="trivia-icon-nerd" viewBox="0 0 64 64">
+            <path d="M29 11c-8-6-18 0-17 9-8 2-9 14-2 18-5 8 3 18 12 15 3 7 13 5 13-3V18c0-5-2-7-6-7ZM35 18c0-5 2-7 6-7 8-6 18 0 17 9 8 2 9 14 2 18 5 8-3 18-12 15-3 7-13 5-13-3Z"></path><path d="M18 23c7-1 11 4 10 10M46 23c-7-1-11 4-10 10M14 40c6-3 12 0 14 6M50 40c-6-3-12 0-14 6"></path>
+          </symbol>
+          <symbol id="trivia-icon-weird" viewBox="0 0 64 64">
+            <path d="M20 29c2-11 7-17 12-17s10 6 12 17"></path><ellipse cx="32" cy="32" rx="27" ry="10"></ellipse><path d="M12 35c4 10 12 15 20 15s16-5 20-15M21 48l-4 7M32 50v7M43 48l4 7"></path><circle cx="23" cy="34" r="2"></circle><circle cx="32" cy="36" r="2"></circle><circle cx="41" cy="34" r="2"></circle>
+          </symbol>
+          <symbol id="trivia-icon-unhinged" viewBox="0 0 64 64">
+            <path d="M18 11h28l-3 29H21Z"></path><path d="M7 42c9-5 41-5 50 0-5 10-40 10-50 0ZM23 18h18"></path>
+          </symbol>
+          <symbol id="trivia-icon-serial-killer" viewBox="0 0 64 64">
+            <path d="M32 7C18 7 9 17 9 30c0 9 5 15 12 19v8h22v-8c7-4 12-10 12-19C55 17 46 7 32 7Z"></path><path d="M22 29c0-4 4-7 8-4 2 5-2 10-8 8Zm20 0c0-4-4-7-8-4-2 5 2 10 8 8ZM32 34l-4 7h8ZM25 49v8M32 49v8M39 49v8"></path>
+          </symbol>
+        </svg>
+        <div class="trivia-mode-marquee">
+          <span class="trivia-mode-marquee-main">CRISPY BITS</span>
+          <h1 id="mode-selection-title">TRIVIA</h1>
+          <span class="trivia-mode-marquee-flourish" aria-hidden="true">◆</span>
+        </div>
+        <div class="trivia-mode-prompt">
+          <p>WHAT ARE YOU<br>IN THE MOOD FOR?</p>
+          <span class="trivia-mode-prompt-ornament" aria-hidden="true">◆</span>
+        </div>
         <div class="trivia-mode-grid" data-mode-grid aria-label="Trivia modes"></div>
         <button class="trivia-mode-button trivia-mode-button--surprise" type="button" data-action="surprise-mode" disabled>
+          <span class="trivia-mode-lamp" aria-hidden="true"></span>
+          <svg class="trivia-mode-dice" aria-hidden="true" viewBox="0 0 64 64"><path d="M32 5 56 18v28L32 59 8 46V18Z"></path><path d="m8 18 24 14 24-14M32 32v27"></path><circle cx="24" cy="18" r="2.5"></circle><circle cx="38" cy="14" r="2.5"></circle><circle cx="18" cy="35" r="2.5"></circle><circle cx="25" cy="46" r="2.5"></circle><circle cx="45" cy="35" r="2.5"></circle><circle cx="43" cy="47" r="2.5"></circle></svg>
           <strong>SURPRISE ME</strong>
-          <span>Let the machine decide.</span>
         </button>
-        <p class="trivia-mode-status" data-mode-status role="status">Loading the game modes…</p>
+        <div class="trivia-mode-lower-ornament" aria-hidden="true"><span>◆</span></div>
+        <p class="trivia-mode-status visually-hidden" data-mode-status role="status">Loading the game modes…</p>
       </div>
     </section>
 
