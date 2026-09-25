@@ -122,7 +122,9 @@ button:focus-visible,a:focus-visible{outline:3px solid #fff0b3;outline-offset:3p
 .music-machine[data-project-type="channel_master"] .customer-backdrop::after{background:linear-gradient(180deg,transparent,rgba(0,0,0,.32) 52%,rgba(0,0,0,.72))}
 .music-machine[data-project-type="channel_master"] .experience-frame{background:linear-gradient(180deg,var(--theme-primary),var(--theme-secondary) 56%,#010202)}
 .music-machine[data-project-type="channel_master"] .experience-frame::before{background:radial-gradient(ellipse at 50% 2%,color-mix(in srgb,var(--theme-accent) 20%,transparent),transparent 34%)}
-.music-machine[data-project-type="channel_master"] .customer-identity{min-height:clamp(68px,12vw,88px);margin-top:12px;background:linear-gradient(180deg,var(--theme-primary),var(--theme-secondary) 78%)}
+.music-machine[data-project-type="channel_master"] .channel-master-maker-mark{position:absolute;left:50%;top:7px;z-index:4;width:clamp(72px,13vw,104px);pointer-events:none;transform:translateX(-50%)}
+.music-machine[data-project-type="channel_master"] .channel-master-maker-mark img{display:block;width:100%;height:auto;object-fit:contain;user-select:none}
+.music-machine[data-project-type="channel_master"] .customer-identity{min-height:clamp(68px,12vw,88px);margin-top:48px;background:linear-gradient(180deg,var(--theme-primary),var(--theme-secondary) 78%)}
 .music-machine[data-project-type="channel_master"] .customer-identity-subtitle{display:none}
 .music-machine[data-project-type="channel_master"] .channel-master-header-ticker{position:absolute;z-index:3;inset:0;display:flex;align-items:center;overflow:hidden;color:#f3ddb0;opacity:0;transition:opacity .55s ease}
 .music-machine[data-project-type="channel_master"] .channel-master-header-ticker[hidden]{display:none}
@@ -144,6 +146,13 @@ button:focus-visible,a:focus-visible{outline:3px solid #fff0b3;outline-offset:3p
 .music-machine[data-project-type="channel_master"] .control-button b{white-space:normal;overflow-wrap:anywhere;font-size:clamp(7px,1.9vw,12px)}
 .music-machine[data-project-type="channel_master"] .channel-master-contact{display:flex;justify-content:center;margin:0 clamp(8px,1.8vw,14px) 16px;padding-top:4px}
 .music-machine[data-project-type="channel_master"] .channel-master-contact a{min-width:min(100%,260px);box-sizing:border-box;border:1px solid #d5aa5f;border-radius:8px;padding:12px 18px;color:#f3e4ba;background:linear-gradient(var(--theme-primary),var(--theme-secondary));box-shadow:inset 0 1px rgba(255,236,187,.19),0 3px 7px #000;text-align:center;text-decoration:none;font:900 12px/1 var(--font-display);letter-spacing:.08em}
+.music-machine[data-project-type="channel_master"] .channel-master-footer-mark{display:grid;width:clamp(88px,18%,132px);margin:clamp(22px,4vw,34px) auto clamp(28px,6vw,48px);color:#d4ad68;background:transparent;text-align:center;pointer-events:none;user-select:none}
+.music-machine[data-project-type="channel_master"] .channel-master-footer-ornament{display:flex;align-items:center;gap:7px;color:#c7984f;text-shadow:0 1px #2b1709,0 -1px rgba(255,226,158,.38)}
+.music-machine[data-project-type="channel_master"] .channel-master-footer-ornament::before,.music-machine[data-project-type="channel_master"] .channel-master-footer-ornament::after{content:"";flex:1 1 auto;height:1px;background:linear-gradient(90deg,transparent,#a87536)}
+.music-machine[data-project-type="channel_master"] .channel-master-footer-ornament::after{background:linear-gradient(90deg,#a87536,transparent)}
+.music-machine[data-project-type="channel_master"] .channel-master-footer-ornament span{font:400 12px/1 Georgia,serif}
+.music-machine[data-project-type="channel_master"] .channel-master-footer-mark strong{margin-top:5px;color:#e0c188;font:900 clamp(8px,1.45vw,10px)/1 var(--font-display);letter-spacing:.2em;text-indent:.2em;text-shadow:0 1px 1px #000}
+.music-machine[data-project-type="channel_master"] .channel-master-footer-mark small{margin-top:4px;color:#a88b59;font:700 clamp(5.5px,1vw,7px)/1 var(--font-copy);letter-spacing:.035em;white-space:nowrap}
 
 /* BANJO'S WORLD OF CARS — isolated fourth-project presentation. */
 .banjo-header-character,.banjo-choice-overlay,.video-stage video[data-sponsor-player]{display:none}
@@ -203,6 +212,8 @@ button:focus-visible,a:focus-visible{outline:3px solid #fff0b3;outline-offset:3p
   .customer-identity{min-height:56px;margin:40px 3% 5px;padding:7px 10px 8px}
   .customer-identity-copy>strong{font-size:var(--hero-copy-size,25px)}
   .customer-identity-subtitle{width:82%;font-size:clamp(7px,2.15vw,9px);letter-spacing:.3em;text-indent:.3em}
+  .music-machine[data-project-type="channel_master"] .channel-master-maker-mark{top:6px;width:76px}
+  .music-machine[data-project-type="channel_master"] .customer-identity{margin-top:40px}
   .music-machine[data-project-type="banjo"] .customer-identity{padding-left:86px;min-height:72px}
   .music-machine[data-project-type="banjo"] .banjo-header-character{width:78px}
   .music-machine[data-project-type="banjo"] .banjo-header-character img{height:250%;top:-3%}
