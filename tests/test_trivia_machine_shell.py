@@ -126,21 +126,31 @@ def test_question_schema_has_every_required_game_and_source_field() -> None:
         assert str(question["sourceUrl"]).startswith("https://")
 
 
-def test_three_production_questions_exercise_the_optional_youtube_path() -> None:
+def test_curated_production_questions_exercise_the_optional_youtube_path() -> None:
     questions_with_video = [
         question for question in _questions() if question.get("videoId")
     ]
     assert {question["id"] for question in questions_with_video} == {
         "GOLDEN-GENERAL-006",
+        "GOLDEN-NERD-002",
         "GOLDEN-NERD-004",
+        "GOLDEN-NERD-005",
+        "GOLDEN-NERD-006",
+        "GOLDEN-WEIRD-002",
+        "GOLDEN-WEIRD-006",
+        "GOLDEN-UNHINGED-003",
         "GOLDEN-SERIAL-004",
     }
     assert all(len(question["videoId"]) == 11 for question in questions_with_video)
     assert all(question["videoTitle"] for question in questions_with_video)
     assert all(question["videoChannel"] for question in questions_with_video)
     assert all(question["videoReason"] for question in questions_with_video)
-    assert len(questions_with_video) == 3
-    assert len(_questions()) - len(questions_with_video) == 27
+    assert len(questions_with_video) == 9
+    assert len(_questions()) - len(questions_with_video) == 21
+    molasses = next(question for question in _questions() if question["id"] == "GOLDEN-WEIRD-003")
+    assert not molasses.get("videoId")
+    ice_ship = next(question for question in _questions() if question["id"] == "GOLDEN-UNHINGED-004")
+    assert not ice_ship.get("videoId")
 
 
 def test_controller_reuses_frozen_spin_landing_and_lever_mechanics() -> None:

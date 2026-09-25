@@ -179,7 +179,7 @@
           "videoTitle": "8 Mind-Boggling Facts About the Octopus",
           "videoChannel": "Smithsonian Magazine",
           "videoId": "qeP2uWZt3fg",
-          "videoReason": "A concise Smithsonian visual companion to the anatomy facts."
+          "videoReason": "Smithsonian visual companion directly demonstrates the octopus facts in the reveal."
         },
         {
           "id": "GOLDEN-NERD-001",
@@ -221,7 +221,11 @@
           "sourceUrl": "https://www.nasa.gov/wp-content/uploads/2025/07/battinrh-4-18-00.pdf",
           "difficulty": "hard",
           "status": "approved",
-          "subcategory": "Memory"
+          "subcategory": "Memory",
+          "videoTitle": "Apollo Core Rope Memory",
+          "videoChannel": "CuriousMarc",
+          "videoId": "hckwxq8rnr0",
+          "videoReason": "Hands-on examination of real Apollo core-rope memory makes the physical-software concept tangible."
         },
         {
           "id": "GOLDEN-NERD-003",
@@ -267,7 +271,7 @@
           "videoTitle": "1968 Mother of All Demos with Doug Engelbart & Team (1/3)",
           "videoChannel": "Doug Engelbart Institute",
           "videoId": "UhpTiWyVa6k",
-          "videoReason": "Original remastered footage of the mouse’s public debut."
+          "videoReason": "Original remastered footage shows the mouse and foundational interface ideas being demonstrated."
         },
         {
           "id": "GOLDEN-NERD-005",
@@ -288,7 +292,11 @@
           "sourceUrl": "https://blogs.loc.gov/loc/2019/12/les-paul-inventing-modern-sound/",
           "difficulty": "medium",
           "status": "approved",
-          "subcategory": "Recording technology"
+          "subcategory": "Recording technology",
+          "videoTitle": "Les Paul: How Multi-track Recording Started",
+          "videoChannel": "Musicians Hall of Fame & Museum",
+          "videoId": "e7-sbwWWOLw",
+          "videoReason": "Museum interview material explains Les Paul's recording innovations in direct historical context."
         },
         {
           "id": "GOLDEN-NERD-006",
@@ -309,7 +317,11 @@
           "sourceUrl": "https://www.smithsonianmag.com/smart-news/theremin-100-years-anniversary-instrument-music-history-180976437/",
           "difficulty": "medium",
           "status": "approved",
-          "subcategory": "Electronic instruments"
+          "subcategory": "Electronic instruments",
+          "videoTitle": "Theremin - Clara Rockmore play The Swan (Saint-Saëns)",
+          "videoChannel": "yaoikan1981",
+          "videoId": "pSzTPGlNa5U",
+          "videoReason": "Historic Clara Rockmore performance immediately demonstrates touchless theremin performance."
         },
         {
           "id": "GOLDEN-WEIRD-001",
@@ -351,7 +363,11 @@
           "sourceUrl": "https://www.guinnessworldrecords.com/news/2022/10/the-man-who-ate-metal-monsieur-mangetouts-strange-diet-722640",
           "difficulty": "medium",
           "status": "approved",
-          "subcategory": "Unusual diets"
+          "subcategory": "Unusual diets",
+          "videoTitle": "The Man With The Strangest Diet...",
+          "videoChannel": "Guinness World Records",
+          "videoId": "gtyKNFqutHM",
+          "videoReason": "Official Guinness video about Michel Lotito directly extends the airplane-eating reveal."
         },
         {
           "id": "GOLDEN-WEIRD-003",
@@ -435,7 +451,11 @@
           "sourceUrl": "https://www.nps.gov/gaar/learn/nature/wood-frog-page-2.htm",
           "difficulty": "medium",
           "status": "approved",
-          "subcategory": "Freeze tolerance"
+          "subcategory": "Freeze tolerance",
+          "videoTitle": "This frog literally freezes itself to survive the winter",
+          "videoChannel": "National Geographic Animaux",
+          "videoId": "zYumtXF1nZM",
+          "videoReason": "National Geographic footage visually demonstrates the wood frog's freeze-survival adaptation."
         },
         {
           "id": "GOLDEN-UNHINGED-001",
@@ -498,7 +518,11 @@
           "sourceUrl": "https://www.nma.gov.au/defining-moments/resources/emu-war",
           "difficulty": "easy",
           "status": "approved",
-          "subcategory": "Western Australia"
+          "subcategory": "Western Australia",
+          "videoTitle": "The Great Emu War: how it started and who won",
+          "videoChannel": "ABC Australia",
+          "videoId": "ejiYxSWrkdY",
+          "videoReason": "Official ABC Australia explainer provides strong local historical context for the Emu War."
         },
         {
           "id": "GOLDEN-UNHINGED-004",
@@ -646,7 +670,7 @@
           "difficulty": "medium",
           "status": "approved",
           "subcategory": "Zodiac",
-          "videoTitle": "Let’s Crack Zodiac — Episode 5 — The 340 Is Solved!",
+          "videoTitle": "Let's Crack Zodiac — Episode 5 — The 340 Is Solved!",
           "videoChannel": "David Oranchak",
           "videoId": "-1oQLPRE21o",
           "videoReason": "First-person explanation by one of the three codebreakers who solved Z340."

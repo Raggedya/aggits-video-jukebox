@@ -59,8 +59,8 @@ test('Golden 30 production pack is complete, balanced and validator-clean', () =
   for (const mode of ['general', 'nerd', 'weird', 'unhinged', 'serial-killer']) {
     assert.equal(questions.filter(question => question.mode === mode).length, 6);
   }
-  assert.equal(questions.filter(question => question.videoId).length, 3);
-  assert.equal(questions.filter(question => !question.videoId).length, 27);
+  assert.equal(questions.filter(question => question.videoId).length, 9);
+  assert.equal(questions.filter(question => !question.videoId).length, 21);
   assert.equal(questions.some(question => question.id.startsWith('TEMP-')), false);
 });
 
