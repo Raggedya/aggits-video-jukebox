@@ -46,11 +46,12 @@ def test_proven_spin_and_mechanics_modules_are_byte_identical_copies() -> None:
         assert (TRIVIA / "assets" / filename).read_bytes() == (ROOT / "static" / filename).read_bytes()
 
 
-def test_schema_contains_exactly_five_temporary_questions_in_a_separate_pack() -> None:
+def test_schema_contains_the_approved_golden_30_production_pack() -> None:
     questions = _questions()
     assert DATA["schemaVersion"] == 3
     assert len(DATA["questionPacks"]) == 1
     pack = DATA["questionPacks"][0]
+    assert pack["packId"] == "golden-30-general-pub"
     assert DATA["activePackId"] == pack["packId"]
     assert {
         "packId",
@@ -60,15 +61,26 @@ def test_schema_contains_exactly_five_temporary_questions_in_a_separate_pack() -
         "availableModes",
         "questions",
     } <= pack.keys()
-    assert pack["temporary"] is True
-    assert len(questions) == 5
-    assert all(question["temporary"] is True for question in questions)
-    assert all(str(question["id"]).startswith("TEMP-M3-") for question in questions)
+    assert len(questions) == 30
+    assert len({question["id"] for question in questions}) == 30
+    assert all(question["status"] == "approved" for question in questions)
+    assert all(str(question["id"]).startswith("GOLDEN-") for question in questions)
+    assert not any(str(question["id"]).startswith("TEMP-") for question in questions)
+    assert {
+        mode: sum(question["mode"] == mode for question in questions)
+        for mode in pack["availableModes"]
+    } == {
+        "general": 6,
+        "nerd": 6,
+        "weird": 6,
+        "unhinged": 6,
+        "serial-killer": 6,
+    }
     assert "Which planet is commonly known" not in HTML
     assert "Which planet is commonly known" not in SCRIPT
 
 
-def test_all_five_approved_modes_have_one_test_question() -> None:
+def test_all_five_approved_modes_have_six_production_questions() -> None:
     expected = {
         "general": ("GENERAL", "Give me anything.", "green"),
         "nerd": ("NERD", "Make me work for it.", "blue"),
@@ -114,18 +126,21 @@ def test_question_schema_has_every_required_game_and_source_field() -> None:
         assert str(question["sourceUrl"]).startswith("https://")
 
 
-def test_only_one_fixture_exercises_the_optional_youtube_path() -> None:
+def test_three_production_questions_exercise_the_optional_youtube_path() -> None:
     questions_with_video = [
         question for question in _questions() if question.get("videoId")
     ]
-    assert len(questions_with_video) == 1
-    assert len(questions_with_video[0]["videoId"]) == 11
-    assert questions_with_video[0]["videoTitle"]
-    assert questions_with_video[0]["videoChannel"]
-    assert questions_with_video[0]["videoReason"]
-    assert "videoId" not in next(
-        question for question in _questions() if question["mode"] == "nerd"
-    )
+    assert {question["id"] for question in questions_with_video} == {
+        "GOLDEN-GENERAL-006",
+        "GOLDEN-NERD-004",
+        "GOLDEN-SERIAL-004",
+    }
+    assert all(len(question["videoId"]) == 11 for question in questions_with_video)
+    assert all(question["videoTitle"] for question in questions_with_video)
+    assert all(question["videoChannel"] for question in questions_with_video)
+    assert all(question["videoReason"] for question in questions_with_video)
+    assert len(questions_with_video) == 3
+    assert len(_questions()) - len(questions_with_video) == 27
 
 
 def test_controller_reuses_frozen_spin_landing_and_lever_mechanics() -> None:
@@ -222,6 +237,9 @@ def test_next_re_spin_and_change_mode_are_logically_separate() -> None:
 
 def test_shell_retains_milestone_one_framework_and_has_no_qr_artwork() -> None:
     assert "CRISPY BITS TRIVIA" in HTML
+    assert "30 QUESTIONS" in HTML
+    assert "5 TEST QUESTIONS" not in HTML
+    assert "MILESTONE 2" not in HTML
     assert 'data-project-type="trivia"' in HTML
     assert 'data-reel="0"' in HTML
     assert 'class="lever"' in HTML

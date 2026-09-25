@@ -1,8 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
 
 import { validateTriviaData } from '../assets/trivia-data-validator.js';
 import { buildReelTopics, createRotationPicker } from '../assets/trivia-content-rotation.js';
+
+const productionData = JSON.parse(fs.readFileSync(new URL('../data/trivia-data.json', import.meta.url), 'utf8'));
 
 const makeQuestion = (overrides = {}) => ({
   id: 'TEST-GENERAL-001',
@@ -41,6 +44,24 @@ const makeData = questions => ({
     availableModes: ['general', 'weird'],
     questions,
   }],
+});
+
+test('Golden 30 production pack is complete, balanced and validator-clean', () => {
+  const result = validateTriviaData(productionData);
+  const questions = result.activePack.questions;
+  assert.equal(productionData.schemaVersion, 3);
+  assert.equal(productionData.activePackId, 'golden-30-general-pub');
+  assert.equal(result.activePack.packId, 'golden-30-general-pub');
+  assert.equal(result.diagnostics.length, 0);
+  assert.equal(result.validQuestions.length, 30);
+  assert.equal(result.approvedQuestions.length, 30);
+  assert.equal(new Set(questions.map(question => question.id)).size, 30);
+  for (const mode of ['general', 'nerd', 'weird', 'unhinged', 'serial-killer']) {
+    assert.equal(questions.filter(question => question.mode === mode).length, 6);
+  }
+  assert.equal(questions.filter(question => question.videoId).length, 3);
+  assert.equal(questions.filter(question => !question.videoId).length, 27);
+  assert.equal(questions.some(question => question.id.startsWith('TEMP-')), false);
 });
 
 test('approved records are eligible while draft and retired records are excluded', () => {
