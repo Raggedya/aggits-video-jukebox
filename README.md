@@ -1,8 +1,10 @@
 # CRISPY BITS DESKTOP
 
-A standalone Windows desktop application for creating and managing CRISPY BITS BUSINESS, MUSIC, TOURISM, BANJO, CHANNEL MASTER and WHITE LABEL projects. The seven-tab desktop also includes BULK UPLOAD, an internal campaign workflow that creates ordinary Channel Master projects while reusing the proven YouTube, Library, publication, QR, delivery and recovery infrastructure.
+A standalone Windows desktop application for creating and managing CRISPY BITS BUSINESS, MUSIC, TOURISM, BANJO, CHANNEL MASTER, WHITE LABEL and LOVE MY LOCALS projects. The eight-tab desktop also includes BULK UPLOAD, an internal campaign workflow that creates ordinary Channel Master projects while reusing the proven YouTube, Library, publication, QR, delivery and recovery infrastructure.
 
 WHITE LABEL retains the proven Channel Master machine and replaces its prominent top Crispy Bits mark with a project-specific customer logo. Each logo is stored and published independently, while a discreet POWERED BY CRISPY BITS attribution remains at the bottom of the machine.
+
+LOVE MY LOCALS accepts one to three locations, discovers and scores a varied pool of geographically relevant YouTube material, and prepares up to 50 reviewed videos for a random local-discovery machine. Its public machine retains the focused SHARE, PLAY VIDEO, EXPLORE and RE-SPIN controls without directory or utility panels.
 
 ## Factory workflow
 

@@ -1,0 +1,43 @@
+CRISPY BITS DESKTOP v3.8.0
+================================
+
+NEW
+
+- LOVE MY LOCALS is available as a dedicated desktop product tab.
+- Operators can enter one to three locations and use FIND LOCALS to build a
+  candidate pool of geographically relevant YouTube videos without CSV files.
+- The reviewed selection supports up to 50 videos, remove/replace curation,
+  ticker copy, one optional EXPLORE URL, preview, publishing, QR generation and
+  the existing protected email-delivery pathway.
+
+DISCOVERY QUALITY
+
+- Multi-query Local Texture discovery favours local music, people, news,
+  history, community, sport, venues, makers and unusual local stories.
+- Generic tourism material is strongly suppressed, property-sales videos are
+  excluded, duplicate videos are removed and channel diversity is protected.
+- Older YouTube material remains eligible and the final machine order is
+  randomised for discovery rather than presented as a ranking.
+
+PUBLIC MACHINE
+
+- Love My Locals uses the approved logo, Midnight palette, location title,
+  ticker, reel, lever, video stage and four focused controls: SHARE,
+  PLAY VIDEO, EXPLORE and RE-SPIN.
+- Experimental EAT, STAY, WHAT'S ON and HOUSE PRICES utilities have been
+  removed. Google Places credentials and live restaurant-provider requests are
+  not required.
+
+PRESERVED
+
+- Existing Business, Music, Tourism, Banjo, Channel Master and White Label
+  projects remain compatible.
+- Reel calculations, lever mechanics, landing mathematics, video playback,
+  publication, reporting and protected delivery behaviour are unchanged.
+- Older Love My Locals development projects containing utility fields load
+  safely; obsolete fields are ignored and are not published.
+
+CODE SIGNING
+
+This release contains embedded Windows product and version metadata but is
+unsigned because no trusted code-signing certificate is configured.

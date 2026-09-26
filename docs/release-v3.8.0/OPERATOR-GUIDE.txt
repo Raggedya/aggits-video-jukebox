@@ -1,0 +1,48 @@
+CRISPY BITS DESKTOP v3.8.0 — LOVE MY LOCALS QUICK GUIDE
+========================================================
+
+CREATE A LOVE MY LOCALS PROJECT
+
+Open LOVE MY LOCALS and enter one required location plus up to two optional
+nearby locations. The configured geographic context is used to avoid matching
+another place with the same name.
+
+FIND AND REVIEW LOCALS
+
+Press FIND LOCALS. The desktop performs a basket of local-discovery searches,
+checks geographic relevance, suppresses generic tourism, excludes property-
+sales videos, removes duplicates and protects variety across channels and
+content types.
+
+Review the resulting candidate list. Remove an unsuitable video or replace it
+from the remaining pool. The published machine supports up to 50 active videos.
+There is no CSV export/import step.
+
+FINISH THE MACHINE
+
+Enter or edit the ticker text. EXPLORE URL is optional and should point to one
+appropriate official local, regional tourism or community-information page.
+Use Preview to check the location title, ticker, reel, video information and
+the four public controls:
+
+SHARE
+PLAY VIDEO
+EXPLORE
+RE-SPIN
+
+SAVE, PUBLISH AND DELIVER
+
+Save preserves the locations, discovery pool, reviewed selection, ticker and
+Explore URL. Publish uses the existing verified publishing pathway, creates the
+live URL and QR card, and uses the protected delivery Worker to send them to the
+configured operator email address.
+
+SEARCH AGAIN
+
+Use SEARCH AGAIN only when a fresh candidate pool is wanted. Existing curated
+results are not silently replaced.
+
+VERSION NOTE
+
+Projects saved with v3.8.0 should continue to be edited with v3.8.0 or a later
+compatible release unless backward editing has specifically been verified.
