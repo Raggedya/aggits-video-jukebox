@@ -12,6 +12,7 @@ from aggits_video_factory.love_my_locals_utilities import (
     build_development_utility_fixtures,
     fixture_provider_metadata,
 )
+from aggits_video_factory.config import LOVE_MY_LOCALS_EAT_ENDPOINT
 from aggits_video_factory.models import LoveMyLocalsCandidate, LoveMyLocalsConfig, Video
 from aggits_video_factory.site_builder import build_project_site
 
@@ -47,6 +48,7 @@ def _build_fixture_site(destination: Path):
         locations=["Bairnsdale"],
         resolved_geography="Victoria, Australia",
         candidates=[_candidate()],
+        utility_data_mode="development-fixture",
     )
     project = assemble_project(
         LoveMyLocalsFormValues(
@@ -102,6 +104,17 @@ class LoveMyLocalsUtilityFixtureTests(unittest.TestCase):
         self.assertEqual(restored.utility_enabled, {utility_type: True for utility_type in UTILITY_TYPES})
         with self.assertRaises(LoveMyLocalsError):
             validate_form(LoveMyLocalsFormValues(["Bairnsdale"], explore_url="javascript:alert(1)"))
+
+    def test_live_is_the_safe_default_and_development_fixture_must_be_explicit(self):
+        live = LoveMyLocalsConfig(locations=["Bairnsdale"], candidates=[_candidate()])
+        self.assertEqual(live.utility_data_mode, "live")
+        self.assertEqual(LoveMyLocalsConfig.from_dict(live.to_dict()).utility_data_mode, "live")
+        development = LoveMyLocalsConfig(
+            locations=["Bairnsdale"], candidates=[_candidate()], utility_data_mode="development-fixture",
+        )
+        self.assertEqual(LoveMyLocalsConfig.from_dict(development.to_dict()).utility_data_mode, "development-fixture")
+        with self.assertRaises(ValueError):
+            LoveMyLocalsConfig(locations=["Bairnsdale"], candidates=[_candidate()], utility_data_mode="fixture-if-live-fails")
 
 
 class LoveMyLocalsUtilityOutputTests(unittest.TestCase):
@@ -199,6 +212,87 @@ class LoveMyLocalsUtilityOutputTests(unittest.TestCase):
             source = (ROOT / "static" / name).read_text(encoding="utf-8")
             self.assertNotIn("local-utility", source)
             self.assertNotIn("house-prices", source)
+
+
+class LoveMyLocalsLiveEatOutputTests(unittest.TestCase):
+    def setUp(self):
+        self.temporary = tempfile.TemporaryDirectory()
+        self.destination = Path(self.temporary.name)
+        config = LoveMyLocalsConfig(
+            locations=["Bairnsdale"], resolved_geography="Victoria, Australia",
+            candidates=[_candidate()],
+        )
+        project = assemble_project(
+            LoveMyLocalsFormValues(locations=["Bairnsdale"], explore_url="https://www.visitgippsland.com.au/"),
+            config, "bairnsdale",
+        )
+        build_project_site(project, self.destination)
+        self.page = (self.destination / "index.html").read_text(encoding="utf-8")
+        self.machine = json.loads((self.destination / "machine.json").read_text(encoding="utf-8"))
+        self.service = (ROOT / "static" / "love-my-locals-utilities.js").read_text(encoding="utf-8")
+        self.runtime = (ROOT / "static" / "video-machine.js").read_text(encoding="utf-8")
+
+    def tearDown(self):
+        self.temporary.cleanup()
+
+    def test_production_payload_uses_live_eat_and_only_other_utilities_retain_fixtures(self):
+        panel = self.machine["loveMyLocalsConfig"]["utilityPanel"]
+        self.assertEqual(panel["provider"], "google-places-new")
+        self.assertTrue(panel["liveDataConnected"])
+        self.assertEqual(panel["environment"], "production")
+        self.assertEqual(panel["eat"], {
+            "provider": "google-places-new",
+            "mode": "live",
+            "endpoint": LOVE_MY_LOCALS_EAT_ENDPOINT,
+            "projectSlug": "bairnsdale",
+            "attribution": "Google Maps",
+            "photosEnabled": False,
+            "cacheStrategy": "page-session-only",
+        })
+        self.assertNotIn("eat", panel["data"])
+        self.assertEqual(set(panel["data"]), {"stay", "whats-on", "house-prices"})
+        self.assertTrue(all(value["source"] == "development-fixture" for value in panel["data"].values()))
+
+    def test_live_adapter_has_timeout_session_cache_and_no_fixture_fallback(self):
+        self.assertIn("export class LiveEatProvider", self.service)
+        self.assertIn("cache: 'no-store'", self.service)
+        self.assertIn("AbortController", self.service)
+        self.assertIn("this.cached && Date.now() < this.cacheUntil", self.service)
+        service_start = self.service.index("export class LoveMyLocalsUtilityService")
+        eat_start = self.service.index("getEatData() {", service_start)
+        eat_method = self.service[eat_start:self.service.index("getStayData()", eat_start)]
+        self.assertIn("this.liveEatProvider.getEatData()", eat_method)
+        self.assertIn("this.eatMode === 'development-fixture'", eat_method)
+        self.assertIn("Promise.reject", eat_method)
+        self.assertNotIn("catch", eat_method)
+
+    def test_unavailable_state_is_inside_chamber_and_back_to_video_remains_the_exit(self):
+        self.assertIn("LOCAL EATING INFORMATION IS TEMPORARILY UNAVAILABLE.", self.runtime)
+        self.assertIn("renderLocalUtilityUnavailable(type)", self.runtime)
+        self.assertIn("data-local-utility-back", self.page)
+        self.assertNotIn("VIEW DETAILS", self.page)
+        self.assertNotIn("BOOK NOW", self.page)
+        self.assertNotIn("MENU", self.page)
+        chamber = self.page[self.page.index('class="local-utility-chamber"'):self.page.index("</section>", self.page.index('class="local-utility-chamber"'))]
+        self.assertNotIn("<a ", chamber)
+
+    def test_google_attribution_is_plain_visible_chamber_text_and_photos_are_deliberately_disabled(self):
+        self.assertIn('data-local-utility-attribution translate="no" hidden', self.page)
+        self.assertNotIn('data-local-utility-attribution href=', self.page)
+        panel = self.machine["loveMyLocalsConfig"]["utilityPanel"]
+        self.assertFalse(panel["eat"]["photosEnabled"])
+        css = (ROOT / "static" / "video-machine.css").read_text(encoding="utf-8")
+        self.assertIn(".local-utility-attribution", css)
+        self.assertIn("font:400 12px", css)
+        self.assertIn(".local-utility-pagination[hidden]{display:none!important}", css)
+
+    def test_explore_youtube_discovery_and_mechanics_remain_separate(self):
+        self.assertEqual(self.machine["customerConfig"]["primaryAction"]["destinationURL"], "https://www.visitgippsland.com.au/")
+        discovery = (ROOT / "src" / "aggits_video_factory" / "love_my_locals.py").read_text(encoding="utf-8")
+        self.assertIn("def real_estate_exclusion_reason", discovery)
+        self.assertNotIn("google-places-new", discovery)
+        for name in ("single-reel-engine.js", "machine-mechanics-core.js"):
+            self.assertNotIn("google-places", (ROOT / "static" / name).read_text(encoding="utf-8"))
 
 
 if __name__ == "__main__":

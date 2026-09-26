@@ -17,6 +17,7 @@ PUBLIC_BASE_URL = f"https://{GITHUB_OWNER.lower()}.github.io/{GITHUB_REPOSITORY}
 DELIVERY_ENDPOINT = "https://aggits-video-jukebox.andrewharris501.workers.dev/api/deliveries"
 CAMPAIGN_DELIVERY_ENDPOINT = "https://aggits-video-jukebox.andrewharris501.workers.dev/api/campaign-deliveries"
 BANJO_SUBMISSION_ENDPOINT = "https://aggits-video-jukebox.andrewharris501.workers.dev/api/banjo/submissions"
+LOVE_MY_LOCALS_EAT_ENDPOINT = "https://aggits-video-jukebox.andrewharris501.workers.dev/api/love-my-locals/eat"
 MAX_VIDEOS = 30
 MAX_BANJO_VIDEOS = 40
 MAX_CHANNEL_MASTER_VIDEOS = 50

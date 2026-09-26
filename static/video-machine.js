@@ -63,6 +63,7 @@ if (machine) {
   const localUtilityPrevious = machine.querySelector('[data-local-utility-previous]');
   const localUtilityNext = machine.querySelector('[data-local-utility-next]');
   const localUtilityDots = machine.querySelector('[data-local-utility-dots]');
+  const localUtilityAttribution = machine.querySelector('[data-local-utility-attribution]');
   const localUtilityNotice = machine.querySelector('[data-local-utility-notice]');
   const customerLogo = machine.querySelector('[data-customer-logo]');
   const customerMonogram = machine.querySelector('[data-customer-monogram]');
@@ -557,12 +558,22 @@ if (machine) {
       card.className = 'local-utility-card';
       card.setAttribute('role', 'listitem');
       card.dataset.fixture = String(Boolean(item.fixture));
-      const fixtureBadge = document.createElement('small');
-      fixtureBadge.className = 'local-utility-card-fixture';
-      fixtureBadge.textContent = 'TEST DATA';
+      if (!item.image && activeLocalUtility === 'eat' && !item.fixture) {
+        const placeholder = document.createElement('div');
+        placeholder.className = 'local-utility-card-image-placeholder';
+        placeholder.textContent = 'LOCAL PLACE';
+        placeholder.setAttribute('aria-hidden', 'true');
+        card.append(placeholder);
+      }
+      if (item.fixture) {
+        const fixtureBadge = document.createElement('small');
+        fixtureBadge.className = 'local-utility-card-fixture';
+        fixtureBadge.textContent = 'TEST DATA';
+        card.append(fixtureBadge);
+      }
       const name = document.createElement('h3');
       name.textContent = item.name;
-      card.append(fixtureBadge, name);
+      card.append(name);
       appendUtilityLine(card, 'local-utility-card-category', item.category);
       appendUtilityLine(card, 'local-utility-card-date', [item.date, item.time].filter(Boolean).join(' • '));
       appendUtilityLine(card, 'local-utility-card-price', item.price);
@@ -572,6 +583,7 @@ if (machine) {
         item.carSpaces && `${item.carSpaces} CAR`,
       ].filter(Boolean).join(' • '));
       appendUtilityLine(card, 'local-utility-card-locality', item.locality);
+      appendUtilityLine(card, 'local-utility-card-address', item.address);
       appendUtilityLine(card, 'local-utility-card-description', item.description);
       if (item.rating) appendUtilityLine(
         card, 'local-utility-card-rating', `★ ${item.rating}${item.reviewCount ? ` (${item.reviewCount})` : ''}`,
@@ -588,6 +600,8 @@ if (machine) {
     }
     if (localUtilityPrevious) localUtilityPrevious.disabled = localUtilityPage === 0;
     if (localUtilityNext) localUtilityNext.disabled = localUtilityPage >= pageCount - 1;
+    const pagination = localUtilityPrevious?.closest('.local-utility-pagination');
+    if (pagination) pagination.hidden = items.length === 0;
   }
 
   function renderLocalUtility(data) {
@@ -598,11 +612,24 @@ if (machine) {
     if (localUtilityHeadline) localUtilityHeadline.textContent = data.headline;
     if (localUtilityKicker) localUtilityKicker.textContent = data.kicker;
     if (localUtilityNotice) localUtilityNotice.textContent = data.notice;
+    if (localUtilityAttribution) {
+      localUtilityAttribution.textContent = data.attribution;
+      localUtilityAttribution.hidden = !data.attribution;
+    }
     renderLocalUtilityMarket(data);
     renderLocalUtilityPage();
     winnerTitle.textContent = `${data.title} IN ${String(data.location?.name || machineIdentity).toUpperCase()}`;
     contentMeta.textContent = data.kicker;
     contentDescription.textContent = data.summary;
+  }
+
+  function renderLocalUtilityUnavailable(type) {
+    const title = type === 'eat' ? 'EAT' : String(type || 'LOCAL INFORMATION').toUpperCase();
+    renderLocalUtility({
+      title, icon: type === 'eat' ? '🍴' : '', headline: 'LOCAL EATING INFORMATION IS TEMPORARILY UNAVAILABLE.',
+      kicker: '', summary: 'Live local information could not be retrieved. Please try again later.',
+      location: localUtilityConfig?.location || {}, notice: '', attribution: '', items: [],
+    });
   }
 
   async function openLocalUtility(type) {
@@ -628,7 +655,15 @@ if (machine) {
       setState('UTILITY_READY', `${data.title} information is open. Back to Video restores ${titleOnly(current)}.`);
       localUtilityBack?.focus();
     } catch {
-      status.textContent = 'This local utility fixture is unavailable.';
+      activeLocalUtility = type;
+      localUtilityPage = 0;
+      machine.dataset.utilityMode = type;
+      localUtilityChamber.hidden = false;
+      localUtilityChamber.setAttribute('aria-hidden', 'false');
+      updateLocalUtilitySelection(type);
+      renderLocalUtilityUnavailable(type);
+      setState('UTILITY_UNAVAILABLE', 'Local eating information is temporarily unavailable. Back to Video restores the current discovery.');
+      localUtilityBack?.focus();
     }
   }
 

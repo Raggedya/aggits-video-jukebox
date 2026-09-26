@@ -12,7 +12,13 @@ import qrcode
 from PIL import Image, ImageDraw, ImageFont
 from qrcode.constants import ERROR_CORRECT_H
 
-from .config import BANJO_SUBMISSION_ENDPOINT, BRAND_NAME, PUBLIC_BASE_URL, resource_path
+from .config import (
+    BANJO_SUBMISSION_ENDPOINT,
+    BRAND_NAME,
+    LOVE_MY_LOCALS_EAT_ENDPOINT,
+    PUBLIC_BASE_URL,
+    resource_path,
+)
 from .banjo import BANJO_TITLE, validate_sponsor_logo, validate_sponsor_mp4, verify_banjo_character
 from .models import Project, ProjectType, project_primary_cta
 from .love_my_locals_utilities import build_development_utility_fixtures, fixture_provider_metadata
@@ -395,6 +401,7 @@ def build_project_site(project: Project, destination: Path) -> Path:
             '<span data-local-utility-dots aria-hidden="true"></span>'
             '<button type="button" data-local-utility-next aria-label="Next utility page">›</button>'
             '</nav>'
+            '<p class="local-utility-attribution" data-local-utility-attribution translate="no" hidden></p>'
             '<p class="local-utility-fixture-notice" data-local-utility-notice></p>'
             '</section>'
             if project.project_type is ProjectType.LOVE_MY_LOCALS else ""
@@ -700,6 +707,7 @@ def build_project_site(project: Project, destination: Path) -> Path:
         }
     if project.project_type is ProjectType.LOVE_MY_LOCALS and project.love_my_locals_config:
         locals_config = project.love_my_locals_config
+        live_eat = locals_config.utility_data_mode == "live"
         payload["loveMyLocalsConfig"] = {
             "locations": list(locals_config.locations),
             "resolvedGeography": locals_config.resolved_geography,
@@ -709,10 +717,15 @@ def build_project_site(project: Project, destination: Path) -> Path:
             "brandTeal": "#00C7CC",
             "exploreUrl": locals_config.explore_url or "",
             "utilityPanel": {
-                **fixture_provider_metadata(),
+                **fixture_provider_metadata(
+                    live_eat=live_eat,
+                    eat_endpoint=LOVE_MY_LOCALS_EAT_ENDPOINT,
+                    project_slug=project.slug,
+                ),
                 "enabled": dict(locals_config.utility_enabled),
                 "data": build_development_utility_fixtures(
                     locals_config.locations, locals_config.resolved_geography,
+                    include_eat=not live_eat,
                 ),
             },
         }

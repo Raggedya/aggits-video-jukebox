@@ -107,6 +107,8 @@ _BASE_FIXTURES: dict[str, dict[str, Any]] = {
 def build_development_utility_fixtures(
     locations: Iterable[str],
     resolved_geography: str,
+    *,
+    include_eat: bool = True,
 ) -> dict[str, dict[str, Any]]:
     """Normalised fixture-provider output for the Love My Locals utility service.
 
@@ -120,6 +122,8 @@ def build_development_utility_fixtures(
     country = geography_parts[-1] if len(geography_parts) > 1 else "TEST COUNTRY"
     location = {"name": location_name, "state": state, "country": country}
     bundle = deepcopy(_BASE_FIXTURES)
+    if not include_eat:
+        bundle.pop("eat", None)
     for utility_type, data in bundle.items():
         data.update({
             "schemaVersion": 1,
@@ -136,12 +140,21 @@ def build_development_utility_fixtures(
     return bundle
 
 
-def fixture_provider_metadata() -> dict[str, Any]:
+def fixture_provider_metadata(*, live_eat: bool = False, eat_endpoint: str = "", project_slug: str = "") -> dict[str, Any]:
     return {
-        "provider": UTILITY_FIXTURE_SOURCE,
-        "environment": "development",
-        "notice": UTILITY_FIXTURE_NOTICE,
-        "liveDataConnected": False,
+        "provider": "google-places-new" if live_eat else UTILITY_FIXTURE_SOURCE,
+        "environment": "production" if live_eat else "development",
+        "notice": "" if live_eat else UTILITY_FIXTURE_NOTICE,
+        "liveDataConnected": live_eat,
+        "eat": {
+            "provider": "google-places-new" if live_eat else UTILITY_FIXTURE_SOURCE,
+            "mode": "live" if live_eat else "development-fixture",
+            "endpoint": eat_endpoint if live_eat else "",
+            "projectSlug": project_slug if live_eat else "",
+            "attribution": "Google Maps" if live_eat else "",
+            "photosEnabled": False,
+            "cacheStrategy": "page-session-only" if live_eat else "fixture",
+        },
         "maxItemsPerUtility": 9,
         "itemsPerPage": 3,
     }
