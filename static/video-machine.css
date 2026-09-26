@@ -159,8 +159,8 @@ button:focus-visible,a:focus-visible{outline:3px solid #fff0b3;outline-offset:3p
 .music-machine[data-project-type="white_label"] .customer-backdrop::after{background:linear-gradient(180deg,transparent,rgba(0,0,0,.32) 52%,rgba(0,0,0,.72))}
 .music-machine[data-project-type="white_label"] .experience-frame{background:linear-gradient(180deg,var(--theme-primary),var(--theme-secondary) 56%,#010202)}
 .music-machine[data-project-type="white_label"] .experience-frame::before{background:radial-gradient(ellipse at 50% 2%,color-mix(in srgb,var(--theme-accent) 20%,transparent),transparent 34%)}
-.music-machine[data-project-type="white_label"] .white-label-customer-logo{position:absolute;left:50%;top:5px;z-index:4;display:grid;place-items:center;width:82%;height:38px;pointer-events:none;transform:translateX(-50%)}
-.music-machine[data-project-type="white_label"] .white-label-customer-logo img{display:block;width:100%;height:100%;max-width:100%;max-height:100%;object-fit:contain;object-position:center;filter:drop-shadow(0 2px 2px #000);user-select:none}
+.music-machine[data-project-type="white_label"] .white-label-customer-logo{position:absolute;left:50%;top:5px;z-index:4;display:grid;place-items:center;width:82%;height:38px;overflow:visible;pointer-events:none;transform:translateX(-50%)}
+.music-machine[data-project-type="white_label"] .white-label-customer-logo img{display:block;width:auto;height:auto;max-width:var(--white-label-logo-width,70%);max-height:var(--white-label-logo-height,72%);object-fit:contain;object-position:center;transform:translateY(var(--white-label-logo-y,0));filter:drop-shadow(0 2px 2px #000);user-select:none}
 .music-machine[data-project-type="white_label"] .customer-identity{min-height:clamp(68px,12vw,88px);margin-top:48px;background:linear-gradient(180deg,var(--theme-primary),var(--theme-secondary) 78%)}
 .music-machine[data-project-type="white_label"] .customer-identity-subtitle{display:none}
 .music-machine[data-project-type="white_label"] .channel-master-header-ticker{position:absolute;z-index:3;inset:0;display:flex;align-items:center;overflow:hidden;color:#f3ddb0;opacity:0;transition:opacity .55s ease}

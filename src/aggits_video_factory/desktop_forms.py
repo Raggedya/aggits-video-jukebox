@@ -12,7 +12,7 @@ from .models import (
     BusinessConfig, ChannelMasterConfig, MusicConfig, PrimaryCta, PrimaryCtaType, Project, ProjectType,
     TourismConfig, WhiteLabelConfig, project_primary_cta, utc_now,
 )
-from .white_label import inspect_white_label_logo
+from .white_label import prepare_white_label_logo, validate_logo_adjustments
 from .youtube_api import YouTubeClient
 
 
@@ -132,6 +132,9 @@ class ProjectFormValues:
     custom_accent: str = "#6D80AF"
     contact_url: str = ""
     custom_logo_path: str = ""
+    logo_background_removal: str = "auto"
+    logo_scale_percent: int = 100
+    logo_vertical_position: int = 0
 
     def comparable(self) -> tuple[object, ...]:
         return (
@@ -160,6 +163,9 @@ class ProjectFormValues:
             self.custom_accent,
             self.contact_url,
             self.custom_logo_path,
+            self.logo_background_removal,
+            int(self.logo_scale_percent),
+            int(self.logo_vertical_position),
         )
 
 
@@ -413,15 +419,32 @@ def validate_project_form(values: ProjectFormValues, project_type: ProjectType |
                 if not logo_path:
                     raise FormValidationError("custom_logo", "Please upload a logo before saving this White Label project.")
                 try:
-                    details = inspect_white_label_logo(Path(logo_path))
+                    mode, scale, position = validate_logo_adjustments(
+                        values.logo_background_removal,
+                        values.logo_scale_percent,
+                        values.logo_vertical_position,
+                    )
+                    prepared = prepare_white_label_logo(Path(logo_path), mode)
                 except ValueError as error:
                     raise FormValidationError("custom_logo", str(error)) from error
                 white_label_config = WhiteLabelConfig(
-                    logo_asset_path=str(details.source),
-                    original_filename=details.source.name,
-                    media_type=details.media_type,
-                    width=details.width,
-                    height=details.height,
+                    logo_asset_path=logo_path,
+                    original_logo_path=logo_path,
+                    original_filename=Path(logo_path).name,
+                    media_type="image/png",
+                    width=prepared.image.width,
+                    height=prepared.image.height,
+                    original_width=prepared.original_width,
+                    original_height=prepared.original_height,
+                    background_removal=mode,
+                    background_removal_status=prepared.status,
+                    background_confidence=prepared.confidence,
+                    scale_percent=scale,
+                    vertical_position=position,
+                    has_transparency=prepared.has_transparency,
+                    visible_bbox=prepared.visible_bbox,
+                    transparent_margin_percent=prepared.transparent_margin_percent,
+                    aspect_ratio=round(prepared.aspect_ratio, 6),
                 )
 
         # Project construction is the authoritative validation for shared URL
@@ -533,9 +556,24 @@ def project_to_form_values(project: Project) -> ProjectFormValues:
         custom_accent=channel_master.custom_accent or "#6D80AF" if channel_master else "#6D80AF",
         contact_url=channel_master.contact_url or "" if channel_master else "",
         custom_logo_path=(
-            project.white_label_config.logo_asset_path
+            project.white_label_config.original_logo_path or project.white_label_config.logo_asset_path
             if project.project_type is ProjectType.WHITE_LABEL and project.white_label_config
             else ""
+        ),
+        logo_background_removal=(
+            project.white_label_config.background_removal
+            if project.project_type is ProjectType.WHITE_LABEL and project.white_label_config
+            else "auto"
+        ),
+        logo_scale_percent=(
+            project.white_label_config.scale_percent
+            if project.project_type is ProjectType.WHITE_LABEL and project.white_label_config
+            else 100
+        ),
+        logo_vertical_position=(
+            project.white_label_config.vertical_position
+            if project.project_type is ProjectType.WHITE_LABEL and project.white_label_config
+            else 0
         ),
     )
 

@@ -67,7 +67,15 @@ from aggits_video_factory.store import ProjectStore, slugify
 from aggits_video_factory.supplementary_sources import retrieve_supplementary_sources
 from aggits_video_factory.youtube_api import YouTubeClient, YouTubeError, merge_video_selections
 from aggits_video_factory.video_editor import VideoEditError, VideoSelectionSession
-from aggits_video_factory.white_label import inspect_white_label_logo, materialize_white_label_logo
+from aggits_video_factory.white_label import (
+    MAX_LOGO_SCALE_PERCENT,
+    MAX_LOGO_VERTICAL_POSITION,
+    MIN_LOGO_SCALE_PERCENT,
+    MIN_LOGO_VERTICAL_POSITION,
+    inspect_white_label_logo,
+    materialize_white_label_logo,
+    prepare_white_label_logo,
+)
 
 
 INK = "#111318"
@@ -131,6 +139,9 @@ class ProjectForm(tk.Frame):
         self.custom_accent_var = tk.StringVar(value="#6D80AF")
         self.contact_url_var = tk.StringVar()
         self.custom_logo_var = tk.StringVar()
+        self.custom_logo_background_var = tk.StringVar(value="AUTO")
+        self.custom_logo_scale_var = tk.IntVar(value=100)
+        self.custom_logo_vertical_var = tk.IntVar(value=0)
         self._custom_logo_preview_image: ImageTk.PhotoImage | None = None
         self.field_widgets: dict[str, tk.Widget] = {}
         row = 1
@@ -327,28 +338,85 @@ class ProjectForm(tk.Frame):
         shell = tk.Frame(self, bg=PANEL)
         shell.grid(row=row, column=1, sticky="ew", padx=(0, 22), pady=5)
         shell.columnconfigure(0, weight=1)
-        self.custom_logo_preview = tk.Label(
-            shell, text="NO LOGO SELECTED", width=30, height=5, bg="#101217", fg=MUTED,
-            relief="flat", highlightbackground=DEEP_BRASS, highlightthickness=1,
-            font=("Segoe UI Semibold", 8), compound="center",
+        tk.Label(
+            shell, text="MACHINE HEADER PREVIEW", bg=PANEL, fg=MUTED,
+            anchor="w", font=("Segoe UI Semibold", 8),
+        ).grid(row=0, column=0, columnspan=2, sticky="ew", pady=(0, 4))
+        self.custom_logo_preview = tk.Canvas(
+            shell, width=320, height=92, bg="#07090c", bd=0,
+            highlightbackground="#806334", highlightthickness=1,
         )
-        self.custom_logo_preview.grid(row=0, column=0, columnspan=2, sticky="ew")
+        self.custom_logo_preview.grid(row=1, column=0, columnspan=2, sticky="ew")
+        self.custom_logo_preview.bind("<Configure>", lambda _event: self._update_white_label_logo_preview())
+        self.custom_logo_status = tk.Label(
+            shell, text="NO LOGO SELECTED", bg=PANEL, fg=MUTED,
+            anchor="w", justify="left", wraplength=320, font=("Segoe UI", 8),
+        )
+        self.custom_logo_status.grid(row=2, column=0, columnspan=2, sticky="ew", pady=(5, 0))
         self.custom_logo_button = tk.Button(
             shell, text="UPLOAD LOGO", command=self._choose_white_label_logo,
             bg=PANEL_2, fg=CREAM, activebackground="#303641", activeforeground=PAPER,
             relief="flat", bd=0, font=("Segoe UI Semibold", 8), padx=10, pady=7, cursor="hand2",
         )
-        self.custom_logo_button.grid(row=1, column=0, sticky="w", pady=(7, 0))
+        self.custom_logo_button.grid(row=3, column=0, sticky="w", pady=(7, 0))
         self.custom_logo_remove = tk.Button(
             shell, text="REMOVE LOGO", command=self._remove_white_label_logo,
             bg=PANEL_2, fg=CREAM, activebackground="#303641", activeforeground=PAPER,
             relief="flat", bd=0, font=("Segoe UI Semibold", 8), padx=10, pady=7, cursor="hand2",
         )
-        self.custom_logo_remove.grid(row=1, column=1, sticky="e", pady=(7, 0))
+        self.custom_logo_remove.grid(row=3, column=1, sticky="e", pady=(7, 0))
         tk.Label(
             shell, text="Transparent PNG recommended for best results.", bg=PANEL, fg=MUTED,
             anchor="w", font=("Segoe UI", 8),
-        ).grid(row=2, column=0, columnspan=2, sticky="ew", pady=(6, 0))
+        ).grid(row=4, column=0, columnspan=2, sticky="ew", pady=(6, 8))
+
+        controls = tk.Frame(shell, bg=PANEL)
+        controls.grid(row=5, column=0, columnspan=2, sticky="ew")
+        controls.columnconfigure(1, weight=1)
+        tk.Label(controls, text="Background Removal", bg=PANEL, fg=CREAM, font=("Segoe UI", 8)).grid(
+            row=0, column=0, sticky="w", padx=(0, 10), pady=3,
+        )
+        self.custom_logo_background_combo = ttk.Combobox(
+            controls, textvariable=self.custom_logo_background_var, values=("AUTO", "OFF"),
+            state="readonly", width=8, font=("Segoe UI", 8),
+        )
+        self.custom_logo_background_combo.grid(row=0, column=1, sticky="w", pady=3)
+        self.custom_logo_background_combo.bind(
+            "<<ComboboxSelected>>", lambda _event: self._update_white_label_logo_preview(),
+        )
+
+        tk.Label(controls, text="Logo Scale", bg=PANEL, fg=CREAM, font=("Segoe UI", 8)).grid(
+            row=1, column=0, sticky="w", padx=(0, 10), pady=3,
+        )
+        scale_controls = tk.Frame(controls, bg=PANEL)
+        scale_controls.grid(row=1, column=1, sticky="w", pady=3)
+        tk.Button(
+            scale_controls, text="−", command=lambda: self._adjust_white_label_scale(-5),
+            bg=PANEL_2, fg=CREAM, relief="flat", bd=0, width=3, cursor="hand2",
+        ).pack(side="left")
+        self.custom_logo_scale_label = tk.Label(
+            scale_controls, textvariable=self.custom_logo_scale_var, bg=PANEL, fg=PAPER,
+            width=5, font=("Segoe UI Semibold", 8),
+        )
+        self.custom_logo_scale_label.pack(side="left", padx=5)
+        tk.Label(scale_controls, text="%", bg=PANEL, fg=MUTED, font=("Segoe UI", 8)).pack(side="left", padx=(0, 5))
+        tk.Button(
+            scale_controls, text="+", command=lambda: self._adjust_white_label_scale(5),
+            bg=PANEL_2, fg=CREAM, relief="flat", bd=0, width=3, cursor="hand2",
+        ).pack(side="left")
+
+        tk.Label(controls, text="Vertical Position", bg=PANEL, fg=CREAM, font=("Segoe UI", 8)).grid(
+            row=2, column=0, sticky="w", padx=(0, 10), pady=3,
+        )
+        position_controls = tk.Frame(controls, bg=PANEL)
+        position_controls.grid(row=2, column=1, sticky="w", pady=3)
+        for label, value in (("↑", -1), ("RESET", 0), ("↓", 1)):
+            tk.Button(
+                position_controls, text=label,
+                command=lambda selected=value: self._adjust_white_label_vertical(selected),
+                bg=PANEL_2, fg=CREAM, relief="flat", bd=0,
+                font=("Segoe UI Semibold", 8), padx=7, pady=3, cursor="hand2",
+            ).pack(side="left", padx=(0, 4))
         self.field_widgets["custom_logo"] = self.custom_logo_button
         self._update_white_label_logo_preview()
         return row + 1
@@ -381,6 +449,19 @@ class ProjectForm(tk.Frame):
 
     def _remove_white_label_logo(self) -> None:
         self.custom_logo_var.set("")
+        self.custom_logo_background_var.set("AUTO")
+        self.custom_logo_scale_var.set(100)
+        self.custom_logo_vertical_var.set(0)
+        self._update_white_label_logo_preview()
+
+    def _adjust_white_label_scale(self, delta: int) -> None:
+        value = max(MIN_LOGO_SCALE_PERCENT, min(MAX_LOGO_SCALE_PERCENT, self.custom_logo_scale_var.get() + delta))
+        self.custom_logo_scale_var.set(value)
+        self._update_white_label_logo_preview()
+
+    def _adjust_white_label_vertical(self, direction: int) -> None:
+        value = 0 if direction == 0 else self.custom_logo_vertical_var.get() + direction
+        self.custom_logo_vertical_var.set(max(MIN_LOGO_VERTICAL_POSITION, min(MAX_LOGO_VERTICAL_POSITION, value)))
         self._update_white_label_logo_preview()
 
     def _update_white_label_logo_preview(self) -> None:
@@ -388,21 +469,41 @@ class ProjectForm(tk.Frame):
             return
         path = Path(self.custom_logo_var.get()) if self.custom_logo_var.get().strip() else None
         self._custom_logo_preview_image = None
+        self.custom_logo_preview.delete("all")
+        width = max(320, self.custom_logo_preview.winfo_width())
+        height = max(92, self.custom_logo_preview.winfo_height())
+        self.custom_logo_preview.create_rectangle(8, 7, width - 8, height - 7, outline="#806334", width=2)
+        self.custom_logo_preview.create_rectangle(13, 12, width - 13, height - 12, outline="#3b3020")
         if path and path.is_file():
             try:
-                with Image.open(path) as source:
-                    image = source.convert("RGBA")
-                    image.thumbnail((260, 76), Image.Resampling.LANCZOS)
-                    self._custom_logo_preview_image = ImageTk.PhotoImage(image, master=self)
-                self.custom_logo_preview.configure(
-                    image=self._custom_logo_preview_image, text=path.name, compound="top", fg=CREAM,
+                prepared = prepare_white_label_logo(path, self.custom_logo_background_var.get().lower())
+                image = prepared.image.copy()
+                scale = self.custom_logo_scale_var.get() / 100
+                image.thumbnail((max(1, round(210 * scale)), max(1, round(58 * scale))), Image.Resampling.LANCZOS)
+                self._custom_logo_preview_image = ImageTk.PhotoImage(image, master=self)
+                self.custom_logo_preview.create_image(
+                    width // 2, height // 2 + self.custom_logo_vertical_var.get() * 2,
+                    image=self._custom_logo_preview_image, anchor="center",
+                )
+                status_messages = {
+                    "removed": "Background removed · artwork trimmed · transparent PNG",
+                    "existing_transparency": "Existing transparency preserved · artwork trimmed",
+                    "not_confident": "AUTO could not confidently remove the background. Original preserved.",
+                    "off": "Background removal OFF · original preserved.",
+                }
+                self.custom_logo_status.configure(
+                    text=f"{status_messages[prepared.status]}  Scale {self.custom_logo_scale_var.get()}%.",
+                    fg=ERROR if prepared.status == "not_confident" else SUCCESS,
                 )
                 self.custom_logo_button.configure(text="CHANGE LOGO")
                 self.custom_logo_remove.configure(state="normal")
                 return
-            except OSError:
-                pass
-        self.custom_logo_preview.configure(image="", text="NO LOGO SELECTED", compound="center", fg=MUTED)
+            except (OSError, ValueError):
+                self.custom_logo_status.configure(text="The selected logo cannot be previewed.", fg=ERROR)
+        self.custom_logo_preview.create_text(
+            width // 2, height // 2, text="NO LOGO SELECTED", fill=MUTED, font=("Segoe UI Semibold", 8),
+        )
+        self.custom_logo_status.configure(text="NO LOGO SELECTED", fg=MUTED)
         self.custom_logo_button.configure(text="UPLOAD LOGO")
         self.custom_logo_remove.configure(state="disabled")
 
@@ -540,6 +641,9 @@ class ProjectForm(tk.Frame):
             custom_accent=self.custom_accent_var.get(),
             contact_url=self.contact_url_var.get(),
             custom_logo_path=self.custom_logo_var.get(),
+            logo_background_removal=self.custom_logo_background_var.get().lower(),
+            logo_scale_percent=self.custom_logo_scale_var.get(),
+            logo_vertical_position=self.custom_logo_vertical_var.get(),
         )
 
     def set_values(self, values: ProjectFormValues) -> None:
@@ -577,6 +681,9 @@ class ProjectForm(tk.Frame):
         self.custom_accent_var.set(values.custom_accent)
         self.contact_url_var.set(values.contact_url)
         self.custom_logo_var.set(values.custom_logo_path)
+        self.custom_logo_background_var.set(values.logo_background_removal.upper())
+        self.custom_logo_scale_var.set(values.logo_scale_percent)
+        self.custom_logo_vertical_var.set(values.logo_vertical_position)
         self.story_text.delete("1.0", "end")
         self.story_text.insert("1.0", values.story_text)
         self._story_changed()
@@ -637,6 +744,9 @@ class ProjectForm(tk.Frame):
             palette=str(self._baseline[20]), custom_primary=str(self._baseline[21]),
             custom_accent=str(self._baseline[22]), contact_url=str(self._baseline[23]),
             custom_logo_path=str(self._baseline[24]),
+            logo_background_removal=str(self._baseline[25]),
+            logo_scale_percent=int(self._baseline[26]),
+            logo_vertical_position=int(self._baseline[27]),
         )
         self.set_values(values)
         self.mark_clean()
@@ -1801,9 +1911,23 @@ class Factory(tk.Tk):
                     existing.banjo_config if existing else None,
                 )
             if project_type is ProjectType.WHITE_LABEL:
+                logo_source = values.white_label_config.original_logo_path or values.white_label_config.logo_asset_path
+                retained_filename = None
+                if existing and existing.white_label_config:
+                    previous_source = existing.white_label_config.original_logo_path or existing.white_label_config.logo_asset_path
+                    try:
+                        same_upload = Path(logo_source).resolve() == Path(previous_source).resolve()
+                    except OSError:
+                        same_upload = False
+                    if same_upload:
+                        retained_filename = existing.white_label_config.original_filename
                 white_label_config = materialize_white_label_logo(
-                    values.white_label_config.logo_asset_path,
+                    logo_source,
                     project_dir,
+                    background_removal=values.white_label_config.background_removal,
+                    scale_percent=values.white_label_config.scale_percent,
+                    vertical_position=values.white_label_config.vertical_position,
+                    original_filename=retained_filename,
                 )
             project = assemble_reviewed_project(
                 project_type=project_type,

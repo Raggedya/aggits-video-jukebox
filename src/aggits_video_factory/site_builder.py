@@ -189,10 +189,17 @@ def build_project_site(project: Project, destination: Path) -> Path:
         shutil.rmtree(assets)
     shutil.copytree(resource_path("static"), assets)
     white_label_logo_public_url = ""
+    white_label_logo_style = ""
     if project.project_type is ProjectType.WHITE_LABEL:
         if not project.white_label_config:
             raise ValueError("Please upload a logo before generating this White Label project.")
         white_label_logo_public_url = package_white_label_logo(project.white_label_config, assets)
+        logo_scale = project.white_label_config.scale_percent / 100
+        white_label_logo_style = (
+            f"--white-label-logo-width:{70 * logo_scale:.1f}%;"
+            f"--white-label-logo-height:{72 * logo_scale:.1f}%;"
+            f"--white-label-logo-y:{project.white_label_config.vertical_position * 2}px"
+        )
     video_machine_asset_version = hashlib.sha256(
         (assets / "video-machine.js").read_bytes()
     ).hexdigest()[:12]
@@ -316,7 +323,8 @@ def build_project_site(project: Project, destination: Path) -> Path:
         "{{MACHINE_THEME_ATTRIBUTE}}": machine_theme_attribute,
         "{{CHANNEL_MASTER_MAKER_MARK_MARKUP}}": (
             (
-                '<div class="white-label-customer-logo" data-white-label-customer-logo>'
+                '<div class="white-label-customer-logo" data-white-label-customer-logo '
+                f'style="{white_label_logo_style}">'
                 f'<img src="{html.escape(white_label_logo_public_url, quote=True)}" '
                 f'alt="{html.escape(project.title, quote=True)} logo" '
                 f'width="{project.white_label_config.width}" height="{project.white_label_config.height}" '
@@ -596,6 +604,17 @@ def build_project_site(project: Project, destination: Path) -> Path:
             "mediaType": project.white_label_config.media_type,
             "width": project.white_label_config.width,
             "height": project.white_label_config.height,
+            "originalWidth": project.white_label_config.original_width,
+            "originalHeight": project.white_label_config.original_height,
+            "backgroundRemoval": project.white_label_config.background_removal,
+            "backgroundRemovalStatus": project.white_label_config.background_removal_status,
+            "backgroundConfidence": project.white_label_config.background_confidence,
+            "scalePercent": project.white_label_config.scale_percent,
+            "verticalPosition": project.white_label_config.vertical_position,
+            "hasTransparency": project.white_label_config.has_transparency,
+            "visibleBounds": list(project.white_label_config.visible_bbox) if project.white_label_config.visible_bbox else None,
+            "transparentMarginPercent": project.white_label_config.transparent_margin_percent,
+            "aspectRatio": project.white_label_config.aspect_ratio,
             "poweredBy": "CRISPY BITS",
         }
     (destination / "machine.json").write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")

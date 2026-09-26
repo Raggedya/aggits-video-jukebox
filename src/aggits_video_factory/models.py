@@ -463,46 +463,114 @@ class WhiteLabelConfig:
     """Project-private customer branding layered over Channel Master."""
 
     logo_asset_path: str
+    original_logo_path: str = ""
     original_filename: str = ""
     media_type: str = ""
     width: int = 0
     height: int = 0
+    original_width: int = 0
+    original_height: int = 0
+    background_removal: str = "auto"
+    background_removal_status: str = "legacy_unprocessed"
+    background_confidence: float = 0.0
+    scale_percent: int = 100
+    vertical_position: int = 0
+    has_transparency: bool = False
+    visible_bbox: tuple[int, int, int, int] | None = None
+    transparent_margin_percent: float = 0.0
+    aspect_ratio: float = 0.0
     extra_fields: dict[str, Any] = field(default_factory=dict, repr=False)
 
     def __post_init__(self) -> None:
         self.logo_asset_path = str(self.logo_asset_path or "").strip()
         if not self.logo_asset_path:
             raise ProjectValidationError("Please upload a logo before saving this White Label project.")
+        self.original_logo_path = str(self.original_logo_path or self.logo_asset_path).strip()
         self.original_filename = Path(str(self.original_filename or "")).name
         self.media_type = str(self.media_type or "").strip().lower()
         self.width = int(self.width or 0)
         self.height = int(self.height or 0)
-        if self.width < 0 or self.height < 0:
+        self.original_width = int(self.original_width or self.width or 0)
+        self.original_height = int(self.original_height or self.height or 0)
+        self.background_removal = str(self.background_removal or "auto").strip().lower()
+        self.background_removal_status = str(self.background_removal_status or "legacy_unprocessed").strip().lower()
+        self.background_confidence = float(self.background_confidence or 0.0)
+        self.scale_percent = int(self.scale_percent or 100)
+        self.vertical_position = int(self.vertical_position or 0)
+        self.has_transparency = bool(self.has_transparency)
+        if self.visible_bbox is not None:
+            self.visible_bbox = tuple(int(value) for value in self.visible_bbox)
+            if len(self.visible_bbox) != 4:
+                raise ProjectValidationError("White Label visible artwork bounds are invalid.")
+        self.transparent_margin_percent = float(self.transparent_margin_percent or 0.0)
+        self.aspect_ratio = float(self.aspect_ratio or (self.width / self.height if self.width and self.height else 0.0))
+        if self.width < 0 or self.height < 0 or self.original_width < 0 or self.original_height < 0:
             raise ProjectValidationError("White Label logo dimensions cannot be negative.")
+        if self.background_removal not in {"auto", "off"}:
+            raise ProjectValidationError("White Label background removal must be AUTO or OFF.")
+        if not 60 <= self.scale_percent <= 120:
+            raise ProjectValidationError("White Label logo scale must be between 60% and 120%.")
+        if not -2 <= self.vertical_position <= 2:
+            raise ProjectValidationError("White Label vertical position is outside the header safe area.")
+        if not 0.0 <= self.background_confidence <= 1.0:
+            raise ProjectValidationError("White Label background confidence is invalid.")
+        if not 0.0 <= self.transparent_margin_percent <= 100.0:
+            raise ProjectValidationError("White Label transparent margin percentage is invalid.")
 
     def to_dict(self) -> dict[str, Any]:
         return {
             **self.extra_fields,
             "logo_asset_path": self.logo_asset_path,
+            "original_logo_path": self.original_logo_path,
             "original_filename": self.original_filename,
             "media_type": self.media_type,
             "width": self.width,
             "height": self.height,
+            "original_width": self.original_width,
+            "original_height": self.original_height,
+            "background_removal": self.background_removal,
+            "background_removal_status": self.background_removal_status,
+            "background_confidence": self.background_confidence,
+            "scale_percent": self.scale_percent,
+            "vertical_position": self.vertical_position,
+            "has_transparency": self.has_transparency,
+            "visible_bbox": list(self.visible_bbox) if self.visible_bbox is not None else None,
+            "transparent_margin_percent": self.transparent_margin_percent,
+            "aspect_ratio": self.aspect_ratio,
         }
 
     @classmethod
     def from_dict(cls, value: dict[str, Any] | None) -> "WhiteLabelConfig":
         source = dict(value or {})
         known = {
-            "logo_asset_path", "logoAssetPath", "original_filename", "originalFilename",
-            "media_type", "mediaType", "width", "height",
+            "logo_asset_path", "logoAssetPath", "original_logo_path", "originalLogoPath",
+            "original_filename", "originalFilename", "media_type", "mediaType", "width", "height",
+            "original_width", "originalWidth", "original_height", "originalHeight",
+            "background_removal", "backgroundRemoval", "background_removal_status", "backgroundRemovalStatus",
+            "background_confidence", "backgroundConfidence", "scale_percent", "scalePercent",
+            "vertical_position", "verticalPosition", "has_transparency", "hasTransparency",
+            "visible_bbox", "visibleBBox", "transparent_margin_percent", "transparentMarginPercent",
+            "aspect_ratio", "aspectRatio",
         }
+        visible_bbox = source.get("visible_bbox", source.get("visibleBBox"))
         return cls(
             logo_asset_path=str(source.get("logo_asset_path", source.get("logoAssetPath", "")) or ""),
+            original_logo_path=str(source.get("original_logo_path", source.get("originalLogoPath", "")) or ""),
             original_filename=str(source.get("original_filename", source.get("originalFilename", "")) or ""),
             media_type=str(source.get("media_type", source.get("mediaType", "")) or ""),
             width=int(source.get("width") or 0),
             height=int(source.get("height") or 0),
+            original_width=int(source.get("original_width", source.get("originalWidth")) or 0),
+            original_height=int(source.get("original_height", source.get("originalHeight")) or 0),
+            background_removal=str(source.get("background_removal", source.get("backgroundRemoval", "auto")) or "auto"),
+            background_removal_status=str(source.get("background_removal_status", source.get("backgroundRemovalStatus", "legacy_unprocessed")) or "legacy_unprocessed"),
+            background_confidence=float(source.get("background_confidence", source.get("backgroundConfidence")) or 0.0),
+            scale_percent=int(source.get("scale_percent", source.get("scalePercent")) or 100),
+            vertical_position=int(source.get("vertical_position", source.get("verticalPosition")) or 0),
+            has_transparency=bool(source.get("has_transparency", source.get("hasTransparency", False))),
+            visible_bbox=tuple(visible_bbox) if isinstance(visible_bbox, (list, tuple)) else None,
+            transparent_margin_percent=float(source.get("transparent_margin_percent", source.get("transparentMarginPercent")) or 0.0),
+            aspect_ratio=float(source.get("aspect_ratio", source.get("aspectRatio")) or 0.0),
             extra_fields=_extra_fields(source, known),
         )
 
