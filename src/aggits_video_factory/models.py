@@ -825,6 +825,10 @@ class LoveMyLocalsCandidate:
     matched_location: str = ""
     match_basis: list[str] = field(default_factory=list)
     relevance_score: int = 0
+    content_type: str = "OTHER / RANDOM LOCAL"
+    local_texture_score: int = 0
+    suppression_flags: list[str] = field(default_factory=list)
+    qualification_reason: str = ""
     is_short: bool = False
     cta_type: PrimaryCtaType | str | None = None
     cta_url: str | None = None
@@ -837,11 +841,24 @@ class LoveMyLocalsCandidate:
         self.tags = [str(item).strip() for item in self.tags if str(item).strip()]
         self.matched_location = str(self.matched_location or "").strip()
         self.match_basis = list(dict.fromkeys(str(item).strip().lower() for item in self.match_basis if str(item).strip()))
-        if any(item not in {"title", "description", "tag"} for item in self.match_basis):
-            raise ProjectValidationError("Love My Locals match basis must be title, description or tag.")
+        if any(item not in {"title", "description", "tag", "channel"} for item in self.match_basis):
+            raise ProjectValidationError("Love My Locals match basis must be title, description, tag or channel.")
         self.relevance_score = int(self.relevance_score or 0)
         if self.relevance_score not in {1, 2, 3}:
             raise ProjectValidationError("Love My Locals relevance score must be 1, 2 or 3.")
+        allowed_content_types = {
+            "MUSIC / PERFORMANCE", "PEOPLE / INTERVIEWS", "NEWS", "HISTORY / ARCHIVE",
+            "COMMUNITY / CLUBS / SPORT", "BUSINESS / PUB / FOOD / MAKERS", "TOURISM",
+            "OTHER / RANDOM LOCAL",
+        }
+        self.content_type = str(self.content_type or "OTHER / RANDOM LOCAL").strip().upper()
+        if self.content_type not in allowed_content_types:
+            raise ProjectValidationError("Love My Locals content type is invalid.")
+        self.local_texture_score = max(0, min(100, int(self.local_texture_score or 0)))
+        self.suppression_flags = list(dict.fromkeys(
+            str(item).strip().lower()[:80] for item in self.suppression_flags if str(item).strip()
+        ))
+        self.qualification_reason = str(self.qualification_reason or "").strip()[:500]
         self.is_short = bool(self.is_short)
         self.active = bool(self.active)
         if self.cta_type in (None, ""):
@@ -867,6 +884,10 @@ class LoveMyLocalsCandidate:
             "matched_location": self.matched_location,
             "match_basis": list(self.match_basis),
             "relevance_score": self.relevance_score,
+            "content_type": self.content_type,
+            "local_texture_score": self.local_texture_score,
+            "suppression_flags": list(self.suppression_flags),
+            "qualification_reason": self.qualification_reason,
             "is_short": self.is_short,
             "cta_type": self.cta_type.value if self.cta_type else None,
             "cta_url": self.cta_url,
@@ -885,6 +906,10 @@ class LoveMyLocalsCandidate:
             matched_location=str(value.get("matched_location") or value.get("matchedLocation") or ""),
             match_basis=[str(item) for item in (value.get("match_basis", value.get("matchBasis", [])) or [])],
             relevance_score=int(value.get("relevance_score") or value.get("relevanceScore") or 0),
+            content_type=str(value.get("content_type") or value.get("contentType") or "OTHER / RANDOM LOCAL"),
+            local_texture_score=int(value.get("local_texture_score") or value.get("localTextureScore") or 0),
+            suppression_flags=[str(item) for item in (value.get("suppression_flags", value.get("suppressionFlags", [])) or [])],
+            qualification_reason=str(value.get("qualification_reason") or value.get("qualificationReason") or ""),
             is_short=bool(value.get("is_short", value.get("isShort", False))),
             cta_type=value.get("cta_type", value.get("ctaType")),
             cta_url=value.get("cta_url", value.get("ctaUrl")),
@@ -898,10 +923,13 @@ class LoveMyLocalsConfig:
     resolved_geography: str = "Victoria, Australia"
     resolved_locations: list[str] = field(default_factory=list)
     include_shorts: bool = False
+    tourism_mode: str = "limited"
+    include_council_meetings: bool = False
     candidates: list[LoveMyLocalsCandidate] = field(default_factory=list)
     default_cta_type: PrimaryCtaType | str = PrimaryCtaType.VISIT_WEBSITE
     default_cta_url: str | None = None
     exclusion_diagnostics: list[dict[str, str]] = field(default_factory=list)
+    discovery_summary: dict[str, int] = field(default_factory=dict)
     last_search_at: str = ""
 
     def __post_init__(self) -> None:
@@ -919,6 +947,10 @@ class LoveMyLocalsConfig:
         if len(self.resolved_locations) != len(self.locations):
             raise ProjectValidationError("Love My Locals resolved locations do not match the nominated locations.")
         self.include_shorts = bool(self.include_shorts)
+        self.tourism_mode = str(self.tourism_mode or "limited").strip().lower()
+        if self.tourism_mode not in {"limited", "include"}:
+            raise ProjectValidationError("Love My Locals tourism discovery must be limited or include.")
+        self.include_council_meetings = bool(self.include_council_meetings)
         if any(not isinstance(item, LoveMyLocalsCandidate) for item in self.candidates):
             raise ProjectValidationError("Love My Locals candidates are invalid.")
         ids = [item.video.video_id for item in self.candidates]
@@ -945,6 +977,11 @@ class LoveMyLocalsConfig:
             if video_id and reason:
                 diagnostics.append({"video_id": video_id, "title": title, "reason": reason})
         self.exclusion_diagnostics = diagnostics
+        self.discovery_summary = {
+            str(key).strip()[:80]: max(0, int(value or 0))
+            for key, value in self.discovery_summary.items()
+            if str(key).strip()
+        }
         self.last_search_at = str(self.last_search_at or "")
 
     @property
@@ -961,10 +998,13 @@ class LoveMyLocalsConfig:
             "resolved_geography": self.resolved_geography,
             "resolved_locations": list(self.resolved_locations),
             "include_shorts": self.include_shorts,
+            "tourism_mode": self.tourism_mode,
+            "include_council_meetings": self.include_council_meetings,
             "candidates": [item.to_dict() for item in self.candidates],
             "default_cta_type": self.default_cta_type.value,
             "default_cta_url": self.default_cta_url,
             "exclusion_diagnostics": [dict(item) for item in self.exclusion_diagnostics],
+            "discovery_summary": dict(self.discovery_summary),
             "last_search_at": self.last_search_at,
         }
 
@@ -976,6 +1016,8 @@ class LoveMyLocalsConfig:
             resolved_geography=str(source.get("resolved_geography") or source.get("resolvedGeography") or "Victoria, Australia"),
             resolved_locations=[str(item) for item in (source.get("resolved_locations", source.get("resolvedLocations", [])) or [])],
             include_shorts=bool(source.get("include_shorts", source.get("includeShorts", False))),
+            tourism_mode=str(source.get("tourism_mode") or source.get("tourismMode") or "limited"),
+            include_council_meetings=bool(source.get("include_council_meetings", source.get("includeCouncilMeetings", False))),
             candidates=[LoveMyLocalsCandidate.from_dict(item) for item in (source.get("candidates") or []) if isinstance(item, dict)],
             default_cta_type=source.get("default_cta_type", source.get("defaultCtaType", PrimaryCtaType.VISIT_WEBSITE.value)),
             default_cta_url=source.get("default_cta_url", source.get("defaultCtaUrl")),
@@ -984,6 +1026,10 @@ class LoveMyLocalsConfig:
                 for item in (source.get("exclusion_diagnostics", source.get("exclusionDiagnostics", [])) or [])
                 if isinstance(item, dict)
             ],
+            discovery_summary={
+                str(key): int(value or 0)
+                for key, value in dict(source.get("discovery_summary") or source.get("discoverySummary") or {}).items()
+            },
             last_search_at=str(source.get("last_search_at") or source.get("lastSearchAt") or ""),
         )
 

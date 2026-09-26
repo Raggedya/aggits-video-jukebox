@@ -546,16 +546,11 @@ def build_project_site(project: Project, destination: Path) -> Path:
                     f"{item.display_title}. Discovered around {local_candidates[item.video_id].matched_location}."
                 ),
                 "metadata": (
-                    f"{item.channel_title} • {local_candidates[item.video_id].matched_location} • "
-                    f"{'+'.join(local_candidates[item.video_id].match_basis).upper()} MATCH"
+                    f"{item.channel_title} • Local Discovery • YouTube"
                 ),
                 "ctaLabel": local_candidates[item.video_id].cta_label,
                 "ctaURL": local_candidates[item.video_id].cta_url or "",
                 "ctaType": local_candidates[item.video_id].cta_type.value if local_candidates[item.video_id].cta_type else "",
-                "matchedLocation": local_candidates[item.video_id].matched_location,
-                "matchBasis": list(local_candidates[item.video_id].match_basis),
-                "relevanceScore": local_candidates[item.video_id].relevance_score,
-                "isShort": local_candidates[item.video_id].is_short,
             } if project.project_type is ProjectType.LOVE_MY_LOCALS else {})))
             for item in included_videos
         ],
@@ -662,8 +657,6 @@ def build_project_site(project: Project, destination: Path) -> Path:
             "resolvedGeography": locals_config.resolved_geography,
             "resolvedLocations": list(locals_config.resolved_locations),
             "includeShorts": locals_config.include_shorts,
-            "candidateCount": len(locals_config.candidates),
-            "selectedCount": len(locals_config.selected_videos),
             "logoAssetUrl": "assets/love-my-locals/love-my-locals-logo.png",
             "brandTeal": "#00C7CC",
         }

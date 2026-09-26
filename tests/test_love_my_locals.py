@@ -18,11 +18,16 @@ from aggits_video_factory.love_my_locals import (
     LoveMyLocalsFormValues,
     assemble_project,
     default_ticker,
+    discovery_queries_for_location,
+    discovery_quality_report,
+    council_meeting_suppression_reason,
+    local_texture_analysis,
     qualify_metadata,
     real_estate_exclusion_reason,
     remove_candidate,
     replace_candidate,
     resolved_locations,
+    tourism_suppression_flags,
     validate_form,
 )
 from aggits_video_factory.models import LoveMyLocalsConfig, PrimaryCtaType, Project, ProjectType
@@ -36,7 +41,8 @@ ROOT = Path(__file__).parents[1]
 
 def item(number: int, *, title: str = "Box Hill local story", description: str = "", tags=None,
          duration: str = "PT2M", privacy: str = "public", embeddable: bool = True,
-         channel: str | None = None) -> dict:
+         channel: str | None = None, channel_id: str | None = None,
+         published: str = "2026-01-01T00:00:00Z") -> dict:
     video_id = f"local{number:06d}"[:11]
     return {
         "id": video_id,
@@ -45,8 +51,8 @@ def item(number: int, *, title: str = "Box Hill local story", description: str =
             "description": description,
             "tags": list(tags or []),
             "channelTitle": channel or f"Local Channel {number % 20}",
-            "channelId": f"channel-{number % 20}",
-            "publishedAt": "2026-01-01T00:00:00Z",
+            "channelId": channel_id or f"channel-{number % 20}",
+            "publishedAt": published,
             "liveBroadcastContent": "none",
             "thumbnails": {"high": {"url": f"https://i.ytimg.com/vi/{video_id}/hqdefault.jpg", "width": 480, "height": 360}},
         },
@@ -59,10 +65,12 @@ class FakeClient:
     def __init__(self, results: list[dict] | None = None, error: Exception | None = None) -> None:
         self.results = list(results or [])
         self.error = error
+        self.queries: list[tuple[str, int]] = []
         from aggits_video_factory.youtube_api import YouTubeClient
         self._record = YouTubeClient("test-key")._video_record
 
     def search_video_items(self, query: str, maximum: int = 75) -> list[dict]:
+        self.queries.append((query, maximum))
         if self.error:
             raise self.error
         return list(self.results)
@@ -87,6 +95,10 @@ class LoveMyLocalsTests(unittest.TestCase):
         self.assertIn('"DEFAULT DESTINATION URL"', source)
         self.assertIn('text="SAVE"', source)
         self.assertIn('"SAVE LOVE MY LOCALS"', source)
+        self.assertIn("ADVANCED / DISCOVERY SETTINGS", source)
+        self.assertIn('text="REAL ESTATE: EXCLUDED"', source)
+        self.assertIn('text="INCLUDE FULL COUNCIL MEETINGS"', source)
+        self.assertIn("LOCAL TEXTURE:", source)
         self.assertIn("LoveMyLocalsDiscoveryService", source)
         self.assertNotIn("Love My Locals CSV", source)
 
@@ -118,6 +130,101 @@ class LoveMyLocalsTests(unittest.TestCase):
         self.assertEqual(qualify_metadata("Cafe", "At Box Hill", [], ["Box Hill"])[2], 2)
         self.assertEqual(qualify_metadata("Cafe", "", ["Box Hill"], ["Box Hill"])[2], 1)
         self.assertIsNone(qualify_metadata("Cafe", "Elsewhere", [], ["Box Hill"]))
+
+    def test_multi_query_basket_covers_local_texture_and_australian_vocabulary(self):
+        queries = discovery_queries_for_location("Bairnsdale", "Victoria, Australia")
+        joined = " ".join(queries).casefold()
+        self.assertGreaterEqual(len(queries), 10)
+        for term in (
+            "band", "local news", "old footage", "community group", "footy", "cricket",
+            "pub", "rsl", "cfa", "ses", "historical society", "neighbourhood house",
+            "funny", "local legend",
+        ):
+            self.assertIn(term, joined)
+        self.assertTrue(all("bairnsdale" in query.casefold() for query in queries))
+        self.assertTrue(all(len(query) < 500 for query in queries))
+
+        client = FakeClient([item(1)])
+        LoveMyLocalsDiscoveryService(client, rng=random.Random(1)).discover(["Box Hill"])
+        self.assertEqual([query for query, _maximum in client.queries], discovery_queries_for_location("Box Hill"))
+        self.assertTrue(all(maximum == 20 for _query, maximum in client.queries))
+
+    def test_channel_context_and_local_texture_are_independent_signals(self):
+        qualification = qualify_metadata(
+            "Live original song", "Recorded in the eastern suburbs", [], ["Box Hill"], "Box Hill Musicians",
+        )
+        self.assertEqual(qualification, ("Box Hill", ["channel"], 1))
+        score, content_type, evidence = local_texture_analysis(
+            "Local band live at the pub", "Interview with the singer after the gig", ["original song"], "Community Radio",
+        )
+        self.assertGreaterEqual(score, 12)
+        self.assertEqual(content_type, "MUSIC / PERFORMANCE")
+        self.assertIn("band", evidence)
+
+    def test_tourism_and_council_suppression_preserve_historical_exceptions(self):
+        self.assertIn("tourism:high", tourism_suppression_flags(
+            "Top 10 things to do in Box Hill", "Travel guide and tourist attractions", [], "Visit Box Hill Tourism",
+        ))
+        self.assertEqual(tourism_suppression_flags(
+            "Strange 1970s Box Hill tourism advertisement", "Historical archive footage", [], "Local History",
+        ), ["tourism:historical_context"])
+        self.assertEqual(council_meeting_suppression_reason(
+            "Box Hill Council Meeting livestream", "Ordinary meeting agenda", "Council Stream",
+        ), "council:administrative_meeting")
+        self.assertIsNone(council_meeting_suppression_reason(
+            "Box Hill local project opens", "A council-supported community story", "Local News",
+        ))
+
+    def test_old_local_content_is_welcome_and_council_meetings_default_off(self):
+        old_story = item(20, title="Box Hill local band live performance", published="2008-04-01T00:00:00Z")
+        meeting = item(21, title="Box Hill Council Meeting livestream", description="Ordinary council meeting agenda")
+        config = LoveMyLocalsDiscoveryService(FakeClient([old_story, meeting]), rng=random.Random(2)).discover(["Box Hill"])
+        self.assertEqual([candidate.video.video_id for candidate in config.candidates], [old_story["id"]])
+        self.assertEqual(config.candidates[0].video.published_at, "2008-04-01T00:00:00Z")
+        self.assertEqual(config.discovery_summary["council_meetings_excluded"], 1)
+
+        included = LoveMyLocalsDiscoveryService(FakeClient([old_story, meeting]), rng=random.Random(2)).discover(
+            ["Box Hill"], include_council_meetings=True,
+        )
+        council = next(candidate for candidate in included.candidates if candidate.video.video_id == meeting["id"])
+        self.assertIn("council:administrative_meeting", council.suppression_flags)
+
+    def test_channel_diversity_tourism_cap_and_search_again_randomness(self):
+        results = [
+            item(index, title=f"Box Hill local band performance {index}", channel="One Prolific Channel", channel_id="one-channel")
+            for index in range(12)
+        ]
+        results.extend(
+            item(100 + index, title=f"Box Hill community interview {index}", channel=f"Local Voice {index}", channel_id=f"voice-{index}")
+            for index in range(12)
+        )
+        results.extend(
+            item(200 + index, title=f"Box Hill top attractions travel guide {index}", description="Things to do and where to stay", channel=f"Visit Box Hill {index}", channel_id=f"tour-{index}")
+            for index in range(6)
+        )
+        first = LoveMyLocalsDiscoveryService(FakeClient(results), rng=random.Random(3)).discover(["Box Hill"], target=15)
+        second = LoveMyLocalsDiscoveryService(FakeClient(results), rng=random.Random(9)).discover(["Box Hill"], target=15)
+        active = [candidate for candidate in first.candidates if candidate.active]
+        self.assertLessEqual(sum(candidate.video.channel_id == "one-channel" for candidate in active), 3)
+        self.assertLessEqual(sum("tourism:high" in candidate.suppression_flags for candidate in active), 1)
+        self.assertGreater(first.discovery_summary["channel_diversity_removals"], 0)
+        self.assertNotEqual(
+            [candidate.video.video_id for candidate in first.candidates if candidate.active],
+            [candidate.video.video_id for candidate in second.candidates if candidate.active],
+        )
+
+    def test_three_locations_receive_representation_when_qualified_content_exists(self):
+        results = []
+        for base, place in enumerate(("Box Hill", "Box Hill North", "Box Hill South"), start=1):
+            results.extend(
+                item(base * 100 + index, title=f"{place} community story {index}", channel_id=f"{base}-{index}")
+                for index in range(8)
+            )
+        config = LoveMyLocalsDiscoveryService(FakeClient(results), rng=random.Random(4)).discover(
+            ["Box Hill", "Box Hill North", "Box Hill South"], target=18,
+        )
+        represented = {candidate.matched_location for candidate in config.candidates if candidate.active}
+        self.assertEqual(represented, {"Box Hill", "Box Hill North", "Box Hill South"})
 
     def test_duplicate_private_unavailable_spam_and_incidental_results_are_excluded(self):
         valid = item(1)
@@ -216,6 +323,8 @@ class LoveMyLocalsTests(unittest.TestCase):
             rng=random.Random(7),
         ).discover(
             ["Box Hill"],
+            tourism_mode="include",
+            include_council_meetings=True,
             default_cta_type=PrimaryCtaType.EXPLORE,
             default_cta_url="https://example.com/local",
         )
@@ -224,6 +333,8 @@ class LoveMyLocalsTests(unittest.TestCase):
             ticker_text=default_ticker(["Box Hill"]),
             default_cta_type=PrimaryCtaType.EXPLORE,
             default_cta_url="https://example.com/local",
+            tourism_mode="include",
+            include_council_meetings=True,
         )
         project = assemble_project(values, config, "box-hill")
         self.assertEqual(project.project_type, ProjectType.LOVE_MY_LOCALS)
@@ -240,6 +351,24 @@ class LoveMyLocalsTests(unittest.TestCase):
             self.assertEqual(loaded.love_my_locals_config.candidates[0].cta_url, "https://example.com/local")
             self.assertEqual(loaded.love_my_locals_config.default_cta_type, PrimaryCtaType.EXPLORE)
             self.assertEqual(loaded.love_my_locals_config.default_cta_url, "https://example.com/local")
+            self.assertEqual(loaded.love_my_locals_config.tourism_mode, "include")
+            self.assertTrue(loaded.love_my_locals_config.include_council_meetings)
+
+    def test_quality_report_counts_selected_types_and_private_discovery_totals(self):
+        results = [
+            item(301, title="Box Hill local band live performance", channel_id="music-one"),
+            item(302, title="Box Hill historical archive footage", channel_id="history-one"),
+            item(303, title="Box Hill community football club story", channel_id="sport-one"),
+        ]
+        config = LoveMyLocalsDiscoveryService(FakeClient(results), rng=random.Random(5)).discover(["Box Hill"])
+        report = discovery_quality_report(config)
+        self.assertEqual(sum(report.get(name, 0) for name in (
+            "MUSIC / PERFORMANCE", "PEOPLE / INTERVIEWS", "NEWS", "HISTORY / ARCHIVE",
+            "COMMUNITY / CLUBS / SPORT", "BUSINESS / PUB / FOOD / MAKERS", "TOURISM",
+            "OTHER / RANDOM LOCAL",
+        )), 3)
+        self.assertEqual(report["REAL ESTATE"], 0)
+        self.assertEqual(report["final_videos"], 3)
 
     def test_saving_new_defaults_preserves_per_video_cta_overrides(self):
         config = discovered(3)
@@ -282,6 +411,12 @@ class LoveMyLocalsTests(unittest.TestCase):
             })
             self.assertEqual(machine["videos"][0]["ctaURL"], "https://example.com/one")
             self.assertEqual(machine["videos"][1]["ctaURL"], "")
+            public_json = json.dumps(machine)
+            for private_key in (
+                "matchBasis", "relevanceScore", "localTextureScore", "suppressionFlags",
+                "qualificationReason", "discoverySummary", "candidateCount",
+            ):
+                self.assertNotIn(private_key, public_json)
             self.assertIn("BOX HILL + BOX HILL NORTH", page)
             self.assertIn("assets/love-my-locals/love-my-locals-logo.png", page)
             self.assertTrue((destination / "assets" / "love-my-locals" / "love-my-locals-logo.png").is_file())

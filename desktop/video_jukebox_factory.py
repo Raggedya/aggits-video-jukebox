@@ -789,6 +789,8 @@ class LoveMyLocalsForm(tk.Frame):
         self.location_vars = [tk.StringVar() for _ in range(3)]
         self.geography_var = tk.StringVar(value=DEFAULT_GEOGRAPHY)
         self.include_shorts_var = tk.BooleanVar(value=False)
+        self.tourism_mode_var = tk.StringVar(value="LIMITED")
+        self.include_council_meetings_var = tk.BooleanVar(value=False)
         self.cta_var = tk.StringVar(value=DEFAULT_CTA_LABEL_BY_PROJECT[ProjectType.LOVE_MY_LOCALS])
         self.destination_url_var = tk.StringVar()
         self.field_widgets: dict[str, tk.Widget] = {}
@@ -824,6 +826,27 @@ class LoveMyLocalsForm(tk.Frame):
             bg=PANEL, fg=CREAM, selectcolor=PANEL_2, activebackground=PANEL, activeforeground=PAPER,
             font=("Segoe UI Semibold", 9),
         ).grid(row=row, column=1, sticky="w", padx=(0, 22), pady=5)
+        row += 1
+        advanced = tk.LabelFrame(
+            self, text=" ADVANCED / DISCOVERY SETTINGS ", bg=PANEL, fg=MUTED,
+            highlightbackground=DEEP_BRASS, bd=1, font=("Segoe UI Semibold", 8),
+        )
+        advanced.grid(row=row, column=1, sticky="ew", padx=(0, 22), pady=(4, 8))
+        advanced.columnconfigure(1, weight=1)
+        tk.Label(advanced, text="TOURISM", bg=PANEL, fg=CREAM, font=("Segoe UI", 8)).grid(row=0, column=0, sticky="w", padx=(10, 8), pady=8)
+        self.tourism_combo = ttk.Combobox(
+            advanced, textvariable=self.tourism_mode_var, values=("LIMITED", "INCLUDE"),
+            state="readonly", width=14, font=("Segoe UI", 8),
+        )
+        self.tourism_combo.grid(row=0, column=1, sticky="w", pady=8)
+        tk.Checkbutton(
+            advanced, text="INCLUDE FULL COUNCIL MEETINGS", variable=self.include_council_meetings_var,
+            bg=PANEL, fg=CREAM, selectcolor=PANEL_2, activebackground=PANEL, activeforeground=PAPER,
+            font=("Segoe UI", 8),
+        ).grid(row=1, column=0, columnspan=2, sticky="w", padx=7, pady=(0, 8))
+        tk.Label(
+            advanced, text="REAL ESTATE: EXCLUDED", bg=PANEL, fg="#00C7CC", font=("Segoe UI Semibold", 8),
+        ).grid(row=0, column=2, rowspan=2, sticky="e", padx=10)
         row += 1
         tk.Label(self, text="DEFAULT CTA BUTTON", bg=PANEL, fg=CREAM, anchor="e", font=("Segoe UI", 9)).grid(row=row, column=0, sticky="e", padx=(22, 12), pady=5)
         self.cta_combo = ttk.Combobox(
@@ -895,6 +918,8 @@ class LoveMyLocalsForm(tk.Frame):
             ticker_text=self.ticker_text.get("1.0", "end-1c"),
             default_cta_type=cta_type,
             default_cta_url=self.destination_url_var.get(),
+            tourism_mode=self.tourism_mode_var.get().lower(),
+            include_council_meetings=self.include_council_meetings_var.get(),
         )
 
     def set_values(self, values: LoveMyLocalsFormValues) -> None:
@@ -910,6 +935,8 @@ class LoveMyLocalsForm(tk.Frame):
             cta_type, DEFAULT_CTA_LABEL_BY_PROJECT[ProjectType.LOVE_MY_LOCALS],
         ))
         self.destination_url_var.set(values.default_cta_url or "")
+        self.tourism_mode_var.set(str(values.tourism_mode or "limited").upper())
+        self.include_council_meetings_var.set(bool(values.include_council_meetings))
         self.ticker_text.delete("1.0", "end")
         self.ticker_text.insert("1.0", values.ticker_text)
         self.clear_validation()
@@ -931,7 +958,7 @@ class LoveMyLocalsForm(tk.Frame):
         self.editing_project_id = project.id
         self.set_values(LoveMyLocalsFormValues(
             list(config.locations), config.resolved_geography, config.include_shorts, project.ticker_text,
-            config.default_cta_type, config.default_cta_url or "",
+            config.default_cta_type, config.default_cta_url or "", config.tourism_mode, config.include_council_meetings,
         ))
         self.mode_label.configure(text="EDIT LOVE MY LOCALS PROJECT")
         self.submit_button.configure(text="SEARCH AGAIN")
@@ -950,7 +977,7 @@ class LoveMyLocalsForm(tk.Frame):
             return
         self.set_values(LoveMyLocalsFormValues(
             list(self._baseline[0]), str(self._baseline[1]), bool(self._baseline[2]), str(self._baseline[3]),
-            str(self._baseline[4]), str(self._baseline[5]),
+            str(self._baseline[4]), str(self._baseline[5]), str(self._baseline[6]), bool(self._baseline[7]),
         ))
         self.mark_clean()
 
@@ -1603,7 +1630,7 @@ class Factory(tk.Tk):
                 "config": LoveMyLocalsConfig.from_dict(config.to_dict()),
                 "values": LoveMyLocalsFormValues(
                     list(config.locations), config.resolved_geography, config.include_shorts, project.ticker_text,
-                    config.default_cta_type, config.default_cta_url or "",
+                    config.default_cta_type, config.default_cta_url or "", config.tourism_mode, config.include_council_meetings,
                 ),
                 "slug": project.slug,
                 "editing_project_id": project.id,
@@ -1930,6 +1957,8 @@ class Factory(tk.Tk):
                 values.locations,
                 values.geography,
                 include_shorts=values.include_shorts,
+                tourism_mode=values.tourism_mode,
+                include_council_meetings=values.include_council_meetings,
                 default_cta_type=values.default_cta_type,
                 default_cta_url=values.default_cta_url or None,
             )
@@ -1979,7 +2008,12 @@ class Factory(tk.Tk):
         if [item.casefold() for item in values.locations] != [item.casefold() for item in config.locations]:
             messagebox.showinfo(DESKTOP_TITLE, "The locations changed. Press SEARCH AGAIN so the saved videos match the new locations.")
             return False
-        if values.geography.casefold() != config.resolved_geography.casefold() or values.include_shorts != config.include_shorts:
+        if (
+            values.geography.casefold() != config.resolved_geography.casefold()
+            or values.include_shorts != config.include_shorts
+            or values.tourism_mode != config.tourism_mode
+            or values.include_council_meetings != config.include_council_meetings
+        ):
             messagebox.showinfo(DESKTOP_TITLE, "The search settings changed. Press SEARCH AGAIN before saving.")
             return False
         self._finish_love_my_locals({
@@ -2011,6 +2045,15 @@ class Factory(tk.Tk):
             status_copy += " — continue with these, broaden the locations, or search again."
         status_label = tk.Label(heading, text=status_copy, bg=PANEL, fg=CREAM, font=("Segoe UI", 9), wraplength=980, justify="left")
         status_label.pack(anchor="w", padx=20, pady=(5, 14))
+        summary = config.discovery_summary
+        if summary:
+            summary_copy = (
+                f"{summary.get('qualified_candidates', len(config.candidates))} candidates  •  "
+                f"{summary.get('real_estate_excluded', 0)} real estate excluded  •  "
+                f"{summary.get('tourism_suppressed', 0)} tourism suppressed  •  "
+                f"{summary.get('duplicates_removed', 0)} duplicates removed"
+            )
+            tk.Label(heading, text=summary_copy, bg=PANEL, fg=MUTED, font=("Segoe UI", 8), wraplength=980, justify="left").pack(anchor="w", padx=20, pady=(0, 12))
 
         shell = tk.Frame(dialog, bg="#080b0c", highlightbackground=DEEP_BRASS, highlightthickness=1)
         shell.pack(fill="both", expand=True, padx=18)
@@ -2039,7 +2082,7 @@ class Factory(tk.Tk):
                 + (" — continue with these, broaden the locations, or search again." if len(active_candidates) < 50 else "")
             ))
             for index, item in enumerate(active_candidates, start=1):
-                row = tk.Frame(rows, bg="#111719" if index % 2 else "#0c1112", height=122)
+                row = tk.Frame(rows, bg="#111719" if index % 2 else "#0c1112", height=148)
                 row.pack(fill="x", padx=4, pady=(4 if index == 1 else 0, 2))
                 row.pack_propagate(False)
                 image_data = thumbnails.get(item.video.video_id)
@@ -2059,6 +2102,13 @@ class Factory(tk.Tk):
                 tk.Label(detail, text=item.video.title, bg=row["bg"], fg=PAPER, anchor="w", font=("Segoe UI Semibold", 9)).pack(fill="x")
                 basis = " + ".join(value.upper() for value in item.match_basis)
                 tk.Label(detail, text=f"{item.video.channel_title}  •  {item.matched_location}  •  {basis} MATCH ({item.relevance_score})", bg=row["bg"], fg="#00C7CC", anchor="w", font=("Segoe UI Semibold", 8)).pack(fill="x", pady=(2, 4))
+                texture_level = "HIGH" if item.local_texture_score >= 12 else ("MEDIUM" if item.local_texture_score >= 5 else "LOW")
+                flags = "  •  ".join(value.upper().replace(":", " ") for value in item.suppression_flags)
+                diagnostic = f"{item.content_type}  •  LOCAL TEXTURE: {texture_level} ({item.local_texture_score})"
+                if flags:
+                    diagnostic += f"  •  {flags}"
+                tk.Label(detail, text=diagnostic, bg=row["bg"], fg=CREAM, anchor="w", font=("Segoe UI Semibold", 7)).pack(fill="x")
+                tk.Label(detail, text=item.qualification_reason, bg=row["bg"], fg=MUTED, anchor="w", font=("Segoe UI", 7)).pack(fill="x", pady=(1, 4))
                 controls = tk.Frame(detail, bg=row["bg"])
                 controls.pack(fill="x")
                 cta_var = tk.StringVar(value=type_to_label.get(item.cta_type, "Visit Website"))

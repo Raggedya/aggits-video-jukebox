@@ -4,6 +4,7 @@ import html
 import random
 import re
 from dataclasses import dataclass, field
+from functools import lru_cache
 from typing import Iterable
 from urllib.parse import urlparse
 from uuid import uuid4
@@ -24,7 +25,61 @@ from .youtube_api import ChannelCatalogue, YouTubeClient, YouTubeError, best_thu
 
 
 DEFAULT_GEOGRAPHY = "Victoria, Australia"
-MATCH_WEIGHTS = {"title": 3, "description": 2, "tag": 1}
+MATCH_WEIGHTS = {"title": 3, "description": 2, "tag": 1, "channel": 1}
+TOURISM_MODES = frozenset({"limited", "include"})
+CONTENT_TYPES = (
+    "MUSIC / PERFORMANCE",
+    "PEOPLE / INTERVIEWS",
+    "NEWS",
+    "HISTORY / ARCHIVE",
+    "COMMUNITY / CLUBS / SPORT",
+    "BUSINESS / PUB / FOOD / MAKERS",
+    "TOURISM",
+    "OTHER / RANDOM LOCAL",
+)
+DISCOVERY_QUERY_GROUPS: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("bands", ("band",)),
+    ("musicians", ("musician",)),
+    ("live-music", ("singer", "live music", "gig", "concert", "local music", "original song")),
+    ("news", ("local news", "news")),
+    ("people", ("interview", "people", "locals", "local story", "resident", "profile")),
+    ("history", ("history", "historical", "old footage", "archive", "memories", "heritage", "historical society")),
+    ("community", ("community", "club", "community group", "charity", "volunteer", "neighbourhood house", "community centre")),
+    ("sport", ("sporting club", "football", "footy", "cricket", "basketball", "netball", "sport", "bowls club")),
+    ("social-life", ("pub", "venue", "restaurant", "cafe", "brewery", "record store", "bookshop", "RSL")),
+    ("culture-business", ("business", "shop", "maker", "artist", "gallery", "theatre", "performance")),
+    ("events-schools", ("school", "festival", "market", "event", "live performance")),
+    ("local-services", ("community radio", "radio", "CFA", "SES", "council")),
+    ("quirks", ("funny", "unusual", "weird", "story", "character", "local legend", "collection", "hobby")),
+)
+LOCAL_TEXTURE_TERMS: dict[str, tuple[str, ...]] = {
+    "MUSIC / PERFORMANCE": ("band", "cover band", "musician", "singer", "music", "country music", "gig", "live music", "concert", "orchestra", "performance", "original song", "music video"),
+    "PEOPLE / INTERVIEWS": ("interview", "resident", "people", "profile", "volunteer", "character", "local legend", "collector", "inventor", "hobby"),
+    "NEWS": ("local news", "regional news", "news report", "news", "ABC", "community radio", "radio"),
+    "HISTORY / ARCHIVE": ("history", "historical", "archive", "old footage", "memories", "heritage", "documentary"),
+    "COMMUNITY / CLUBS / SPORT": ("club", "association", "community", "charity", "school", "football", "footy", "cricket", "basketball", "netball", "RSL", "CFA", "SES", "bowls club", "community centre", "neighbourhood house"),
+    "BUSINESS / PUB / FOOD / MAKERS": ("pub", "cafe", "restaurant", "shop", "venue", "business", "brewery", "record store", "bookshop", "maker", "artist", "gallery", "theatre", "market"),
+    "OTHER / RANDOM LOCAL": ("unusual", "weird", "funny", "story", "event", "collection"),
+}
+TOURISM_PATTERN = re.compile(
+    r"\b(?:tourism|travel\s+guide|travel\s+vlog|things\s+to\s+do|top\s+\d+\s+(?:things|attractions)|"
+    r"tourist\s+attractions?|where\s+to\s+stay|accommodation|holiday|vacation|destination\s+guide|"
+    r"travel\s+itinerary|weekend\s+getaway|tourism\s+campaign|destination\s+marketing|"
+    r"aerial\s+view|drone\s+tour|walking\s+tour)\b",
+    re.I,
+)
+TOURISM_CHANNEL_PATTERN = re.compile(r"(?:tourism|visitor\s+centre|destination|\bvisit\s+[A-Za-z]|travel)", re.I)
+HISTORICAL_CONTEXT_PATTERN = re.compile(r"\b(?:history|historical|archive|old\s+footage|heritage|memories|vintage)\b", re.I)
+COUNCIL_MEETING_PATTERN = re.compile(
+    r"\b(?:ordinary|special|monthly|statutory)?\s*(?:council|committee)\s+(?:meeting|livestream)|"
+    r"\b(?:council\s+agenda|minutes\s+of\s+(?:the\s+)?meeting|planning\s+committee\s+meeting|"
+    r"public\s+question\s+time|council\s+chamber\s+livestream)\b",
+    re.I,
+)
+GENERIC_PROMO_PATTERN = re.compile(
+    r"\b(?:limited\s+time|buy\s+now|call\s+today|special\s+offer|our\s+services|sales\s+presentation|corporate\s+video)\b",
+    re.I,
+)
 SPAM_PATTERN = re.compile(r"\b(?:sub\s*4\s*sub|free\s+bitcoin|crypto\s+giveaway|click\s+here\s+to\s+earn)\b", re.I)
 PROPERTY_CONTEXT_PATTERN = re.compile(
     r"\b(?:real\s+estate|realty|realtor|estate\s+agents?|property|properties|house|home|apartment|unit|townhouse|land|property\s+development)\b",
@@ -78,6 +133,8 @@ class LoveMyLocalsFormValues:
     ticker_text: str = ""
     default_cta_type: PrimaryCtaType | str = PrimaryCtaType.VISIT_WEBSITE
     default_cta_url: str = ""
+    tourism_mode: str = "limited"
+    include_council_meetings: bool = False
 
     def comparable(self) -> tuple[object, ...]:
         return (
@@ -87,6 +144,8 @@ class LoveMyLocalsFormValues:
             self.ticker_text,
             self.default_cta_type.value if isinstance(self.default_cta_type, PrimaryCtaType) else str(self.default_cta_type),
             self.default_cta_url,
+            self.tourism_mode,
+            bool(self.include_council_meetings),
         )
 
 
@@ -120,8 +179,12 @@ def validate_form(values: LoveMyLocalsFormValues) -> LoveMyLocalsFormValues:
         parsed = urlparse(cta_url)
         if parsed.scheme not in {"http", "https"} or not parsed.netloc:
             raise LoveMyLocalsError("CTA Destination URL must be a complete http or https URL.")
+    tourism_mode = str(values.tourism_mode or "limited").strip().lower()
+    if tourism_mode not in TOURISM_MODES:
+        raise LoveMyLocalsError("Tourism discovery must be LIMITED or INCLUDE.")
     return LoveMyLocalsFormValues(
         locations, geography, bool(values.include_shorts), ticker, cta_type, cta_url,
+        tourism_mode, bool(values.include_council_meetings),
     )
 
 
@@ -147,7 +210,13 @@ def _contains_location(text: str, location: str) -> bool:
     return bool(re.search(r"(?<!\w)" + r"[\s\W_]+".join(words) + r"(?!\w)", text, flags=re.I))
 
 
-def qualify_metadata(title: str, description: str, tags: Iterable[str], locations: Iterable[str]) -> tuple[str, list[str], int] | None:
+def qualify_metadata(
+    title: str,
+    description: str,
+    tags: Iterable[str],
+    locations: Iterable[str],
+    channel_title: str = "",
+) -> tuple[str, list[str], int] | None:
     tag_text = " ".join(str(tag) for tag in tags)
     best: tuple[str, list[str], int] | None = None
     for location in locations:
@@ -158,12 +227,81 @@ def qualify_metadata(title: str, description: str, tags: Iterable[str], location
             bases.append("description")
         if _contains_location(tag_text, location):
             bases.append("tag")
+        if _contains_location(channel_title, location):
+            bases.append("channel")
         if not bases:
             continue
         score = max(MATCH_WEIGHTS[item] for item in bases)
-        if best is None or score > best[2]:
+        if best is None or score > best[2] or (score == best[2] and len(location) > len(best[0])):
             best = (location, bases, score)
     return best
+
+
+@lru_cache(maxsize=256)
+def _term_pattern(term: str) -> re.Pattern[str]:
+    words = [re.escape(part) for part in re.findall(r"[\w'-]+", term, flags=re.UNICODE)]
+    return re.compile(r"(?<!\w)" + r"[\s\W_]+".join(words) + r"(?!\w)", re.I)
+
+
+def _matched_terms(text: str, terms: Iterable[str]) -> list[str]:
+    return [term for term in terms if _term_pattern(term).search(text)]
+
+
+def local_texture_analysis(
+    title: str,
+    description: str,
+    tags: Iterable[str],
+    channel_title: str = "",
+) -> tuple[int, str, list[str]]:
+    """Return a human/local-interest score independently of geography."""
+    tag_text = " ".join(str(tag) for tag in tags)
+    scores: dict[str, int] = {}
+    evidence: dict[str, list[str]] = {}
+    for content_type, terms in LOCAL_TEXTURE_TERMS.items():
+        title_hits = _matched_terms(title, terms)
+        description_hits = _matched_terms(description, terms)
+        tag_hits = _matched_terms(tag_text, terms)
+        channel_hits = _matched_terms(channel_title, terms)
+        all_hits = list(dict.fromkeys((*title_hits, *description_hits, *tag_hits, *channel_hits)))
+        score = min(24, len(title_hits) * 4 + len(description_hits) * 2 + len(tag_hits) + len(channel_hits))
+        scores[content_type] = score
+        evidence[content_type] = all_hits
+    content_type = max(scores, key=lambda item: scores[item]) if scores else "OTHER / RANDOM LOCAL"
+    if scores.get(content_type, 0) <= 0:
+        content_type = "OTHER / RANDOM LOCAL"
+    total = min(60, sum(sorted((value for value in scores.values() if value > 0), reverse=True)[:3]))
+    return total, content_type, evidence.get(content_type, [])[:5]
+
+
+def tourism_suppression_flags(title: str, description: str, tags: Iterable[str], channel_title: str = "") -> list[str]:
+    metadata = " ".join((str(title), str(description), " ".join(str(tag) for tag in tags)))
+    hits = TOURISM_PATTERN.findall(metadata)
+    channel_is_tourism = bool(TOURISM_CHANNEL_PATTERN.search(str(channel_title or "")))
+    historical = bool(HISTORICAL_CONTEXT_PATTERN.search(metadata))
+    if historical and (hits or channel_is_tourism):
+        return ["tourism:historical_context"]
+    if channel_is_tourism or len(hits) >= 2:
+        return ["tourism:high"]
+    if hits:
+        return ["tourism:medium"]
+    return []
+
+
+def council_meeting_suppression_reason(title: str, description: str, channel_title: str = "") -> str | None:
+    combined = f"{title} {description} {channel_title}"
+    return "council:administrative_meeting" if COUNCIL_MEETING_PATTERN.search(combined) else None
+
+
+def discovery_queries_for_location(location: str, geography: str = DEFAULT_GEOGRAPHY) -> list[str]:
+    """Build broad intent queries while keeping each API search quota-bounded."""
+    place = re.sub(r"\s+", " ", str(location)).strip()
+    context = re.sub(r"\s+", " ", str(geography)).strip()
+    prefix = f'"{place}" {context}'.strip()
+    queries = [prefix]
+    for _intent, terms in DISCOVERY_QUERY_GROUPS:
+        expression = "|".join(f'"{term}"' if " " in term else term for term in terms)
+        queries.append(f"{prefix} {expression}")
+    return queries
 
 
 def real_estate_exclusion_reason(
@@ -216,27 +354,93 @@ def _duplicate_signature(video: Video) -> tuple[str, str, int]:
     return title, video.channel_title.casefold(), round(video.duration_seconds / 5) if video.duration_seconds else 0
 
 
-def _prioritise(candidates: list[LoveMyLocalsCandidate], target: int, rng: random.Random) -> list[LoveMyLocalsCandidate]:
+def _candidate_quality(item: LoveMyLocalsCandidate) -> int:
+    penalty = 0
+    if "tourism:high" in item.suppression_flags:
+        penalty += 24
+    elif "tourism:medium" in item.suppression_flags:
+        penalty += 12
+    if "promotion:generic" in item.suppression_flags:
+        penalty += 8
+    if "council:administrative_meeting" in item.suppression_flags:
+        penalty += 20
+    return item.relevance_score * 20 + item.local_texture_score - penalty
+
+
+def _prioritise(
+    candidates: list[LoveMyLocalsCandidate],
+    target: int,
+    rng: random.Random,
+    *,
+    locations: Iterable[str],
+    tourism_mode: str = "limited",
+) -> tuple[list[LoveMyLocalsCandidate], dict[str, int]]:
+    """Greedily balance quality, topic, place and publisher before shuffling."""
     selected: list[LoveMyLocalsCandidate] = []
-    deferred: list[LoveMyLocalsCandidate] = []
+    remaining = list(candidates)
     channel_counts: dict[str, int] = {}
-    for score in (3, 2, 1):
-        group = [item for item in candidates if item.relevance_score == score]
-        rng.shuffle(group)
-        for item in group:
+    category_counts: dict[str, int] = {}
+    location_counts: dict[str, int] = {}
+    channel_skips: set[str] = set()
+    tourism_skips: set[str] = set()
+    location_list = list(locations)
+    category_targets = {
+        "PEOPLE / INTERVIEWS": 10,
+        "NEWS": 6,
+        "MUSIC / PERFORMANCE": 8,
+        "COMMUNITY / CLUBS / SPORT": 6,
+        "HISTORY / ARCHIVE": 5,
+        "BUSINESS / PUB / FOOD / MAKERS": 5,
+    }
+    location_target = max(1, target // max(2, len(location_list) * 2))
+
+    def choose(channel_limit: int, tourism_limit: int | None) -> LoveMyLocalsCandidate | None:
+        eligible: list[tuple[float, LoveMyLocalsCandidate]] = []
+        tourism_count = sum(
+            bool({"tourism:high", "tourism:medium"} & set(item.suppression_flags)) for item in selected
+        )
+        for item in remaining:
             channel_key = item.video.channel_id or item.video.channel_title.casefold()
-            if channel_counts.get(channel_key, 0) >= 3:
-                deferred.append(item)
+            if channel_counts.get(channel_key, 0) >= channel_limit:
+                channel_skips.add(item.video.video_id)
                 continue
-            selected.append(item)
-            channel_counts[channel_key] = channel_counts.get(channel_key, 0) + 1
-            if len(selected) >= target:
-                rng.shuffle(selected)
-                return selected
-    rng.shuffle(deferred)
-    selected.extend(deferred[: max(0, target - len(selected))])
+            is_tourism = bool({"tourism:high", "tourism:medium"} & set(item.suppression_flags))
+            if tourism_limit is not None and is_tourism and tourism_count >= tourism_limit:
+                tourism_skips.add(item.video.video_id)
+                continue
+            category_gap = max(0, category_targets.get(item.content_type, 0) - category_counts.get(item.content_type, 0))
+            place_gap = max(0, location_target - location_counts.get(item.matched_location, 0))
+            score = _candidate_quality(item) + min(28, category_gap * 4) + min(18, place_gap * 3)
+            eligible.append((score + rng.random() * 2.5, item))
+        return max(eligible, key=lambda value: value[0])[1] if eligible else None
+
+    tourism_limit = 1 if tourism_mode == "limited" else 3
+    while remaining and len(selected) < target:
+        item = choose(3, tourism_limit)
+        if item is None:
+            # Only relax publisher/tourism caps when alternatives cannot fill the machine.
+            item = choose(5, tourism_limit)
+        if item is None:
+            item = choose(8, None)
+        if item is None:
+            break
+        remaining.remove(item)
+        selected.append(item)
+        channel_key = item.video.channel_id or item.video.channel_title.casefold()
+        channel_counts[channel_key] = channel_counts.get(channel_key, 0) + 1
+        category_counts[item.content_type] = category_counts.get(item.content_type, 0) + 1
+        location_counts[item.matched_location] = location_counts.get(item.matched_location, 0) + 1
     rng.shuffle(selected)
-    return selected[:target]
+    selected_ids = {item.video.video_id for item in selected}
+    tourism_suppressed = sum(
+        item.video.video_id not in selected_ids
+        and (item.content_type == "TOURISM" or bool({"tourism:high", "tourism:medium"} & set(item.suppression_flags)))
+        for item in candidates
+    )
+    return selected[:target], {
+        "channel_diversity_removals": len(channel_skips - selected_ids),
+        "tourism_suppressed": max(tourism_suppressed, len(tourism_skips - selected_ids)),
+    }
 
 
 class LoveMyLocalsDiscoveryService:
@@ -250,16 +454,24 @@ class LoveMyLocalsDiscoveryService:
         geography: str = DEFAULT_GEOGRAPHY,
         *,
         include_shorts: bool = False,
+        tourism_mode: str = "limited",
+        include_council_meetings: bool = False,
         default_cta_type: PrimaryCtaType | str = PrimaryCtaType.VISIT_WEBSITE,
         default_cta_url: str | None = None,
         target: int = MAX_LOVE_MY_LOCALS_VIDEOS,
     ) -> LoveMyLocalsConfig:
         names = normalize_locations(locations)
+        tourism_mode = str(tourism_mode or "limited").strip().lower()
+        if tourism_mode not in TOURISM_MODES:
+            raise LoveMyLocalsError("Tourism discovery must be LIMITED or INCLUDE.")
         resolved = resolved_locations(names, geography)
         raw_items: list[dict] = []
-        for query in resolved:
+        queries: list[str] = []
+        for name in names:
+            queries.extend(discovery_queries_for_location(name, geography))
+        for query in queries:
             try:
-                raw_items.extend(self.client.search_video_items(f'"{query}"', maximum=75))
+                raw_items.extend(self.client.search_video_items(query, maximum=20))
             except YouTubeError:
                 raise
             except Exception as error:
@@ -269,16 +481,29 @@ class LoveMyLocalsDiscoveryService:
         exclusion_diagnostics: list[dict[str, str]] = []
         seen_ids: set[str] = set()
         seen_signatures: set[tuple[str, str, int]] = set()
+        duplicate_count = 0
+        unavailable_count = 0
+        unqualified_count = 0
+        spam_count = 0
+        shorts_excluded_count = 0
         for item in raw_items:
             record = self.client._video_record(item)
-            if not record or record.video_id in seen_ids:
+            if not record:
+                unavailable_count += 1
+                continue
+            if record.video_id in seen_ids:
+                duplicate_count += 1
                 continue
             seen_ids.add(record.video_id)
             snippet = item.get("snippet") if isinstance(item.get("snippet"), dict) else {}
             description = html.unescape(str(snippet.get("description") or "")).strip()
             tags = [html.unescape(str(tag)).strip() for tag in (snippet.get("tags") or []) if str(tag).strip()]
-            qualification = qualify_metadata(record.title, description, tags, names)
-            if qualification is None or SPAM_PATTERN.search(f"{record.title} {description}"):
+            qualification = qualify_metadata(record.title, description, tags, names, record.channel_title)
+            if qualification is None:
+                unqualified_count += 1
+                continue
+            if SPAM_PATTERN.search(f"{record.title} {description}"):
+                spam_count += 1
                 continue
             exclusion_reason = real_estate_exclusion_reason(
                 record.title,
@@ -293,13 +518,36 @@ class LoveMyLocalsDiscoveryService:
                     "reason": exclusion_reason,
                 })
                 continue
+            council_reason = council_meeting_suppression_reason(record.title, description, record.channel_title)
+            if council_reason and not include_council_meetings:
+                exclusion_diagnostics.append({
+                    "video_id": record.video_id,
+                    "title": record.title,
+                    "reason": council_reason,
+                })
+                continue
             short = _is_short(item)
             if short and not include_shorts:
+                shorts_excluded_count += 1
                 continue
             signature = _duplicate_signature(record)
             if signature in seen_signatures:
+                duplicate_count += 1
                 continue
             matched_location, match_basis, score = qualification
+            texture_score, content_type, texture_evidence = local_texture_analysis(
+                record.title, description, tags, record.channel_title,
+            )
+            suppression_flags = tourism_suppression_flags(record.title, description, tags, record.channel_title)
+            if council_reason:
+                suppression_flags.append(council_reason)
+            if GENERIC_PROMO_PATTERN.search(f"{record.title} {description}") and texture_score < 10:
+                suppression_flags.append("promotion:generic")
+            if {"tourism:high", "tourism:medium"} & set(suppression_flags) and not texture_evidence:
+                content_type = "TOURISM"
+            reason = f"{' + '.join(match_basis).upper()} MATCH: {matched_location}"
+            if texture_evidence:
+                reason += f"; {content_type}: {', '.join(texture_evidence)}"
             seen_signatures.add(signature)
             qualified.append(LoveMyLocalsCandidate(
                 video=record,
@@ -308,6 +556,10 @@ class LoveMyLocalsDiscoveryService:
                 matched_location=matched_location,
                 match_basis=match_basis,
                 relevance_score=score,
+                content_type=content_type,
+                local_texture_score=texture_score,
+                suppression_flags=suppression_flags,
+                qualification_reason=reason,
                 is_short=short,
                 cta_type=default_cta_type,
                 cta_url=default_cta_url,
@@ -315,7 +567,13 @@ class LoveMyLocalsDiscoveryService:
             ))
             if len(qualified) >= MAX_LOVE_MY_LOCALS_CANDIDATES:
                 break
-        selected = _prioritise(qualified, min(MAX_LOVE_MY_LOCALS_VIDEOS, max(1, target)), self.rng)
+        selected, selection_summary = _prioritise(
+            qualified,
+            min(MAX_LOVE_MY_LOCALS_VIDEOS, max(1, target)),
+            self.rng,
+            locations=names,
+            tourism_mode=tourism_mode,
+        )
         selected_ids = {item.video.video_id for item in selected}
         for item in qualified:
             item.active = item.video.video_id in selected_ids
@@ -326,12 +584,44 @@ class LoveMyLocalsDiscoveryService:
             resolved_geography=geography,
             resolved_locations=resolved,
             include_shorts=include_shorts,
+            tourism_mode=tourism_mode,
+            include_council_meetings=include_council_meetings,
             candidates=qualified,
             default_cta_type=default_cta_type,
             default_cta_url=default_cta_url,
             exclusion_diagnostics=exclusion_diagnostics,
+            discovery_summary={
+                "queries_run": len(queries),
+                "raw_results": len(raw_items),
+                "unique_results": len(seen_ids),
+                "qualified_candidates": len(qualified),
+                "excluded": (
+                    len(exclusion_diagnostics) + unavailable_count + unqualified_count
+                    + spam_count + shorts_excluded_count
+                ),
+                "unavailable_excluded": unavailable_count,
+                "location_unqualified": unqualified_count,
+                "spam_excluded": spam_count,
+                "shorts_excluded": shorts_excluded_count,
+                "real_estate_excluded": sum(item["reason"].startswith("real_estate:") for item in exclusion_diagnostics),
+                "council_meetings_excluded": sum(item["reason"].startswith("council:") for item in exclusion_diagnostics),
+                "duplicates_removed": duplicate_count,
+                "tourism_suppressed": selection_summary["tourism_suppressed"],
+                "channel_diversity_removals": selection_summary["channel_diversity_removals"],
+                "final_videos": len(selected),
+            },
             last_search_at=utc_now(),
         )
+
+
+def discovery_quality_report(config: LoveMyLocalsConfig) -> dict[str, int]:
+    report = {content_type: 0 for content_type in CONTENT_TYPES}
+    for item in config.candidates:
+        if item.active:
+            report[item.content_type] = report.get(item.content_type, 0) + 1
+    report["REAL ESTATE"] = 0
+    report.update(config.discovery_summary)
+    return report
 
 
 def remove_candidate(config: LoveMyLocalsConfig, video_id: str) -> bool:
@@ -347,8 +637,17 @@ def replace_candidate(config: LoveMyLocalsConfig, video_id: str, *, rng: random.
     available = [item for item in config.candidates if not item.active and item.video.video_id != video_id]
     if not available:
         return None
-    best_score = max(item.relevance_score for item in available)
-    best = [item for item in available if item.relevance_score == best_score]
+    active_channel_counts: dict[str, int] = {}
+    for item in config.candidates:
+        if item.active:
+            key = item.video.channel_id or item.video.channel_title.casefold()
+            active_channel_counts[key] = active_channel_counts.get(key, 0) + 1
+    diverse = [
+        item for item in available
+        if active_channel_counts.get(item.video.channel_id or item.video.channel_title.casefold(), 0) < 3
+    ] or available
+    best_score = max(_candidate_quality(item) for item in diverse)
+    best = [item for item in diverse if _candidate_quality(item) == best_score]
     replacement = (rng or random.SystemRandom()).choice(best)
     replacement.active = True
     return replacement
@@ -368,6 +667,10 @@ def assemble_project(
         raise LoveMyLocalsError("The reviewed discovery results do not match the current geographic context. Search again before building.")
     if validated.include_shorts != config.include_shorts:
         raise LoveMyLocalsError("The YouTube Shorts setting changed after discovery. Search again before building.")
+    if validated.tourism_mode != config.tourism_mode:
+        raise LoveMyLocalsError("The tourism discovery setting changed after discovery. Search again before building.")
+    if validated.include_council_meetings != config.include_council_meetings:
+        raise LoveMyLocalsError("The council-meeting setting changed after discovery. Search again before building.")
     previous_type = config.default_cta_type
     previous_url = config.default_cta_url
     for item in config.candidates:
