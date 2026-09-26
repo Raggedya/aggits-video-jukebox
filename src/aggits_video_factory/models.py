@@ -185,8 +185,6 @@ TOURISM_CTA_TYPES = frozenset({
     PrimaryCtaType.VISIT_WEBSITE, PrimaryCtaType.CUSTOM,
 })
 CHANNEL_MASTER_CTA_TYPES = BUSINESS_CTA_TYPES | MUSIC_CTA_TYPES | TOURISM_CTA_TYPES
-LOVE_MY_LOCALS_UTILITY_TYPES = ("eat", "stay", "whats-on", "house-prices")
-LOVE_MY_LOCALS_UTILITY_DATA_MODES = ("live", "development-fixture")
 
 
 CHANNEL_MASTER_PALETTES: dict[str, tuple[str, str, str]] = {
@@ -931,10 +929,6 @@ class LoveMyLocalsConfig:
     default_cta_type: PrimaryCtaType | str = PrimaryCtaType.VISIT_WEBSITE
     default_cta_url: str | None = None
     explore_url: str | None = None
-    utility_enabled: dict[str, bool] = field(default_factory=lambda: {
-        utility_type: True for utility_type in LOVE_MY_LOCALS_UTILITY_TYPES
-    })
-    utility_data_mode: str = "live"
     exclusion_diagnostics: list[dict[str, str]] = field(default_factory=list)
     discovery_summary: dict[str, int] = field(default_factory=dict)
     last_search_at: str = ""
@@ -975,14 +969,6 @@ class LoveMyLocalsConfig:
             raise ProjectValidationError("Select a valid Love My Locals default CTA.")
         self.default_cta_url = _optional_http_url(self.default_cta_url, "Love My Locals default CTA URL")
         self.explore_url = _optional_http_url(self.explore_url, "Love My Locals Explore URL")
-        supplied_utilities = dict(self.utility_enabled or {})
-        self.utility_enabled = {
-            utility_type: bool(supplied_utilities.get(utility_type, True))
-            for utility_type in LOVE_MY_LOCALS_UTILITY_TYPES
-        }
-        self.utility_data_mode = str(self.utility_data_mode or "live").strip().lower()
-        if self.utility_data_mode not in LOVE_MY_LOCALS_UTILITY_DATA_MODES:
-            raise ValueError("Love My Locals utility data mode must be live or development-fixture.")
         diagnostics: list[dict[str, str]] = []
         for item in self.exclusion_diagnostics:
             if not isinstance(item, dict):
@@ -1020,8 +1006,6 @@ class LoveMyLocalsConfig:
             "default_cta_type": self.default_cta_type.value,
             "default_cta_url": self.default_cta_url,
             "explore_url": self.explore_url,
-            "utility_enabled": dict(self.utility_enabled),
-            "utility_data_mode": self.utility_data_mode,
             "exclusion_diagnostics": [dict(item) for item in self.exclusion_diagnostics],
             "discovery_summary": dict(self.discovery_summary),
             "last_search_at": self.last_search_at,
@@ -1041,11 +1025,6 @@ class LoveMyLocalsConfig:
             default_cta_type=source.get("default_cta_type", source.get("defaultCtaType", PrimaryCtaType.VISIT_WEBSITE.value)),
             default_cta_url=source.get("default_cta_url", source.get("defaultCtaUrl")),
             explore_url=source.get("explore_url", source.get("exploreUrl")),
-            utility_enabled={
-                str(key): bool(enabled)
-                for key, enabled in dict(source.get("utility_enabled") or source.get("utilityEnabled") or {}).items()
-            },
-            utility_data_mode=str(source.get("utility_data_mode") or source.get("utilityDataMode") or "live"),
             exclusion_diagnostics=[
                 dict(item)
                 for item in (source.get("exclusion_diagnostics", source.get("exclusionDiagnostics", [])) or [])

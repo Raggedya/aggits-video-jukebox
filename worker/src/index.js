@@ -1,7 +1,6 @@
 const DELIVERY_PATH = "/api/deliveries";
 const CAMPAIGN_DELIVERY_PATH = "/api/campaign-deliveries";
 const BANJO_SUBMISSION_PATH = "/api/banjo/submissions";
-const LOVE_MY_LOCALS_EAT_PATH = "/api/love-my-locals/eat";
 const REPLAY_WINDOW_SECONDS = 300;
 const MAX_BODY_BYTES = 16 * 1024;
 const MAX_CAMPAIGN_BODY_BYTES = 12 * 1024 * 1024;
@@ -10,20 +9,11 @@ const SUBMISSION_RATE_LIMIT = 5;
 const SUBMISSION_RATE_WINDOW_SECONDS = 60 * 60;
 const SUBMISSION_DUPLICATE_WINDOW_SECONDS = 24 * 60 * 60;
 const BANJO_SUBMISSION_SLUG = "banjos-world-of-cars";
-const EAT_MAX_RESULTS = 9;
-const GOOGLE_PLACES_TEXT_SEARCH = "https://places.googleapis.com/v1/places:searchText";
-const GOOGLE_PLACES_FIELDS = [
-  "places.id", "places.displayName", "places.primaryType", "places.primaryTypeDisplayName", "places.types",
-  "places.formattedAddress", "places.shortFormattedAddress", "places.addressComponents", "places.businessStatus",
-  "places.rating", "places.userRatingCount", "places.attributions",
-].join(",");
 
 const json = (value, status = 200, headers = {}) => new Response(JSON.stringify(value), {
   status,
   headers: { "content-type": "application/json; charset=utf-8", ...headers },
 });
-
-const eatJson = (value, status = 200) => json(value, status, { ...cors, "cache-control": "no-store" });
 
 const cors = {
   "access-control-allow-origin": "*",
@@ -151,216 +141,6 @@ async function sha256(buffer) {
 async function sha256Hex(value) {
   const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(String(value))));
   return Array.from(digest, (byte) => byte.toString(16).padStart(2, "0")).join("");
-}
-
-function safeProviderText(value, maximum = 180) {
-  const text = String(value || "").replace(/[\u0000-\u001f\u007f]/g, " ").replace(/\s+/g, " ").trim();
-  return text.slice(0, maximum);
-}
-
-function placeLocality(place, fallback) {
-  const components = Array.isArray(place?.addressComponents) ? place.addressComponents : [];
-  for (const wanted of ["locality", "postal_town", "administrative_area_level_2", "sublocality"]) {
-    const component = components.find((item) => Array.isArray(item?.types) && item.types.includes(wanted));
-    const value = safeProviderText(component?.longText || component?.shortText, 100);
-    if (value) return value;
-  }
-  return safeProviderText(fallback, 100);
-}
-
-function explicitPlaceLocality(place) {
-  const components = Array.isArray(place?.addressComponents) ? place.addressComponents : [];
-  for (const wanted of ["locality", "postal_town", "sublocality"]) {
-    const component = components.find((item) => Array.isArray(item?.types) && item.types.includes(wanted));
-    const value = safeProviderText(component?.longText || component?.shortText, 100);
-    if (value) return value;
-  }
-  return "";
-}
-
-function eatCategory(place) {
-  const primary = safeProviderText(place?.primaryType, 80).toLowerCase();
-  const types = new Set([primary, ...(Array.isArray(place?.types) ? place.types : [])].map((value) => String(value).toLowerCase()));
-  if (types.has("cafe") || types.has("coffee_shop")) return { key: "cafe", label: "Cafe" };
-  if (types.has("bakery")) return { key: "bakery", label: "Bakery • Cafe" };
-  if (types.has("bar") || types.has("pub")) return { key: "pub", label: "Pub • Food & Drink" };
-  if (types.has("restaurant")) return { key: "restaurant", label: safeProviderText(place?.primaryTypeDisplayName?.text, 80) || "Restaurant" };
-  if (types.has("meal_takeaway") || types.has("food_court")) return { key: "casual", label: "Casual Dining" };
-  return null;
-}
-
-function normaliseEatPlace(place, location, retrievedAt) {
-  if (!place || typeof place !== "object" || Array.isArray(place)) return { rejected: "malformed" };
-  if (String(place.businessStatus || "") === "CLOSED_PERMANENTLY") return { rejected: "permanently_closed" };
-  if (Array.isArray(place.attributions) && place.attributions.length) return { rejected: "external_attribution_required" };
-  const category = eatCategory(place);
-  if (!category) return { rejected: "inappropriate_type" };
-  const primary = safeProviderText(place.primaryType, 80).toLowerCase();
-  if (["supermarket", "grocery_store", "convenience_store", "gas_station", "wholesaler", "catering_service", "store", "lodging"].includes(primary)) {
-    return { rejected: "inappropriate_type" };
-  }
-  const id = safeProviderText(place.id, 160);
-  const name = safeProviderText(place.displayName?.text, 140);
-  if (!id || !name) return { rejected: "malformed" };
-  const ratingValue = Number(place.rating);
-  const rating = Number.isFinite(ratingValue) && ratingValue >= 0 && ratingValue <= 5 ? Math.round(ratingValue * 10) / 10 : null;
-  const reviewValue = Number(place.userRatingCount);
-  const reviewCount = Number.isInteger(reviewValue) && reviewValue >= 0 ? reviewValue : null;
-  const locality = placeLocality(place, location.name);
-  const explicitLocality = explicitPlaceLocality(place);
-  if (explicitLocality && explicitLocality.localeCompare(location.name, undefined, { sensitivity: "accent" }) !== 0) {
-    return { rejected: "outside_nominated_location" };
-  }
-  const address = safeProviderText(place.shortFormattedAddress || place.formattedAddress, 180);
-  return {
-    item: {
-      id: `google-${id}`, name, category: category.label, categoryKey: category.key, locality, address,
-      description: category.label, rating, reviewCount, image: "", source: "google-places-new", sourceId: id,
-      retrievedAt, fixture: false, matchedLocation: safeProviderText(location.name, 100),
-    },
-  };
-}
-
-function selectDiverseEatPlaces(records, limit = EAT_MAX_RESULTS) {
-  const deduplicated = [];
-  const seenIds = new Set();
-  const seenNames = new Set();
-  for (const record of records) {
-    const nameKey = `${record.name.toLowerCase()}|${record.address.toLowerCase()}`;
-    if (seenIds.has(record.sourceId) || seenNames.has(nameKey)) continue;
-    seenIds.add(record.sourceId);
-    seenNames.add(nameKey);
-    deduplicated.push(record);
-  }
-  const categoryOrder = ["cafe", "restaurant", "pub", "bakery", "casual"];
-  const locationOrder = [...new Set(deduplicated.map((item) => item.matchedLocation))];
-  const buckets = new Map();
-  for (const item of deduplicated) {
-    const key = `${item.matchedLocation}|${item.categoryKey}`;
-    if (!buckets.has(key)) buckets.set(key, []);
-    buckets.get(key).push(item);
-  }
-  const selected = [];
-  while (selected.length < limit) {
-    let added = false;
-    for (const location of locationOrder) {
-      for (const category of categoryOrder) {
-        const candidate = buckets.get(`${location}|${category}`)?.shift();
-        if (candidate) {
-          selected.push(candidate);
-          added = true;
-          if (selected.length >= limit) break;
-        }
-      }
-      if (selected.length >= limit) break;
-    }
-    if (!added) break;
-  }
-  return { selected, duplicateCount: records.length - deduplicated.length };
-}
-
-async function fetchWithTimeout(url, options, timeoutMs = 10000) {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-  try { return await fetch(url, { ...options, signal: controller.signal }); }
-  finally { clearTimeout(timer); }
-}
-
-async function loadPublishedLoveMyLocalsMachine(env, slug) {
-  const publicBase = String(env.PUBLIC_BASE_URL || "").replace(/\/+$/, "");
-  if (!publicBase) throw Object.assign(new Error("machine_lookup_not_configured"), { status: 503 });
-  const response = await fetchWithTimeout(`${publicBase}/crispy-bits/${encodeURIComponent(slug)}/machine.json`, {
-    headers: { accept: "application/json" }, cf: { cacheTtl: 0 },
-  });
-  if (!response.ok) throw Object.assign(new Error("machine_not_found"), { status: 404 });
-  const machine = await response.json().catch(() => null);
-  if (!machine || machine.projectType !== "love_my_locals" || safeSlug(machine.slug) !== slug) {
-    throw Object.assign(new Error("invalid_machine"), { status: 404 });
-  }
-  return machine;
-}
-
-function machineEatLocations(machine) {
-  const config = machine?.loveMyLocalsConfig;
-  const supplied = Array.isArray(config?.locations) ? config.locations : [];
-  const resolved = safeProviderText(config?.resolvedGeography, 120);
-  return supplied.slice(0, 3).map((value) => ({ name: safeProviderText(value, 100), resolved })).filter((item) => item.name);
-}
-
-async function googleEatSearch(apiKey, location) {
-  const response = await fetchWithTimeout(GOOGLE_PLACES_TEXT_SEARCH, {
-    method: "POST",
-    headers: {
-      "content-type": "application/json", "x-goog-api-key": apiKey, "x-goog-fieldmask": GOOGLE_PLACES_FIELDS,
-    },
-    body: JSON.stringify({
-      textQuery: `restaurants cafes pubs bakeries in ${location.name}${location.resolved ? `, ${location.resolved}` : ""}`,
-      maxResultCount: 20, languageCode: "en", regionCode: "AU",
-    }),
-  });
-  if (!response.ok) {
-    const status = response.status === 429 ? 429 : response.status === 401 || response.status === 403 ? 503 : 502;
-    throw Object.assign(new Error(response.status === 429 ? "provider_quota_exceeded" : "provider_request_failed"), { status });
-  }
-  const payload = await response.json().catch(() => null);
-  if (!payload || !Array.isArray(payload.places)) throw Object.assign(new Error("malformed_provider_response"), { status: 502 });
-  return payload.places;
-}
-
-async function handleLoveMyLocalsEat(request, env) {
-  if (!env.GOOGLE_PLACES_API_KEY) return eatJson({ ok: false, error: "eat_provider_not_configured" }, 503);
-  const url = new URL(request.url);
-  const slug = safeSlug(url.searchParams.get("slug"));
-  if (!slug) return eatJson({ ok: false, error: "invalid_machine" }, 400);
-  try {
-    const machine = await loadPublishedLoveMyLocalsMachine(env, slug);
-    const locations = machineEatLocations(machine);
-    if (!locations.length) return eatJson({ ok: false, error: "invalid_location" }, 422);
-    const retrievedAt = new Date().toISOString();
-    const rawByLocation = await Promise.all(locations.map(async (location) => ({ location, places: await googleEatSearch(env.GOOGLE_PLACES_API_KEY, location) })));
-    const rejectionReasons = {};
-    const normalised = [];
-    let rawCount = 0;
-    for (const result of rawByLocation) {
-      rawCount += result.places.length;
-      for (const place of result.places) {
-        const value = normaliseEatPlace(place, result.location, retrievedAt);
-        if (value.item) normalised.push(value.item);
-        else rejectionReasons[value.rejected] = (rejectionReasons[value.rejected] || 0) + 1;
-      }
-    }
-    const { selected, duplicateCount } = selectDiverseEatPlaces(normalised);
-    if (!selected.length) return eatJson({ ok: false, error: "no_suitable_places" }, 404);
-    if (duplicateCount) rejectionReasons.duplicate = duplicateCount;
-    const notSelectedCount = normalised.length - duplicateCount - selected.length;
-    if (notSelectedCount > 0) rejectionReasons.not_selected_capacity_or_diversity = notSelectedCount;
-    const primary = locations[0];
-    const categoryMix = selected.reduce((summary, item) => ({ ...summary, [item.categoryKey]: (summary[item.categoryKey] || 0) + 1 }), {});
-    const items = selected.map(({ categoryKey, matchedLocation, ...item }) => item);
-    return eatJson({
-      ok: true,
-      data: {
-        schemaVersion: 1, utilityType: "eat", title: "EAT", icon: "🍴",
-        headline: `GREAT FOOD AROUND ${primary.name.toUpperCase()}`,
-        kicker: "CAFÉS • RESTAURANTS • PUBS • LOCAL FAVOURITES",
-        summary: `A current snapshot of places to eat around ${primary.name}.`,
-        location: { name: primary.name, state: primary.resolved, country: "Australia" },
-        source: "google-places-new", environment: "live", notice: "", attribution: "Google Maps",
-        retrievedAt, refreshAfter: new Date(Date.now() + 15 * 60 * 1000).toISOString(), items,
-      },
-      diagnostics: {
-        rawCount, rejectedCount: Object.values(rejectionReasons).reduce((total, count) => total + count, 0),
-        rejectionReasons, finalCount: items.length, categoryMix,
-        missingImageCount: items.filter((item) => !item.image).length,
-        missingRatingCount: items.filter((item) => item.rating == null).length,
-      },
-    });
-  } catch (error) {
-    const status = Number(error?.status) || (error?.name === "AbortError" ? 504 : 502);
-    const allowed = new Set(["machine_lookup_not_configured", "machine_not_found", "invalid_machine", "provider_quota_exceeded", "provider_request_failed", "malformed_provider_response"]);
-    const code = error?.name === "AbortError" ? "provider_timeout" : allowed.has(error?.message) ? error.message : "eat_provider_unavailable";
-    return eatJson({ ok: false, error: code }, status);
-  }
 }
 
 async function verifyPublishedAssets(env, { slug, revision, expectedUrl, projectType, legacy = false }) {
@@ -646,8 +426,7 @@ async function handleCampaignDelivery(request, env) {
 
 export {
   authenticate, canonicalRequest, constantTimeEqual, deliveryIdempotencyKey, handleBanjoSubmission,
-  handleCampaignDelivery, handleDelivery, handleLoveMyLocalsEat, normaliseEatPlace, selectDiverseEatPlaces,
-  safeFirstName, safeRecipient, safeYouTubeVideo, verifyPublishedAssets,
+  handleCampaignDelivery, handleDelivery, safeFirstName, safeRecipient, safeYouTubeVideo, verifyPublishedAssets,
 };
 
 export default {
@@ -659,8 +438,6 @@ export default {
     if (request.method === "POST" && url.pathname === CAMPAIGN_DELIVERY_PATH) return handleCampaignDelivery(request, env);
     if (request.method === "POST" && url.pathname === BANJO_SUBMISSION_PATH) return handleBanjoSubmission(request, env);
     if (url.pathname === BANJO_SUBMISSION_PATH) return json({ ok: false, error: "method_not_allowed" }, 405, { ...cors, allow: "POST" });
-    if (request.method === "GET" && url.pathname === LOVE_MY_LOCALS_EAT_PATH) return handleLoveMyLocalsEat(request, env);
-    if (url.pathname === LOVE_MY_LOCALS_EAT_PATH) return eatJson({ ok: false, error: "method_not_allowed" }, 405);
     return json({ ok: false, error: "not_found" }, 404, cors);
   },
 };

@@ -1,6 +1,5 @@
 import {ARTIST_SINGLE_REEL_PROFILE,populateSingleReel,spinSingleReel} from './single-reel-engine.js';
 import {MUSIC_MACHINE_REEL_PROFILE,leverResistance} from './machine-mechanics-core.js';
-import {LoveMyLocalsUtilityService} from './love-my-locals-utilities.js';
 
 const machine = document.querySelector('.music-machine[data-machine-platform="youtube"]');
 
@@ -50,21 +49,6 @@ if (machine) {
   const contentMeta = machine.querySelector('[data-content-meta]');
   const contentDescription = machine.querySelector('[data-content-description]');
   const viewYouTube = machine.querySelector('[data-view-youtube]');
-  const localUtilityChamber = machine.querySelector('[data-local-utility-chamber]');
-  const localUtilityButtons = [...machine.querySelectorAll('[data-local-utility]')];
-  const localUtilityBack = machine.querySelector('[data-local-utility-back]');
-  const localUtilityLocation = machine.querySelector('[data-local-utility-location]');
-  const localUtilityIcon = machine.querySelector('[data-local-utility-icon]');
-  const localUtilityTitle = machine.querySelector('[data-local-utility-title]');
-  const localUtilityHeadline = machine.querySelector('[data-local-utility-headline]');
-  const localUtilityKicker = machine.querySelector('[data-local-utility-kicker]');
-  const localUtilityMarket = machine.querySelector('[data-local-utility-market]');
-  const localUtilityCards = machine.querySelector('[data-local-utility-cards]');
-  const localUtilityPrevious = machine.querySelector('[data-local-utility-previous]');
-  const localUtilityNext = machine.querySelector('[data-local-utility-next]');
-  const localUtilityDots = machine.querySelector('[data-local-utility-dots]');
-  const localUtilityAttribution = machine.querySelector('[data-local-utility-attribution]');
-  const localUtilityNotice = machine.querySelector('[data-local-utility-notice]');
   const customerLogo = machine.querySelector('[data-customer-logo]');
   const customerMonogram = machine.querySelector('[data-customer-monogram]');
   const needles = [...machine.querySelectorAll('[data-meter-needle]')];
@@ -109,12 +93,6 @@ if (machine) {
   let storyTickerStarted = false;
   let storyTickerStarting = false;
   let storyTickerEpoch = 0;
-  let localUtilityService = null;
-  let localUtilityConfig = null;
-  let activeLocalUtility = '';
-  let activeLocalUtilityData = null;
-  let localUtilityPage = 0;
-  let localUtilityRestore = null;
   let revealTimer = 0;
   let selectionEpoch = 0;
   let reelMotorAudio = null;
@@ -480,9 +458,7 @@ if (machine) {
       updateStory(video);
     }
     const primaryText = primaryActionButton.querySelector('b');
-    if (activeProjectType !== 'love_my_locals') {
-      primaryActionDestination = activeProjectType === 'banjo' ? '' : primaryActionDestination;
-    }
+    primaryActionDestination = activeProjectType === 'banjo' ? '' : primaryActionDestination;
     if (activeProjectType === 'banjo' && primaryText) primaryText.textContent = 'SHOW BANJO';
     primaryActionButton.setAttribute(
       'aria-label',
@@ -492,199 +468,6 @@ if (machine) {
           ? primaryActionDestination ? primaryActionLabel : `${primaryActionLabel || 'Primary action'} unavailable`
           : 'Contextual action unavailable',
     );
-  }
-
-  function setLocalUtilityButtonsEnabled(enabled) {
-    localUtilityButtons.forEach(button => {
-      const type = String(button.dataset.localUtility || '');
-      const configured = localUtilityConfig?.enabled?.[type] !== false;
-      button.disabled = !(enabled && configured);
-      button.setAttribute('aria-disabled', String(button.disabled));
-    });
-  }
-
-  function updateLocalUtilitySelection(type = '') {
-    localUtilityButtons.forEach(button => {
-      const selected = button.dataset.localUtility === type;
-      button.setAttribute('aria-pressed', String(selected));
-      button.classList.toggle('is-active', selected);
-    });
-  }
-
-  function utilityLocationText(data) {
-    const location = data?.location || {};
-    return [location.name, location.state].filter(Boolean).join('\n');
-  }
-
-  function appendUtilityLine(card, className, value) {
-    const text = String(value || '').trim();
-    if (!text) return;
-    const node = document.createElement('p');
-    node.className = className;
-    node.textContent = text;
-    card.append(node);
-  }
-
-  function renderLocalUtilityMarket(data) {
-    if (!localUtilityMarket) return;
-    localUtilityMarket.replaceChildren();
-    const market = data?.market;
-    localUtilityMarket.hidden = !market;
-    if (!market) return;
-    [
-      ['MEDIAN HOUSE PRICE', market.medianHousePrice],
-      ['MEDIAN UNIT PRICE', market.medianUnitPrice],
-      ['12-MONTH MOVEMENT', market.twelveMonthMovement],
-    ].forEach(([label, value]) => {
-      const item = document.createElement('div');
-      const heading = document.createElement('small');
-      const content = document.createElement('strong');
-      heading.textContent = label;
-      content.textContent = String(value || 'TEST DATA');
-      item.append(heading, content);
-      localUtilityMarket.append(item);
-    });
-  }
-
-  function renderLocalUtilityPage() {
-    if (!activeLocalUtilityData || !localUtilityCards) return;
-    const items = activeLocalUtilityData.items.slice(0, 9);
-    const pageCount = Math.max(1, Math.ceil(items.length / 3));
-    localUtilityPage = Math.max(0, Math.min(pageCount - 1, localUtilityPage));
-    const visible = items.slice(localUtilityPage * 3, localUtilityPage * 3 + 3);
-    localUtilityCards.replaceChildren();
-    visible.forEach(item => {
-      const card = document.createElement('article');
-      card.className = 'local-utility-card';
-      card.setAttribute('role', 'listitem');
-      card.dataset.fixture = String(Boolean(item.fixture));
-      if (!item.image && activeLocalUtility === 'eat' && !item.fixture) {
-        const placeholder = document.createElement('div');
-        placeholder.className = 'local-utility-card-image-placeholder';
-        placeholder.textContent = 'LOCAL PLACE';
-        placeholder.setAttribute('aria-hidden', 'true');
-        card.append(placeholder);
-      }
-      if (item.fixture) {
-        const fixtureBadge = document.createElement('small');
-        fixtureBadge.className = 'local-utility-card-fixture';
-        fixtureBadge.textContent = 'TEST DATA';
-        card.append(fixtureBadge);
-      }
-      const name = document.createElement('h3');
-      name.textContent = item.name;
-      card.append(name);
-      appendUtilityLine(card, 'local-utility-card-category', item.category);
-      appendUtilityLine(card, 'local-utility-card-date', [item.date, item.time].filter(Boolean).join(' • '));
-      appendUtilityLine(card, 'local-utility-card-price', item.price);
-      appendUtilityLine(card, 'local-utility-card-property', [
-        item.bedrooms && `${item.bedrooms} BED`,
-        item.bathrooms && `${item.bathrooms} BATH`,
-        item.carSpaces && `${item.carSpaces} CAR`,
-      ].filter(Boolean).join(' • '));
-      appendUtilityLine(card, 'local-utility-card-locality', item.locality);
-      appendUtilityLine(card, 'local-utility-card-address', item.address);
-      appendUtilityLine(card, 'local-utility-card-description', item.description);
-      if (item.rating) appendUtilityLine(
-        card, 'local-utility-card-rating', `★ ${item.rating}${item.reviewCount ? ` (${item.reviewCount})` : ''}`,
-      );
-      localUtilityCards.append(card);
-    });
-    if (localUtilityDots) {
-      localUtilityDots.replaceChildren();
-      for (let index = 0; index < pageCount; index += 1) {
-        const dot = document.createElement('i');
-        dot.className = index === localUtilityPage ? 'is-active' : '';
-        localUtilityDots.append(dot);
-      }
-    }
-    if (localUtilityPrevious) localUtilityPrevious.disabled = localUtilityPage === 0;
-    if (localUtilityNext) localUtilityNext.disabled = localUtilityPage >= pageCount - 1;
-    const pagination = localUtilityPrevious?.closest('.local-utility-pagination');
-    if (pagination) pagination.hidden = items.length === 0;
-  }
-
-  function renderLocalUtility(data) {
-    activeLocalUtilityData = data;
-    if (localUtilityLocation) localUtilityLocation.textContent = utilityLocationText(data);
-    if (localUtilityIcon) localUtilityIcon.textContent = data.icon;
-    if (localUtilityTitle) localUtilityTitle.textContent = data.title;
-    if (localUtilityHeadline) localUtilityHeadline.textContent = data.headline;
-    if (localUtilityKicker) localUtilityKicker.textContent = data.kicker;
-    if (localUtilityNotice) localUtilityNotice.textContent = data.notice;
-    if (localUtilityAttribution) {
-      localUtilityAttribution.textContent = data.attribution;
-      localUtilityAttribution.hidden = !data.attribution;
-    }
-    renderLocalUtilityMarket(data);
-    renderLocalUtilityPage();
-    winnerTitle.textContent = `${data.title} IN ${String(data.location?.name || machineIdentity).toUpperCase()}`;
-    contentMeta.textContent = data.kicker;
-    contentDescription.textContent = data.summary;
-  }
-
-  function renderLocalUtilityUnavailable(type) {
-    const title = type === 'eat' ? 'EAT' : String(type || 'LOCAL INFORMATION').toUpperCase();
-    renderLocalUtility({
-      title, icon: type === 'eat' ? '🍴' : '', headline: 'LOCAL EATING INFORMATION IS TEMPORARILY UNAVAILABLE.',
-      kicker: '', summary: 'Live local information could not be retrieved. Please try again later.',
-      location: localUtilityConfig?.location || {}, notice: '', attribution: '', items: [],
-    });
-  }
-
-  async function openLocalUtility(type) {
-    if (activeProjectType !== 'love_my_locals' || !current || spinning || !localUtilityService || !localUtilityChamber) return;
-    if (!localUtilityRestore) {
-      localUtilityRestore = {
-        title: winnerTitle.textContent,
-        meta: contentMeta.textContent,
-        description: contentDescription.textContent,
-      };
-    }
-    if (machine.dataset.videoOpen !== 'true') void openVideo(false);
-    if (spinning || !current) return;
-    try {
-      const data = await localUtilityService.get(type);
-      activeLocalUtility = type;
-      localUtilityPage = 0;
-      machine.dataset.utilityMode = type;
-      localUtilityChamber.hidden = false;
-      localUtilityChamber.setAttribute('aria-hidden', 'false');
-      updateLocalUtilitySelection(type);
-      renderLocalUtility(data);
-      setState('UTILITY_READY', `${data.title} information is open. Back to Video restores ${titleOnly(current)}.`);
-      localUtilityBack?.focus();
-    } catch {
-      activeLocalUtility = type;
-      localUtilityPage = 0;
-      machine.dataset.utilityMode = type;
-      localUtilityChamber.hidden = false;
-      localUtilityChamber.setAttribute('aria-hidden', 'false');
-      updateLocalUtilitySelection(type);
-      renderLocalUtilityUnavailable(type);
-      setState('UTILITY_UNAVAILABLE', 'Local eating information is temporarily unavailable. Back to Video restores the current discovery.');
-      localUtilityBack?.focus();
-    }
-  }
-
-  function closeLocalUtility({focus = true, restoreContent = true} = {}) {
-    if (!activeLocalUtility || !localUtilityChamber) return;
-    const previousButton = localUtilityButtons.find(button => button.dataset.localUtility === activeLocalUtility);
-    activeLocalUtility = '';
-    activeLocalUtilityData = null;
-    localUtilityPage = 0;
-    delete machine.dataset.utilityMode;
-    localUtilityChamber.hidden = true;
-    localUtilityChamber.setAttribute('aria-hidden', 'true');
-    updateLocalUtilitySelection();
-    if (restoreContent && localUtilityRestore) {
-      winnerTitle.textContent = localUtilityRestore.title;
-      contentMeta.textContent = localUtilityRestore.meta;
-      contentDescription.textContent = localUtilityRestore.description;
-    }
-    localUtilityRestore = null;
-    if (!spinning && current) setState('VIDEO_READY', `${titleOnly(current)} is ready in the video player.`);
-    if (focus) previousButton?.focus();
   }
 
   function showBanjoChoiceAward(video) {
@@ -873,8 +656,6 @@ if (machine) {
     if (activeProjectType === 'banjo' && current?.contentType === 'sponsor_mp4') emitBanjoEvent('sponsor_respin', {creativeId: current.creativeId});
     cancelPendingReveal();
     spinning = true;
-    closeLocalUtility({focus: false});
-    setLocalUtilityButtonsEnabled(false);
     ensureMachineSamples();
     await closeVideo();
     setState('SPINNING', 'The reel is selecting a video.');
@@ -923,7 +704,6 @@ if (machine) {
     else primaryActionButton.disabled = !primaryActionDestination;
     primaryActionButton.setAttribute('aria-disabled', String(primaryActionButton.disabled));
     respinButton.disabled = false;
-    setLocalUtilityButtonsEnabled(activeProjectType === 'love_my_locals');
     spinning = false;
     showBanjoChoiceAward(winner);
     scheduleVideoReveal(winner);
@@ -1038,7 +818,6 @@ if (machine) {
     await sleep(reducedMotion.matches ? 300 : 900);
     if (spinning || machine.dataset.videoOpen !== 'true' || current?.videoId !== openingVideoId) return;
     meterMode = 'video';
-    if (activeLocalUtility) return;
     setState('VIDEO_READY', `${titleOnly(current)} is ready. Use the video player or press Play Video again.`);
     if (isSponsor && sponsorPlayer) {
       if (playRequested || soundEnabled) {
@@ -1304,7 +1083,6 @@ if (machine) {
     respinButton.addEventListener('click', spin);
     playButton.addEventListener('click', () => {
       if (activeProjectType === 'banjo' && current?.isBanjosChoice) emitBanjoEvent('banjos_choice_video_play', {videoId: current.videoId});
-      closeLocalUtility({focus: false});
       void openVideo(true);
     });
     shareButton.addEventListener('click', () => {
@@ -1313,18 +1091,6 @@ if (machine) {
     });
     primaryActionButton.addEventListener('click', () => {
       openPrimaryAction();
-    });
-    localUtilityButtons.forEach(button => button.addEventListener('click', () => {
-      void openLocalUtility(String(button.dataset.localUtility || ''));
-    }));
-    localUtilityBack?.addEventListener('click', () => closeLocalUtility());
-    localUtilityPrevious?.addEventListener('click', () => {
-      localUtilityPage -= 1;
-      renderLocalUtilityPage();
-    });
-    localUtilityNext?.addEventListener('click', () => {
-      localUtilityPage += 1;
-      renderLocalUtilityPage();
     });
     banjoSubmissionForm?.addEventListener('submit', event => { void submitBanjoForm(event); });
     banjoSubmissionCloseButtons.forEach(button => button.addEventListener('click', closeBanjoSubmission));
@@ -1407,11 +1173,6 @@ if (machine) {
     });
     banjoSponsorLogo?.addEventListener('click', () => emitBanjoEvent('sponsor_logo_click', {placement: 'sponsor_area'}));
     document.addEventListener('keydown', event => {
-      if (event.key === 'Escape' && activeLocalUtility) {
-        event.preventDefault();
-        closeLocalUtility();
-        return;
-      }
       if (event.key === 'Escape' && banjoSubmissionModal && !banjoSubmissionModal.hidden) {
         event.preventDefault();
         closeBanjoSubmission();
@@ -1448,17 +1209,6 @@ if (machine) {
       machineDescription = String(config.customerConfig?.customerStory || config.tickerText || '').trim();
       activeProjectType = String(config.projectType || 'business').trim().toLowerCase();
       machine.dataset.projectType = activeProjectType;
-      if (activeProjectType === 'love_my_locals') {
-        localUtilityConfig = config.loveMyLocalsConfig?.utilityPanel || null;
-        const locations = config.loveMyLocalsConfig?.locations || [];
-        const resolved = String(config.loveMyLocalsConfig?.resolvedGeography || '').split(',').map(value => value.trim());
-        localUtilityService = localUtilityConfig ? new LoveMyLocalsUtilityService(localUtilityConfig, {
-          name: String(locations[0] || machineIdentity),
-          state: String(resolved[0] || ''),
-          country: String(resolved.at(-1) || ''),
-        }) : null;
-        setLocalUtilityButtonsEnabled(false);
-      }
       banjoConfig = activeProjectType === 'banjo' ? (config.banjoConfig || {}) : null;
       if (activeProjectType === 'banjo') {
         banjoSubmissionEndpoint = String(banjoConfig?.submission?.endpoint || '').trim();

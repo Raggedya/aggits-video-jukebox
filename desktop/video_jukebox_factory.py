@@ -867,10 +867,10 @@ class LoveMyLocalsForm(tk.Frame):
             bg=PANEL, fg=MUTED, anchor="w", justify="left", wraplength=500, font=("Segoe UI", 8),
         ).grid(row=row, column=1, sticky="ew", padx=(0, 22), pady=(0, 6))
         row += 1
-        row = self._entry_row(row, "EXPLORE TOURISM URL", self.explore_url_var, "explore_url")
+        row = self._entry_row(row, "EXPLORE URL", self.explore_url_var, "explore_url")
         tk.Label(
             self,
-            text="The one external local-information link used by EXPLORE. Utility cards always remain inside Crispy Bits.",
+            text="Optional official local/regional tourism or community-information page used by EXPLORE.",
             bg=PANEL, fg=MUTED, anchor="w", justify="left", wraplength=500, font=("Segoe UI", 8),
         ).grid(row=row, column=1, sticky="ew", padx=(0, 22), pady=(0, 6))
         row += 1
