@@ -333,7 +333,7 @@ class ProjectForm(tk.Frame):
                 custom_accent=self.custom_accent_var.get(),
             )
             colours = (config.resolved_primary, config.resolved_secondary, config.resolved_accent)
-        except ValueError:
+        except (TypeError, ValueError):
             colours = (PANEL_2, INK, BRASS)
         for swatch, colour in zip(self.palette_swatches, colours):
             swatch.configure(bg=colour)
@@ -780,14 +780,17 @@ class LoveMyLocalsForm(tk.Frame):
 
     project_type = ProjectType.LOVE_MY_LOCALS
 
-    def __init__(self, parent: tk.Misc, submit, new_project) -> None:
+    def __init__(self, parent: tk.Misc, submit, save, new_project) -> None:
         super().__init__(parent, bg=PANEL)
         self.submit_callback = submit
+        self.save_callback = save
         self.new_callback = new_project
         self.editing_project_id: str | None = None
         self.location_vars = [tk.StringVar() for _ in range(3)]
         self.geography_var = tk.StringVar(value=DEFAULT_GEOGRAPHY)
         self.include_shorts_var = tk.BooleanVar(value=False)
+        self.cta_var = tk.StringVar(value=DEFAULT_CTA_LABEL_BY_PROJECT[ProjectType.LOVE_MY_LOCALS])
+        self.destination_url_var = tk.StringVar()
         self.field_widgets: dict[str, tk.Widget] = {}
         self._baseline: tuple[object, ...] = ()
         self._logo_image: ImageTk.PhotoImage | None = None
@@ -822,6 +825,24 @@ class LoveMyLocalsForm(tk.Frame):
             font=("Segoe UI Semibold", 9),
         ).grid(row=row, column=1, sticky="w", padx=(0, 22), pady=5)
         row += 1
+        tk.Label(self, text="DEFAULT CTA BUTTON", bg=PANEL, fg=CREAM, anchor="e", font=("Segoe UI", 9)).grid(row=row, column=0, sticky="e", padx=(22, 12), pady=5)
+        self.cta_combo = ttk.Combobox(
+            self,
+            textvariable=self.cta_var,
+            values=[label for label, _type in CTA_CHOICES_BY_PROJECT[ProjectType.LOVE_MY_LOCALS]],
+            state="readonly",
+            font=("Segoe UI", 9),
+        )
+        self.cta_combo.grid(row=row, column=1, sticky="ew", padx=(0, 22), pady=5, ipady=3)
+        self.field_widgets["cta_type"] = self.cta_combo
+        row += 1
+        row = self._entry_row(row, "DEFAULT DESTINATION URL", self.destination_url_var, "cta_url")
+        tk.Label(
+            self,
+            text="Applied to discovered videos by default. You can override the button and URL for each video during review.",
+            bg=PANEL, fg=MUTED, anchor="w", justify="left", wraplength=500, font=("Segoe UI", 8),
+        ).grid(row=row, column=1, sticky="ew", padx=(0, 22), pady=(0, 6))
+        row += 1
         tk.Label(self, text="TICKER TEXT", bg=PANEL, fg=CREAM, anchor="ne", font=("Segoe UI", 9)).grid(row=row, column=0, sticky="ne", padx=(22, 12), pady=5)
         self.ticker_text = tk.Text(self, height=5, wrap="word", bg="#101217", fg=PAPER, insertbackground=PAPER, relief="flat", highlightbackground=DEEP_BRASS, highlightthickness=1, font=("Segoe UI", 10))
         self.ticker_text.grid(row=row, column=1, sticky="ew", padx=(0, 22), pady=5)
@@ -833,12 +854,20 @@ class LoveMyLocalsForm(tk.Frame):
         self.stage_note = tk.Label(self, text="", bg=PANEL, fg=MUTED, anchor="w", justify="left", wraplength=500, font=("Segoe UI", 8))
         self.stage_note.grid(row=row, column=1, sticky="ew", padx=(0, 22), pady=(0, 8))
         row += 1
+        actions = tk.Frame(self, bg=PANEL)
+        actions.grid(row=row, column=1, sticky="e", padx=(0, 22), pady=(2, 18))
+        self.save_button = tk.Button(
+            actions, text="SAVE", command=self.save_callback, bg=PANEL_2, fg=CREAM,
+            activebackground="#303641", activeforeground=PAPER, relief="flat", bd=0,
+            font=("Segoe UI Semibold", 11), padx=22, pady=12, cursor="hand2",
+        )
+        self.save_button.pack(side="right", padx=(8, 0))
         self.submit_button = tk.Button(
-            self, text="FIND LOCALS", command=self.submit_callback, bg="#008F94", fg=PAPER,
+            actions, text="FIND LOCALS", command=self.submit_callback, bg="#008F94", fg=PAPER,
             activebackground="#00C7CC", activeforeground=INK, relief="flat", bd=0,
             font=("Segoe UI Semibold", 11), padx=22, pady=12, cursor="hand2",
         )
-        self.submit_button.grid(row=row, column=1, sticky="e", padx=(0, 22), pady=(2, 18))
+        self.submit_button.pack(side="right")
         for variable in [*self.location_vars, self.geography_var]:
             variable.trace_add("write", lambda *_args: self._update_resolved())
 
@@ -856,11 +885,16 @@ class LoveMyLocalsForm(tk.Frame):
         self.resolved_label.configure(text=f"SEARCH LOCATION: {resolved}" if resolved else "")
 
     def values(self) -> LoveMyLocalsFormValues:
+        cta_type = CTA_LABEL_TO_TYPE_BY_PROJECT[ProjectType.LOVE_MY_LOCALS].get(
+            self.cta_var.get(), PrimaryCtaType.VISIT_WEBSITE,
+        )
         return LoveMyLocalsFormValues(
             locations=[item.get() for item in self.location_vars],
             geography=self.geography_var.get(),
             include_shorts=self.include_shorts_var.get(),
             ticker_text=self.ticker_text.get("1.0", "end-1c"),
+            default_cta_type=cta_type,
+            default_cta_url=self.destination_url_var.get(),
         )
 
     def set_values(self, values: LoveMyLocalsFormValues) -> None:
@@ -868,6 +902,14 @@ class LoveMyLocalsForm(tk.Frame):
             variable.set(value)
         self.geography_var.set(values.geography or DEFAULT_GEOGRAPHY)
         self.include_shorts_var.set(values.include_shorts)
+        try:
+            cta_type = PrimaryCtaType(values.default_cta_type)
+        except ValueError:
+            cta_type = PrimaryCtaType.VISIT_WEBSITE
+        self.cta_var.set(CTA_TYPE_TO_LABEL_BY_PROJECT[ProjectType.LOVE_MY_LOCALS].get(
+            cta_type, DEFAULT_CTA_LABEL_BY_PROJECT[ProjectType.LOVE_MY_LOCALS],
+        ))
+        self.destination_url_var.set(values.default_cta_url or "")
         self.ticker_text.delete("1.0", "end")
         self.ticker_text.insert("1.0", values.ticker_text)
         self.clear_validation()
@@ -878,6 +920,7 @@ class LoveMyLocalsForm(tk.Frame):
         self.set_values(LoveMyLocalsFormValues(geography=DEFAULT_GEOGRAPHY))
         self.mode_label.configure(text="NEW LOVE MY LOCALS PROJECT")
         self.submit_button.configure(text="FIND LOCALS")
+        self.save_button.configure(state="disabled")
         self.stage_note.configure(text="Enter 1–3 places. FIND LOCALS discovers and auto-populates up to 50 local YouTube videos. No CSV step.")
         self.mark_clean()
 
@@ -886,9 +929,13 @@ class LoveMyLocalsForm(tk.Frame):
         if not config:
             return
         self.editing_project_id = project.id
-        self.set_values(LoveMyLocalsFormValues(list(config.locations), config.resolved_geography, config.include_shorts, project.ticker_text))
+        self.set_values(LoveMyLocalsFormValues(
+            list(config.locations), config.resolved_geography, config.include_shorts, project.ticker_text,
+            config.default_cta_type, config.default_cta_url or "",
+        ))
         self.mode_label.configure(text="EDIT LOVE MY LOCALS PROJECT")
         self.submit_button.configure(text="SEARCH AGAIN")
+        self.save_button.configure(state="normal")
         self.stage_note.configure(text=f"{len(config.selected_videos)} active videos · {len(config.candidates)} saved candidates · {config.resolved_geography}")
         self.mark_clean()
 
@@ -901,7 +948,10 @@ class LoveMyLocalsForm(tk.Frame):
     def restore_baseline(self) -> None:
         if not self._baseline:
             return
-        self.set_values(LoveMyLocalsFormValues(list(self._baseline[0]), str(self._baseline[1]), bool(self._baseline[2]), str(self._baseline[3])))
+        self.set_values(LoveMyLocalsFormValues(
+            list(self._baseline[0]), str(self._baseline[1]), bool(self._baseline[2]), str(self._baseline[3]),
+            str(self._baseline[4]), str(self._baseline[5]),
+        ))
         self.mark_clean()
 
     def show_validation(self, error: Exception) -> None:
@@ -1385,6 +1435,7 @@ class Factory(tk.Tk):
                 form = LoveMyLocalsForm(
                     form_canvas,
                     submit=lambda kind=project_type: self._submit_project(kind),
+                    save=self._save_love_my_locals,
                     new_project=lambda kind=project_type: self._new_project(kind),
                 )
             else:
@@ -1518,6 +1569,8 @@ class Factory(tk.Tk):
         self.status.configure(text=message, fg=BRASS if busy else MUTED)
         for form in self.forms.values():
             form.submit_button.configure(state="disabled" if busy else "normal")
+            if isinstance(form, LoveMyLocalsForm):
+                form.save_button.configure(state="disabled" if busy or not form.editing_project_id else "normal")
         self.settings_button.configure(state="disabled" if busy else "normal")
         self._update_actions()
 
@@ -1550,6 +1603,7 @@ class Factory(tk.Tk):
                 "config": LoveMyLocalsConfig.from_dict(config.to_dict()),
                 "values": LoveMyLocalsFormValues(
                     list(config.locations), config.resolved_geography, config.include_shorts, project.ticker_text,
+                    config.default_cta_type, config.default_cta_url or "",
                 ),
                 "slug": project.slug,
                 "editing_project_id": project.id,
@@ -1769,6 +1823,8 @@ class Factory(tk.Tk):
         if choice is None:
             return False
         if choice:
+            if isinstance(form, LoveMyLocalsForm) and form.editing_project_id:
+                return self._save_love_my_locals()
             return self._submit_project(form.project_type)
         form.restore_baseline()
         return True
@@ -1874,6 +1930,8 @@ class Factory(tk.Tk):
                 values.locations,
                 values.geography,
                 include_shorts=values.include_shorts,
+                default_cta_type=values.default_cta_type,
+                default_cta_url=values.default_cta_url or None,
             )
             thumbnails: dict[str, bytes] = {}
             active = [item for item in config.candidates if item.active]
@@ -1901,6 +1959,36 @@ class Factory(tk.Tk):
             }
 
         self._run_async("FINDING LOCAL YOUTUBE VIDEOS…", worker, self._review_love_my_locals)
+        return False
+
+    def _save_love_my_locals(self) -> bool:
+        if self.busy:
+            return False
+        form = self.forms[ProjectType.LOVE_MY_LOCALS]
+        existing = self.projects.get(form.editing_project_id or "")
+        if not existing or not existing.love_my_locals_config:
+            messagebox.showinfo(DESKTOP_TITLE, "Find and review local videos before saving this project.")
+            return False
+        form.clear_validation()
+        try:
+            values = validate_love_my_locals_form(form.values())
+        except LoveMyLocalsError as error:
+            form.show_validation(error)
+            return False
+        config = LoveMyLocalsConfig.from_dict(existing.love_my_locals_config.to_dict())
+        if [item.casefold() for item in values.locations] != [item.casefold() for item in config.locations]:
+            messagebox.showinfo(DESKTOP_TITLE, "The locations changed. Press SEARCH AGAIN so the saved videos match the new locations.")
+            return False
+        if values.geography.casefold() != config.resolved_geography.casefold() or values.include_shorts != config.include_shorts:
+            messagebox.showinfo(DESKTOP_TITLE, "The search settings changed. Press SEARCH AGAIN before saving.")
+            return False
+        self._finish_love_my_locals({
+            "config": config,
+            "values": values,
+            "slug": existing.slug,
+            "editing_project_id": existing.id,
+            "thumbnails": {},
+        })
         return False
 
     def _review_love_my_locals(self, candidate: dict[str, object]) -> None:
@@ -1974,8 +2062,10 @@ class Factory(tk.Tk):
                 controls = tk.Frame(detail, bg=row["bg"])
                 controls.pack(fill="x")
                 cta_var = tk.StringVar(value=type_to_label.get(item.cta_type, "Visit Website"))
+                tk.Label(controls, text="BUTTON", bg=row["bg"], fg=MUTED, font=("Segoe UI Semibold", 7)).pack(side="left", padx=(0, 5))
                 cta_combo = ttk.Combobox(controls, textvariable=cta_var, values=cta_labels, state="readonly", width=20)
                 cta_combo.pack(side="left")
+                tk.Label(controls, text="DESTINATION URL", bg=row["bg"], fg=MUTED, font=("Segoe UI Semibold", 7)).pack(side="left", padx=(9, 5))
                 url_var = tk.StringVar(value=item.cta_url or "")
                 url_entry = tk.Entry(controls, textvariable=url_var, bg="#101217", fg=PAPER, insertbackground=PAPER, relief="flat", highlightbackground=DEEP_BRASS, highlightthickness=1, font=("Segoe UI", 8))
                 url_entry.pack(side="left", fill="x", expand=True, padx=(7, 0), ipady=5)
@@ -2013,7 +2103,8 @@ class Factory(tk.Tk):
             dialog.destroy()
             self._finish_love_my_locals(candidate)
 
-        self._button(footer, "BUILD LOVE MY LOCALS", save_review, primary=True, compact=True).pack(side="right")
+        save_label = "SAVE CHANGES" if candidate.get("editing_project_id") else "SAVE LOVE MY LOCALS"
+        self._button(footer, save_label, save_review, primary=True, compact=True).pack(side="right")
         self._button(footer, "CANCEL", dialog.destroy, compact=True).pack(side="right", padx=8)
         canvas.bind("<Enter>", lambda _event: canvas.bind_all("<MouseWheel>", lambda event: canvas.yview_scroll(int(-event.delta / 120), "units")))
         canvas.bind("<Leave>", lambda _event: canvas.unbind_all("<MouseWheel>"))

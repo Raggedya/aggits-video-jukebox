@@ -899,6 +899,8 @@ class LoveMyLocalsConfig:
     resolved_locations: list[str] = field(default_factory=list)
     include_shorts: bool = False
     candidates: list[LoveMyLocalsCandidate] = field(default_factory=list)
+    default_cta_type: PrimaryCtaType | str = PrimaryCtaType.VISIT_WEBSITE
+    default_cta_url: str | None = None
     exclusion_diagnostics: list[dict[str, str]] = field(default_factory=list)
     last_search_at: str = ""
 
@@ -926,6 +928,13 @@ class LoveMyLocalsConfig:
             raise ProjectValidationError("Love My Locals can include no more than 50 videos.")
         if not self.include_shorts and any(item.active and item.is_short for item in self.candidates):
             raise ProjectValidationError("YouTube Shorts are disabled for this Love My Locals project.")
+        try:
+            self.default_cta_type = PrimaryCtaType(self.default_cta_type)
+        except (TypeError, ValueError) as error:
+            raise ProjectValidationError("Select a valid Love My Locals default CTA.") from error
+        if self.default_cta_type not in CHANNEL_MASTER_CTA_TYPES:
+            raise ProjectValidationError("Select a valid Love My Locals default CTA.")
+        self.default_cta_url = _optional_http_url(self.default_cta_url, "Love My Locals default CTA URL")
         diagnostics: list[dict[str, str]] = []
         for item in self.exclusion_diagnostics:
             if not isinstance(item, dict):
@@ -953,6 +962,8 @@ class LoveMyLocalsConfig:
             "resolved_locations": list(self.resolved_locations),
             "include_shorts": self.include_shorts,
             "candidates": [item.to_dict() for item in self.candidates],
+            "default_cta_type": self.default_cta_type.value,
+            "default_cta_url": self.default_cta_url,
             "exclusion_diagnostics": [dict(item) for item in self.exclusion_diagnostics],
             "last_search_at": self.last_search_at,
         }
@@ -966,6 +977,8 @@ class LoveMyLocalsConfig:
             resolved_locations=[str(item) for item in (source.get("resolved_locations", source.get("resolvedLocations", [])) or [])],
             include_shorts=bool(source.get("include_shorts", source.get("includeShorts", False))),
             candidates=[LoveMyLocalsCandidate.from_dict(item) for item in (source.get("candidates") or []) if isinstance(item, dict)],
+            default_cta_type=source.get("default_cta_type", source.get("defaultCtaType", PrimaryCtaType.VISIT_WEBSITE.value)),
+            default_cta_url=source.get("default_cta_url", source.get("defaultCtaUrl")),
             exclusion_diagnostics=[
                 dict(item)
                 for item in (source.get("exclusion_diagnostics", source.get("exclusionDiagnostics", [])) or [])

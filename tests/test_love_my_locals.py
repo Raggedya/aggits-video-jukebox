@@ -25,7 +25,7 @@ from aggits_video_factory.love_my_locals import (
     resolved_locations,
     validate_form,
 )
-from aggits_video_factory.models import LoveMyLocalsConfig, Project, ProjectType
+from aggits_video_factory.models import LoveMyLocalsConfig, PrimaryCtaType, Project, ProjectType
 from aggits_video_factory.site_builder import build_project_site
 from aggits_video_factory.store import ProjectStore
 from aggits_video_factory.youtube_api import YouTubeError
@@ -83,6 +83,10 @@ class LoveMyLocalsTests(unittest.TestCase):
         source = (ROOT / "desktop" / "video_jukebox_factory.py").read_text(encoding="utf-8")
         self.assertIn("ProjectType.LOVE_MY_LOCALS", source)
         self.assertIn('text="FIND LOCALS"', source)
+        self.assertIn('text="DEFAULT CTA BUTTON"', source)
+        self.assertIn('"DEFAULT DESTINATION URL"', source)
+        self.assertIn('text="SAVE"', source)
+        self.assertIn('"SAVE LOVE MY LOCALS"', source)
         self.assertIn("LoveMyLocalsDiscoveryService", source)
         self.assertNotIn("Love My Locals CSV", source)
 
@@ -95,6 +99,19 @@ class LoveMyLocalsTests(unittest.TestCase):
             validate_form(LoveMyLocalsFormValues([]))
         with self.assertRaises(LoveMyLocalsError):
             validate_form(LoveMyLocalsFormValues(["A", "B", "C", "D"]))
+
+    def test_default_cta_selector_and_destination_url_validation(self):
+        values = validate_form(LoveMyLocalsFormValues(
+            ["Box Hill"],
+            default_cta_type=PrimaryCtaType.EXPLORE,
+            default_cta_url="https://example.com/box-hill",
+        ))
+        self.assertEqual(values.default_cta_type, PrimaryCtaType.EXPLORE)
+        self.assertEqual(values.default_cta_url, "https://example.com/box-hill")
+        with self.assertRaises(LoveMyLocalsError):
+            validate_form(LoveMyLocalsFormValues(
+                ["Box Hill"], default_cta_url="javascript:alert(1)",
+            ))
 
     def test_relevance_weights_title_description_and_tag(self):
         self.assertEqual(qualify_metadata("Box Hill cafe", "", [], ["Box Hill"])[2], 3)
@@ -194,15 +211,26 @@ class LoveMyLocalsTests(unittest.TestCase):
         self.assertEqual(len(config.selected_videos), 50)
 
     def test_project_save_reload_cta_ticker_and_optional_destination(self):
-        config = discovered(3)
-        config.candidates[0].cta_url = "https://example.com/local"
-        values = LoveMyLocalsFormValues(["Box Hill"], ticker_text=default_ticker(["Box Hill"]))
+        config = LoveMyLocalsDiscoveryService(
+            FakeClient([item(index, title=f"Box Hill discovery {index}") for index in range(3)]),
+            rng=random.Random(7),
+        ).discover(
+            ["Box Hill"],
+            default_cta_type=PrimaryCtaType.EXPLORE,
+            default_cta_url="https://example.com/local",
+        )
+        values = LoveMyLocalsFormValues(
+            ["Box Hill"],
+            ticker_text=default_ticker(["Box Hill"]),
+            default_cta_type=PrimaryCtaType.EXPLORE,
+            default_cta_url="https://example.com/local",
+        )
         project = assemble_project(values, config, "box-hill")
         self.assertEqual(project.project_type, ProjectType.LOVE_MY_LOCALS)
         self.assertEqual(video_limit_for_project_type(project.project_type), 50)
         self.assertEqual(ticker_limit_for_project_type(project.project_type), 1500)
         self.assertGreater(len(CTA_CHOICES_BY_PROJECT[project.project_type]), 1)
-        self.assertIsNone(config.candidates[1].cta_url)
+        self.assertEqual(config.candidates[1].cta_url, "https://example.com/local")
         with tempfile.TemporaryDirectory() as temporary:
             store = ProjectStore(Path(temporary))
             store.save_project(project)
@@ -210,6 +238,25 @@ class LoveMyLocalsTests(unittest.TestCase):
             self.assertEqual(loaded.love_my_locals_config.locations, ["Box Hill"])
             self.assertEqual(loaded.ticker_text, project.ticker_text)
             self.assertEqual(loaded.love_my_locals_config.candidates[0].cta_url, "https://example.com/local")
+            self.assertEqual(loaded.love_my_locals_config.default_cta_type, PrimaryCtaType.EXPLORE)
+            self.assertEqual(loaded.love_my_locals_config.default_cta_url, "https://example.com/local")
+
+    def test_saving_new_defaults_preserves_per_video_cta_overrides(self):
+        config = discovered(3)
+        overridden = config.candidates[0]
+        overridden.cta_type = PrimaryCtaType.BOOK_NOW
+        overridden.cta_url = "https://example.com/special"
+        values = LoveMyLocalsFormValues(
+            ["Box Hill"],
+            default_cta_type=PrimaryCtaType.EXPLORE,
+            default_cta_url="https://example.com/default",
+        )
+        project = assemble_project(values, config, "box-hill")
+        candidates = project.love_my_locals_config.candidates
+        self.assertEqual(candidates[0].cta_type, PrimaryCtaType.BOOK_NOW)
+        self.assertEqual(candidates[0].cta_url, "https://example.com/special")
+        self.assertTrue(all(item.cta_type is PrimaryCtaType.EXPLORE for item in candidates[1:]))
+        self.assertTrue(all(item.cta_url == "https://example.com/default" for item in candidates[1:]))
 
     def test_preview_payload_logo_plaque_teal_ctas_and_qr(self):
         results = [item(index, title=f"Box Hill discovery {index}") for index in range(2)]

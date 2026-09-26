@@ -5,10 +5,12 @@ import random
 import re
 from dataclasses import dataclass, field
 from typing import Iterable
+from urllib.parse import urlparse
 from uuid import uuid4
 
 from .config import MAX_LOVE_MY_LOCALS_CANDIDATES, MAX_LOVE_MY_LOCALS_VIDEOS
 from .models import (
+    CHANNEL_MASTER_CTA_TYPES,
     ChannelMasterConfig,
     LoveMyLocalsCandidate,
     LoveMyLocalsConfig,
@@ -74,6 +76,8 @@ class LoveMyLocalsFormValues:
     geography: str = DEFAULT_GEOGRAPHY
     include_shorts: bool = False
     ticker_text: str = ""
+    default_cta_type: PrimaryCtaType | str = PrimaryCtaType.VISIT_WEBSITE
+    default_cta_url: str = ""
 
     def comparable(self) -> tuple[object, ...]:
         return (
@@ -81,6 +85,8 @@ class LoveMyLocalsFormValues:
             self.geography,
             bool(self.include_shorts),
             self.ticker_text,
+            self.default_cta_type.value if isinstance(self.default_cta_type, PrimaryCtaType) else str(self.default_cta_type),
+            self.default_cta_url,
         )
 
 
@@ -103,7 +109,20 @@ def validate_form(values: LoveMyLocalsFormValues) -> LoveMyLocalsFormValues:
     ticker = str(values.ticker_text or "").strip() or default_ticker(locations)
     if len(ticker) > 1500:
         raise LoveMyLocalsError("Ticker Text cannot exceed 1500 characters.")
-    return LoveMyLocalsFormValues(locations, geography, bool(values.include_shorts), ticker)
+    try:
+        cta_type = PrimaryCtaType(values.default_cta_type)
+    except (TypeError, ValueError) as error:
+        raise LoveMyLocalsError("Select a valid Love My Locals CTA button.") from error
+    if cta_type not in CHANNEL_MASTER_CTA_TYPES:
+        raise LoveMyLocalsError("Select a valid Love My Locals CTA button.")
+    cta_url = str(values.default_cta_url or "").strip()
+    if cta_url:
+        parsed = urlparse(cta_url)
+        if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+            raise LoveMyLocalsError("CTA Destination URL must be a complete http or https URL.")
+    return LoveMyLocalsFormValues(
+        locations, geography, bool(values.include_shorts), ticker, cta_type, cta_url,
+    )
 
 
 def location_title(locations: Iterable[str], *, plaque: bool = False) -> str:
@@ -231,6 +250,8 @@ class LoveMyLocalsDiscoveryService:
         geography: str = DEFAULT_GEOGRAPHY,
         *,
         include_shorts: bool = False,
+        default_cta_type: PrimaryCtaType | str = PrimaryCtaType.VISIT_WEBSITE,
+        default_cta_url: str | None = None,
         target: int = MAX_LOVE_MY_LOCALS_VIDEOS,
     ) -> LoveMyLocalsConfig:
         names = normalize_locations(locations)
@@ -288,8 +309,8 @@ class LoveMyLocalsDiscoveryService:
                 match_basis=match_basis,
                 relevance_score=score,
                 is_short=short,
-                cta_type=PrimaryCtaType.VISIT_WEBSITE,
-                cta_url=None,
+                cta_type=default_cta_type,
+                cta_url=default_cta_url,
                 active=False,
             ))
             if len(qualified) >= MAX_LOVE_MY_LOCALS_CANDIDATES:
@@ -306,6 +327,8 @@ class LoveMyLocalsDiscoveryService:
             resolved_locations=resolved,
             include_shorts=include_shorts,
             candidates=qualified,
+            default_cta_type=default_cta_type,
+            default_cta_url=default_cta_url,
             exclusion_diagnostics=exclusion_diagnostics,
             last_search_at=utc_now(),
         )
@@ -345,6 +368,17 @@ def assemble_project(
         raise LoveMyLocalsError("The reviewed discovery results do not match the current geographic context. Search again before building.")
     if validated.include_shorts != config.include_shorts:
         raise LoveMyLocalsError("The YouTube Shorts setting changed after discovery. Search again before building.")
+    previous_type = config.default_cta_type
+    previous_url = config.default_cta_url
+    for item in config.candidates:
+        uses_previous_default = item.cta_type == previous_type and item.cta_url == previous_url
+        if not item.cta_url or uses_previous_default:
+            item.cta_type = validated.default_cta_type
+            item.cta_url = validated.default_cta_url or None
+            item.__post_init__()
+    config.default_cta_type = validated.default_cta_type
+    config.default_cta_url = validated.default_cta_url or None
+    config.__post_init__()
     if not config.selected_videos:
         raise LoveMyLocalsError("No active local videos are available to build this machine.")
     if existing and existing.project_type is not ProjectType.LOVE_MY_LOCALS:
