@@ -15,6 +15,7 @@ from qrcode.constants import ERROR_CORRECT_H
 from .config import BANJO_SUBMISSION_ENDPOINT, BRAND_NAME, PUBLIC_BASE_URL, resource_path
 from .banjo import BANJO_TITLE, validate_sponsor_logo, validate_sponsor_mp4, verify_banjo_character
 from .models import Project, ProjectType, project_primary_cta
+from .love_my_locals_utilities import build_development_utility_fixtures, fixture_provider_metadata
 from .social_preview import (
     BANJO_SOCIAL_PREVIEW_SIZE,
     SOCIAL_PREVIEW_SIZE,
@@ -245,14 +246,20 @@ def build_project_site(project: Project, destination: Path) -> Path:
     story_sections = _story_sections(project.ticker_text, project.title, project.project_type)
     banjo_ticker = _banjo_ticker_text(project.ticker_text) if project.project_type is ProjectType.BANJO else ""
     channel_master_ticker = _banjo_ticker_text(project.ticker_text) if channel_product else ""
-    primary_action_label = primary_cta.display_label if primary_cta else (
+    primary_action_label = "EXPLORE" if project.project_type is ProjectType.LOVE_MY_LOCALS else primary_cta.display_label if primary_cta else (
         "SHOW BANJO" if project.project_type is ProjectType.BANJO
-        else "MORE INFO" if project.project_type is ProjectType.LOVE_MY_LOCALS
         else "PRIMARY ACTION"
+    )
+    love_my_locals_explore_url = (
+        project.love_my_locals_config.explore_url or ""
+        if project.project_type is ProjectType.LOVE_MY_LOCALS and project.love_my_locals_config
+        else ""
     )
     primary_action_aria = (
         "Show Banjo your car"
         if project.project_type is ProjectType.BANJO
+        else "Explore local and regional visitor information" if love_my_locals_explore_url
+        else "Explore unavailable" if project.project_type is ProjectType.LOVE_MY_LOCALS
         else primary_action_label if primary_cta and primary_cta.destination_url else f"{primary_action_label} unavailable"
     )
     initial_reel_instruction = "PULL THE LEVER  ──────→"
@@ -370,6 +377,40 @@ def build_project_site(project: Project, destination: Path) -> Path:
         "{{BANJO_SPONSOR_PLAYER_MARKUP}}": (
             '<video data-sponsor-player preload="metadata" controls playsinline hidden aria-label="Sponsor video"></video>'
             if project.project_type is ProjectType.BANJO else ""
+        ),
+        "{{LOVE_MY_LOCALS_UTILITY_CHAMBER_MARKUP}}": (
+            '<section class="local-utility-chamber" data-local-utility-chamber hidden '
+            'aria-live="polite" aria-label="Local utility information">'
+            '<header class="local-utility-header">'
+            '<button type="button" class="local-utility-back" data-local-utility-back>← BACK TO VIDEO</button>'
+            '<span class="local-utility-location" data-local-utility-location></span>'
+            '</header>'
+            '<div class="local-utility-heading"><span data-local-utility-icon aria-hidden="true"></span>'
+            '<div><h2 data-local-utility-title></h2><strong data-local-utility-headline></strong>'
+            '<p data-local-utility-kicker></p></div></div>'
+            '<div class="local-utility-market" data-local-utility-market hidden></div>'
+            '<div class="local-utility-cards" data-local-utility-cards role="list"></div>'
+            '<nav class="local-utility-pagination" aria-label="Utility pages">'
+            '<button type="button" data-local-utility-previous aria-label="Previous utility page">‹</button>'
+            '<span data-local-utility-dots aria-hidden="true"></span>'
+            '<button type="button" data-local-utility-next aria-label="Next utility page">›</button>'
+            '</nav>'
+            '<p class="local-utility-fixture-notice" data-local-utility-notice></p>'
+            '</section>'
+            if project.project_type is ProjectType.LOVE_MY_LOCALS else ""
+        ),
+        "{{LOVE_MY_LOCALS_UTILITY_NAV_MARKUP}}": (
+            '<nav class="local-utility-nav" data-local-utility-nav aria-label="Local information utilities">'
+            '<button type="button" data-local-utility="eat" aria-pressed="false" disabled>'
+            '<span aria-hidden="true">🍴</span><b>EAT</b></button>'
+            '<button type="button" data-local-utility="stay" aria-pressed="false" disabled>'
+            '<span aria-hidden="true">🛏</span><b>STAY</b></button>'
+            '<button type="button" data-local-utility="whats-on" aria-pressed="false" disabled>'
+            '<span aria-hidden="true">★</span><b>WHAT’S ON</b></button>'
+            '<button type="button" data-local-utility="house-prices" aria-pressed="false" disabled>'
+            '<span aria-hidden="true">⌂</span><b>HOUSE PRICES</b></button>'
+            '</nav>'
+            if project.project_type is ProjectType.LOVE_MY_LOCALS else ""
         ),
         "{{BANJO_CHOICE_MARKUP}}": (
             '<section class="banjo-choice-overlay" data-banjo-choice-overlay aria-hidden="true" role="status">'
@@ -495,6 +536,13 @@ def build_project_site(project: Project, destination: Path) -> Path:
         item.video.video_id: item
         for item in (project.love_my_locals_config.candidates if project.love_my_locals_config else [])
     }
+    if project.project_type is ProjectType.LOVE_MY_LOCALS:
+        customer_config["primaryAction"] = {
+            "type": "explore",
+            "displayLabel": "EXPLORE",
+            "destinationURL": love_my_locals_explore_url,
+            "enabled": bool(love_my_locals_explore_url),
+        }
     payload = {
         "schemaVersion": 2,
         "projectType": project.project_type.value,
@@ -659,6 +707,14 @@ def build_project_site(project: Project, destination: Path) -> Path:
             "includeShorts": locals_config.include_shorts,
             "logoAssetUrl": "assets/love-my-locals/love-my-locals-logo.png",
             "brandTeal": "#00C7CC",
+            "exploreUrl": locals_config.explore_url or "",
+            "utilityPanel": {
+                **fixture_provider_metadata(),
+                "enabled": dict(locals_config.utility_enabled),
+                "data": build_development_utility_fixtures(
+                    locals_config.locations, locals_config.resolved_geography,
+                ),
+            },
         }
     (destination / "machine.json").write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     create_qr_card(project, destination / "qr-card.png")

@@ -793,6 +793,7 @@ class LoveMyLocalsForm(tk.Frame):
         self.include_council_meetings_var = tk.BooleanVar(value=False)
         self.cta_var = tk.StringVar(value=DEFAULT_CTA_LABEL_BY_PROJECT[ProjectType.LOVE_MY_LOCALS])
         self.destination_url_var = tk.StringVar()
+        self.explore_url_var = tk.StringVar()
         self.field_widgets: dict[str, tk.Widget] = {}
         self._baseline: tuple[object, ...] = ()
         self._logo_image: ImageTk.PhotoImage | None = None
@@ -866,6 +867,13 @@ class LoveMyLocalsForm(tk.Frame):
             bg=PANEL, fg=MUTED, anchor="w", justify="left", wraplength=500, font=("Segoe UI", 8),
         ).grid(row=row, column=1, sticky="ew", padx=(0, 22), pady=(0, 6))
         row += 1
+        row = self._entry_row(row, "EXPLORE TOURISM URL", self.explore_url_var, "explore_url")
+        tk.Label(
+            self,
+            text="The one external local-information link used by EXPLORE. Utility cards always remain inside Crispy Bits.",
+            bg=PANEL, fg=MUTED, anchor="w", justify="left", wraplength=500, font=("Segoe UI", 8),
+        ).grid(row=row, column=1, sticky="ew", padx=(0, 22), pady=(0, 6))
+        row += 1
         tk.Label(self, text="TICKER TEXT", bg=PANEL, fg=CREAM, anchor="ne", font=("Segoe UI", 9)).grid(row=row, column=0, sticky="ne", padx=(22, 12), pady=5)
         self.ticker_text = tk.Text(self, height=5, wrap="word", bg="#101217", fg=PAPER, insertbackground=PAPER, relief="flat", highlightbackground=DEEP_BRASS, highlightthickness=1, font=("Segoe UI", 10))
         self.ticker_text.grid(row=row, column=1, sticky="ew", padx=(0, 22), pady=5)
@@ -920,6 +928,7 @@ class LoveMyLocalsForm(tk.Frame):
             default_cta_url=self.destination_url_var.get(),
             tourism_mode=self.tourism_mode_var.get().lower(),
             include_council_meetings=self.include_council_meetings_var.get(),
+            explore_url=self.explore_url_var.get(),
         )
 
     def set_values(self, values: LoveMyLocalsFormValues) -> None:
@@ -937,6 +946,7 @@ class LoveMyLocalsForm(tk.Frame):
         self.destination_url_var.set(values.default_cta_url or "")
         self.tourism_mode_var.set(str(values.tourism_mode or "limited").upper())
         self.include_council_meetings_var.set(bool(values.include_council_meetings))
+        self.explore_url_var.set(values.explore_url or "")
         self.ticker_text.delete("1.0", "end")
         self.ticker_text.insert("1.0", values.ticker_text)
         self.clear_validation()
@@ -959,6 +969,7 @@ class LoveMyLocalsForm(tk.Frame):
         self.set_values(LoveMyLocalsFormValues(
             list(config.locations), config.resolved_geography, config.include_shorts, project.ticker_text,
             config.default_cta_type, config.default_cta_url or "", config.tourism_mode, config.include_council_meetings,
+            config.explore_url or "",
         ))
         self.mode_label.configure(text="EDIT LOVE MY LOCALS PROJECT")
         self.submit_button.configure(text="SEARCH AGAIN")
@@ -978,6 +989,7 @@ class LoveMyLocalsForm(tk.Frame):
         self.set_values(LoveMyLocalsFormValues(
             list(self._baseline[0]), str(self._baseline[1]), bool(self._baseline[2]), str(self._baseline[3]),
             str(self._baseline[4]), str(self._baseline[5]), str(self._baseline[6]), bool(self._baseline[7]),
+            str(self._baseline[8]),
         ))
         self.mark_clean()
 
@@ -1631,6 +1643,7 @@ class Factory(tk.Tk):
                 "values": LoveMyLocalsFormValues(
                     list(config.locations), config.resolved_geography, config.include_shorts, project.ticker_text,
                     config.default_cta_type, config.default_cta_url or "", config.tourism_mode, config.include_council_meetings,
+                    config.explore_url or "",
                 ),
                 "slug": project.slug,
                 "editing_project_id": project.id,

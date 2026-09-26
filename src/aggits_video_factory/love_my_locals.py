@@ -135,6 +135,7 @@ class LoveMyLocalsFormValues:
     default_cta_url: str = ""
     tourism_mode: str = "limited"
     include_council_meetings: bool = False
+    explore_url: str = ""
 
     def comparable(self) -> tuple[object, ...]:
         return (
@@ -146,6 +147,7 @@ class LoveMyLocalsFormValues:
             self.default_cta_url,
             self.tourism_mode,
             bool(self.include_council_meetings),
+            self.explore_url,
         )
 
 
@@ -182,9 +184,14 @@ def validate_form(values: LoveMyLocalsFormValues) -> LoveMyLocalsFormValues:
     tourism_mode = str(values.tourism_mode or "limited").strip().lower()
     if tourism_mode not in TOURISM_MODES:
         raise LoveMyLocalsError("Tourism discovery must be LIMITED or INCLUDE.")
+    explore_url = str(values.explore_url or "").strip()
+    if explore_url:
+        parsed = urlparse(explore_url)
+        if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+            raise LoveMyLocalsError("Explore Tourism URL must be a complete http or https URL.")
     return LoveMyLocalsFormValues(
         locations, geography, bool(values.include_shorts), ticker, cta_type, cta_url,
-        tourism_mode, bool(values.include_council_meetings),
+        tourism_mode, bool(values.include_council_meetings), explore_url,
     )
 
 
@@ -681,6 +688,7 @@ def assemble_project(
             item.__post_init__()
     config.default_cta_type = validated.default_cta_type
     config.default_cta_url = validated.default_cta_url or None
+    config.explore_url = validated.explore_url or None
     config.__post_init__()
     if not config.selected_videos:
         raise LoveMyLocalsError("No active local videos are available to build this machine.")
