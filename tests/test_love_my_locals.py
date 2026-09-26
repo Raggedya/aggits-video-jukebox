@@ -225,6 +225,14 @@ class LoveMyLocalsTests(unittest.TestCase):
             page = (destination / "index.html").read_text(encoding="utf-8")
             self.assertEqual(machine["projectType"], "love_my_locals")
             self.assertEqual(machine["loveMyLocalsConfig"]["brandTeal"], "#00C7CC")
+            self.assertEqual(machine["channelMasterConfig"]["palette"], {
+                "name": "MIDNIGHT",
+                "customPrimary": None,
+                "customAccent": None,
+                "resolvedPrimary": "#172033",
+                "resolvedSecondary": "#080B12",
+                "resolvedAccent": "#6D80AF",
+            })
             self.assertEqual(machine["videos"][0]["ctaURL"], "https://example.com/one")
             self.assertEqual(machine["videos"][1]["ctaURL"], "")
             self.assertIn("BOX HILL + BOX HILL NORTH", page)

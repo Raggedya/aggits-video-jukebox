@@ -22,7 +22,6 @@ from .youtube_api import ChannelCatalogue, YouTubeClient, YouTubeError, best_thu
 
 
 DEFAULT_GEOGRAPHY = "Victoria, Australia"
-LOVE_MY_LOCALS_TEAL = "#00C7CC"
 MATCH_WEIGHTS = {"title": 3, "description": 2, "tag": 1}
 SPAM_PATTERN = re.compile(r"\b(?:sub\s*4\s*sub|free\s+bitcoin|crypto\s+giveaway|click\s+here\s+to\s+earn)\b", re.I)
 PROPERTY_CONTEXT_PATTERN = re.compile(
@@ -363,11 +362,7 @@ def assemble_project(
         channel_thumbnail=active[0].thumbnail_url if active else "",
         id=existing.id if existing else str(uuid4()),
         project_type=ProjectType.LOVE_MY_LOCALS,
-        channel_master_config=ChannelMasterConfig(
-            palette="CUSTOM",
-            custom_primary="#10282A",
-            custom_accent=LOVE_MY_LOCALS_TEAL,
-        ),
+        channel_master_config=ChannelMasterConfig(palette="MIDNIGHT"),
         love_my_locals_config=config,
         excluded_video_ids=excluded,
         videos=[item.video for item in config.candidates],
