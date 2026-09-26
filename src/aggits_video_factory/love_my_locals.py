@@ -25,6 +25,44 @@ DEFAULT_GEOGRAPHY = "Victoria, Australia"
 LOVE_MY_LOCALS_TEAL = "#00C7CC"
 MATCH_WEIGHTS = {"title": 3, "description": 2, "tag": 1}
 SPAM_PATTERN = re.compile(r"\b(?:sub\s*4\s*sub|free\s+bitcoin|crypto\s+giveaway|click\s+here\s+to\s+earn)\b", re.I)
+PROPERTY_CONTEXT_PATTERN = re.compile(
+    r"\b(?:real\s+estate|realty|realtor|estate\s+agents?|property|properties|house|home|apartment|unit|townhouse|land|property\s+development)\b",
+    re.I,
+)
+DIRECT_PROPERTY_LISTING_PATTERN = re.compile(
+    r"\b(?:(?:property|house|home|apartment|unit|townhouse|land)\s+(?:is\s+|now\s+)?(?:for\s+sale|for\s+rent)|"
+    r"(?:for\s+sale|for\s+rent)\s+(?:property|house|home|apartment|unit|townhouse|land)|"
+    r"property\s+listing|real[ -]?estate\s+listing|rental\s+listing|"
+    r"property\s+inspection|land\s+for\s+sale)\b",
+    re.I,
+)
+PROPERTY_AGENCY_PATTERN = re.compile(
+    r"\b(?:real\s+estate|realty|realtor|estate\s+agents?|property\s+(?:group|sales)|properties)\b",
+    re.I,
+)
+PROPERTY_SALES_PATTERN = re.compile(
+    r"\b(?:for\s+sale|for\s+rent|auction|open\s+(?:home|house)|inspection|listing|sold|rental|"
+    r"rent|now\s+selling|private\s+sale|display\s+suite|enquire\s+now|off[ -]the[ -]plan)\b",
+    re.I,
+)
+PROPERTY_TOUR_PATTERN = re.compile(
+    r"\b(?:agent\s+walkthrough|property\s+walkthrough|walk[ -]?through|house\s+tour|home\s+tour|"
+    r"property\s+tour|apartment\s+tour|unit\s+tour)\b",
+    re.I,
+)
+STREET_ADDRESS_PATTERN = re.compile(
+    r"\b\d{1,5}[A-Za-z]?\s+[A-Za-z][A-Za-z' -]{1,45}\s"
+    r"(?:street|st|road|rd|avenue|ave|drive|dr|court|ct|lane|ln|crescent|cres|boulevard|blvd|parade|place|pl|way)\b",
+    re.I,
+)
+PROPERTY_SPEC_PATTERN = re.compile(
+    r"\b\d+(?:\.\d+)?\s*(?:bed(?:room)?s?|bath(?:room)?s?|car\s*spaces?|garage|sqm|m2|m²|square\s+metres?)\b",
+    re.I,
+)
+PROPERTY_PRICE_PATTERN = re.compile(
+    r"(?:\$\s?\d[\d,.]*(?:\s*(?:k|m|million))?|\b\d[\d,.]*\s*(?:per\s+week|p/?w)\b)",
+    re.I,
+)
 
 
 class LoveMyLocalsError(RuntimeError):
@@ -110,6 +148,43 @@ def qualify_metadata(title: str, description: str, tags: Iterable[str], location
     return best
 
 
+def real_estate_exclusion_reason(
+    title: str,
+    description: str,
+    tags: Iterable[str],
+    channel_title: str = "",
+) -> str | None:
+    """Identify sales/rental listings without blocking general property discussion."""
+    metadata = " ".join((str(title), str(description), " ".join(str(tag) for tag in tags)))
+    channel = str(channel_title or "")
+    combined = f"{metadata} {channel}"
+    if DIRECT_PROPERTY_LISTING_PATTERN.search(metadata):
+        return "real_estate:direct_listing_language"
+
+    property_context = bool(PROPERTY_CONTEXT_PATTERN.search(combined))
+    agency_context = bool(PROPERTY_AGENCY_PATTERN.search(channel)) or bool(
+        re.search(r"\breal[ -]?estate\s+agent\b", metadata, flags=re.I)
+    )
+    sales_context = bool(PROPERTY_SALES_PATTERN.search(metadata))
+    tour_context = bool(PROPERTY_TOUR_PATTERN.search(metadata))
+    address_context = bool(STREET_ADDRESS_PATTERN.search(metadata))
+    specification_count = len(PROPERTY_SPEC_PATTERN.findall(metadata))
+    price_context = bool(PROPERTY_PRICE_PATTERN.search(metadata))
+
+    if address_context and specification_count >= 2:
+        return "real_estate:address_and_property_specifications"
+    if address_context and sales_context:
+        return "real_estate:address_and_sales_context"
+    if agency_context and (sales_context or tour_context) and (address_context or specification_count or price_context):
+        return "real_estate:agency_listing_context"
+    if property_context and tour_context and (sales_context or address_context or specification_count or agency_context):
+        return "real_estate:sales_walkthrough"
+    listing_signals = sum((sales_context, tour_context, address_context, specification_count >= 1, price_context, agency_context))
+    if property_context and listing_signals >= 2:
+        return "real_estate:property_sales_context"
+    return None
+
+
 def _is_short(item: dict) -> bool:
     snippet = item.get("snippet") if isinstance(item.get("snippet"), dict) else {}
     duration = parse_duration(str(item.get("contentDetails", {}).get("duration") or ""))
@@ -171,17 +246,32 @@ class LoveMyLocalsDiscoveryService:
                 raise LoveMyLocalsError("Love My Locals could not complete the YouTube search.") from error
 
         qualified: list[LoveMyLocalsCandidate] = []
+        exclusion_diagnostics: list[dict[str, str]] = []
         seen_ids: set[str] = set()
         seen_signatures: set[tuple[str, str, int]] = set()
         for item in raw_items:
             record = self.client._video_record(item)
             if not record or record.video_id in seen_ids:
                 continue
+            seen_ids.add(record.video_id)
             snippet = item.get("snippet") if isinstance(item.get("snippet"), dict) else {}
             description = html.unescape(str(snippet.get("description") or "")).strip()
             tags = [html.unescape(str(tag)).strip() for tag in (snippet.get("tags") or []) if str(tag).strip()]
             qualification = qualify_metadata(record.title, description, tags, names)
             if qualification is None or SPAM_PATTERN.search(f"{record.title} {description}"):
+                continue
+            exclusion_reason = real_estate_exclusion_reason(
+                record.title,
+                description,
+                tags,
+                record.channel_title,
+            )
+            if exclusion_reason:
+                exclusion_diagnostics.append({
+                    "video_id": record.video_id,
+                    "title": record.title,
+                    "reason": exclusion_reason,
+                })
                 continue
             short = _is_short(item)
             if short and not include_shorts:
@@ -190,7 +280,6 @@ class LoveMyLocalsDiscoveryService:
             if signature in seen_signatures:
                 continue
             matched_location, match_basis, score = qualification
-            seen_ids.add(record.video_id)
             seen_signatures.add(signature)
             qualified.append(LoveMyLocalsCandidate(
                 video=record,
@@ -218,6 +307,7 @@ class LoveMyLocalsDiscoveryService:
             resolved_locations=resolved,
             include_shorts=include_shorts,
             candidates=qualified,
+            exclusion_diagnostics=exclusion_diagnostics,
             last_search_at=utc_now(),
         )
 

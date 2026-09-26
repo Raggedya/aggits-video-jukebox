@@ -899,6 +899,7 @@ class LoveMyLocalsConfig:
     resolved_locations: list[str] = field(default_factory=list)
     include_shorts: bool = False
     candidates: list[LoveMyLocalsCandidate] = field(default_factory=list)
+    exclusion_diagnostics: list[dict[str, str]] = field(default_factory=list)
     last_search_at: str = ""
 
     def __post_init__(self) -> None:
@@ -925,6 +926,16 @@ class LoveMyLocalsConfig:
             raise ProjectValidationError("Love My Locals can include no more than 50 videos.")
         if not self.include_shorts and any(item.active and item.is_short for item in self.candidates):
             raise ProjectValidationError("YouTube Shorts are disabled for this Love My Locals project.")
+        diagnostics: list[dict[str, str]] = []
+        for item in self.exclusion_diagnostics:
+            if not isinstance(item, dict):
+                continue
+            video_id = str(item.get("video_id") or item.get("videoId") or "").strip()[:64]
+            title = str(item.get("title") or "").strip()[:500]
+            reason = str(item.get("reason") or "").strip()[:120]
+            if video_id and reason:
+                diagnostics.append({"video_id": video_id, "title": title, "reason": reason})
+        self.exclusion_diagnostics = diagnostics
         self.last_search_at = str(self.last_search_at or "")
 
     @property
@@ -942,6 +953,7 @@ class LoveMyLocalsConfig:
             "resolved_locations": list(self.resolved_locations),
             "include_shorts": self.include_shorts,
             "candidates": [item.to_dict() for item in self.candidates],
+            "exclusion_diagnostics": [dict(item) for item in self.exclusion_diagnostics],
             "last_search_at": self.last_search_at,
         }
 
@@ -954,6 +966,11 @@ class LoveMyLocalsConfig:
             resolved_locations=[str(item) for item in (source.get("resolved_locations", source.get("resolvedLocations", [])) or [])],
             include_shorts=bool(source.get("include_shorts", source.get("includeShorts", False))),
             candidates=[LoveMyLocalsCandidate.from_dict(item) for item in (source.get("candidates") or []) if isinstance(item, dict)],
+            exclusion_diagnostics=[
+                dict(item)
+                for item in (source.get("exclusion_diagnostics", source.get("exclusionDiagnostics", [])) or [])
+                if isinstance(item, dict)
+            ],
             last_search_at=str(source.get("last_search_at") or source.get("lastSearchAt") or ""),
         )
 

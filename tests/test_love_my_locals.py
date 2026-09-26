@@ -19,12 +19,13 @@ from aggits_video_factory.love_my_locals import (
     assemble_project,
     default_ticker,
     qualify_metadata,
+    real_estate_exclusion_reason,
     remove_candidate,
     replace_candidate,
     resolved_locations,
     validate_form,
 )
-from aggits_video_factory.models import Project, ProjectType
+from aggits_video_factory.models import LoveMyLocalsConfig, Project, ProjectType
 from aggits_video_factory.site_builder import build_project_site
 from aggits_video_factory.store import ProjectStore
 from aggits_video_factory.youtube_api import YouTubeError
@@ -114,6 +115,57 @@ class LoveMyLocalsTests(unittest.TestCase):
         ]
         config = LoveMyLocalsDiscoveryService(FakeClient(results), rng=random.Random(1)).discover(["Box Hill"])
         self.assertEqual([candidate.video.video_id for candidate in config.candidates], [valid["id"]])
+
+    def test_real_estate_listings_are_hard_excluded_without_blocking_local_history(self):
+        listing = item(10, title="Box Hill house for sale — 3 bedroom family home")
+        auction = item(11, title="Box Hill auction result — 18 Station Street")
+        walkthrough = item(
+            12,
+            title="12 Whitehorse Road Box Hill | 3 Bed 2 Bath agent walkthrough",
+            channel="Box Hill Property Group",
+        )
+        rental = item(13, title="Box Hill apartment for rent — $650 per week")
+        ambiguous = item(14, title="History of the Box Hill real estate market")
+        legitimate = item(15, title="Box Hill Historical Society walking tour")
+        config = LoveMyLocalsDiscoveryService(
+            FakeClient([listing, auction, walkthrough, rental, ambiguous, legitimate]),
+            rng=random.Random(1),
+        ).discover(["Box Hill"])
+
+        included_ids = {candidate.video.video_id for candidate in config.candidates}
+        self.assertEqual(included_ids, {ambiguous["id"], legitimate["id"]})
+        excluded_ids = {item["video_id"] for item in config.exclusion_diagnostics}
+        self.assertEqual(excluded_ids, {listing["id"], auction["id"], walkthrough["id"], rental["id"]})
+        self.assertTrue(all(item["reason"].startswith("real_estate:") for item in config.exclusion_diagnostics))
+
+        restored = LoveMyLocalsConfig.from_dict(config.to_dict())
+        self.assertEqual(restored.exclusion_diagnostics, config.exclusion_diagnostics)
+        project = assemble_project(LoveMyLocalsFormValues(["Box Hill"]), restored, "box-hill-property-filter")
+        with tempfile.TemporaryDirectory() as temporary:
+            build_project_site(project, Path(temporary))
+            public_payload = json.loads((Path(temporary) / "machine.json").read_text(encoding="utf-8"))
+        self.assertNotIn("exclusionDiagnostics", public_payload["loveMyLocalsConfig"])
+        self.assertNotIn("real_estate:", json.dumps(public_payload))
+
+    def test_real_estate_classifier_requires_listing_context_not_one_ambiguous_keyword(self):
+        self.assertIsNone(real_estate_exclusion_reason(
+            "History of the Box Hill real estate market", "A local history documentary.", [], "Local History TV",
+        ))
+        self.assertIsNone(real_estate_exclusion_reason(
+            "Box Hill community property discussion", "Council discusses public property policy.", [], "Council Stream",
+        ))
+        self.assertIsNone(real_estate_exclusion_reason(
+            "Box Hill real estate market analysis", "Median prices reached $1,000,000.", [], "Local News",
+        ))
+        self.assertIsNone(real_estate_exclusion_reason(
+            "Box Hill school open house", "Meet the teachers and tour the classrooms.", [], "Box Hill School",
+        ))
+        self.assertEqual(
+            real_estate_exclusion_reason(
+                "Box Hill apartment tour", "Now selling from $650,000. Book an inspection.", ["property"], "Local Realty",
+            ),
+            "real_estate:agency_listing_context",
+        )
 
     def test_shorts_off_and_on(self):
         results = [item(1, duration="PT30S"), item(2, duration="PT2M")]
