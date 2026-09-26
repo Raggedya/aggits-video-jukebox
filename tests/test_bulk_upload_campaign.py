@@ -105,7 +105,7 @@ class BulkCampaignTests(unittest.TestCase):
                 app = Factory()
             app.withdraw()
             try:
-                self.assertEqual([app.notebook.tab(index, "text") for index in range(app.notebook.index("end"))], ["BUSINESS", "MUSIC", "TOURISM", "BANJO", "CHANNEL MASTER", "WHITE LABEL", "BULK UPLOAD"])
+                self.assertEqual([app.notebook.tab(index, "text") for index in range(app.notebook.index("end"))], ["BUSINESS", "MUSIC", "TOURISM", "BANJO", "CHANNEL MASTER", "WHITE LABEL", "LOVE MY LOCALS", "BULK UPLOAD"])
                 app.notebook.select(5)
                 for width, height in ((1320, 820), (1120, 720)):
                     app.geometry(f"{width}x{height}")

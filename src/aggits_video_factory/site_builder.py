@@ -172,14 +172,16 @@ def create_qr_card(project: Project, destination: Path) -> None:
 def build_project_site(project: Project, destination: Path) -> Path:
     if project.project_type not in {
         ProjectType.BUSINESS, ProjectType.MUSIC, ProjectType.TOURISM,
-        ProjectType.BANJO, ProjectType.CHANNEL_MASTER, ProjectType.WHITE_LABEL,
+        ProjectType.BANJO, ProjectType.CHANNEL_MASTER, ProjectType.WHITE_LABEL, ProjectType.LOVE_MY_LOCALS,
     }:
         raise ValueError(f"Unsupported project type: {project.project_type!r}.")
     primary_cta = project_primary_cta(project)
     music_cta = project.music_config.primary_cta if project.music_config else None
     tourism_config = project.tourism_config if project.project_type is ProjectType.TOURISM else None
     banjo_config = project.banjo_config if project.project_type is ProjectType.BANJO else None
-    channel_product = project.project_type in {ProjectType.CHANNEL_MASTER, ProjectType.WHITE_LABEL}
+    channel_product = project.project_type in {
+        ProjectType.CHANNEL_MASTER, ProjectType.WHITE_LABEL, ProjectType.LOVE_MY_LOCALS,
+    }
     channel_master_config = project.channel_master_config if channel_product else None
     if project.project_type is ProjectType.MUSIC and primary_cta is None:
         raise ValueError("A Music project requires a configured primary CTA before generation.")
@@ -243,7 +245,11 @@ def build_project_site(project: Project, destination: Path) -> Path:
     story_sections = _story_sections(project.ticker_text, project.title, project.project_type)
     banjo_ticker = _banjo_ticker_text(project.ticker_text) if project.project_type is ProjectType.BANJO else ""
     channel_master_ticker = _banjo_ticker_text(project.ticker_text) if channel_product else ""
-    primary_action_label = primary_cta.display_label if primary_cta else ("SHOW BANJO" if project.project_type is ProjectType.BANJO else "PRIMARY ACTION")
+    primary_action_label = primary_cta.display_label if primary_cta else (
+        "SHOW BANJO" if project.project_type is ProjectType.BANJO
+        else "MORE INFO" if project.project_type is ProjectType.LOVE_MY_LOCALS
+        else "PRIMARY ACTION"
+    )
     primary_action_aria = (
         "Show Banjo your car"
         if project.project_type is ProjectType.BANJO
@@ -284,7 +290,12 @@ def build_project_site(project: Project, destination: Path) -> Path:
         )
     channel_master_title_plaque_markup = ""
     if channel_product:
-        title_length = len(project.title.strip())
+        plaque_title = (
+            project.love_my_locals_config.plaque_title
+            if project.project_type is ProjectType.LOVE_MY_LOCALS and project.love_my_locals_config
+            else project.title
+        )
+        title_length = len(plaque_title.strip())
         fit_class = (
             " channel-master-title-plaque--very-long" if title_length > 42
             else " channel-master-title-plaque--long" if title_length > 28
@@ -292,7 +303,7 @@ def build_project_site(project: Project, destination: Path) -> Path:
         )
         channel_master_title_plaque_markup = (
             f'<div class="channel-master-title-plaque{fit_class}" '
-            f'data-channel-master-title-plaque aria-hidden="true">{html.escape(project.title)}</div>'
+            f'data-channel-master-title-plaque aria-hidden="true">{html.escape(plaque_title)}</div>'
         )
     machine_theme_attribute = ""
     if channel_master_config:
@@ -335,11 +346,18 @@ def build_project_site(project: Project, destination: Path) -> Path:
                 '<div class="channel-master-maker-mark" aria-hidden="true">'
                 '<img src="assets/channel-master/crispy-bits-maker-mark-approved.png" '
                 'alt="" width="1280" height="432" draggable="false"></div>'
-                if project.project_type is ProjectType.CHANNEL_MASTER else ""
+                if project.project_type is ProjectType.CHANNEL_MASTER else (
+                    '<div class="love-my-locals-maker-mark" aria-hidden="true">'
+                    '<img src="assets/love-my-locals/love-my-locals-logo.png" '
+                    'alt="" width="2171" height="724" draggable="false"></div>'
+                    if project.project_type is ProjectType.LOVE_MY_LOCALS else ""
+                )
             )
         ),
         "{{UTILITY_CONTROLS_MARKUP}}": (
-            "" if project.project_type in {ProjectType.BANJO, ProjectType.CHANNEL_MASTER, ProjectType.WHITE_LABEL} else
+            "" if project.project_type in {
+                ProjectType.BANJO, ProjectType.CHANNEL_MASTER, ProjectType.WHITE_LABEL, ProjectType.LOVE_MY_LOCALS,
+            } else
             '<nav class="utility-controls" aria-label="Machine controls">'
             '<button type="button" data-action="home"><span aria-hidden="true">⌂</span><b>HOME</b></button>'
             '<button type="button" data-action="sound" aria-pressed="true"><span data-sound-icon aria-hidden="true">♪</span><b data-sound-label>SOUND ON</b></button>'
@@ -411,7 +429,7 @@ def build_project_site(project: Project, destination: Path) -> Path:
                 '<footer class="channel-master-footer-mark" aria-hidden="true">'
                 '<div class="channel-master-footer-ornament"><span>✷</span></div>'
                 '<strong>CRISPY BITS</strong><small>© CLEARLIGHTCREATIVE2020</small></footer>'
-                if project.project_type is ProjectType.CHANNEL_MASTER else ""
+                if project.project_type in {ProjectType.CHANNEL_MASTER, ProjectType.LOVE_MY_LOCALS} else ""
             )
         ),
         "{{CHANNEL_MASTER_TITLE_PLAQUE_MARKUP}}": channel_master_title_plaque_markup,
@@ -473,6 +491,10 @@ def build_project_site(project: Project, destination: Path) -> Path:
     if project.project_type is ProjectType.BUSINESS:
         customer_config.update({"shopURL": shop_url, "shopEnabled": bool(shop_url)})
 
+    local_candidates = {
+        item.video.video_id: item
+        for item in (project.love_my_locals_config.candidates if project.love_my_locals_config else [])
+    }
     payload = {
         "schemaVersion": 2,
         "projectType": project.project_type.value,
@@ -518,7 +540,23 @@ def build_project_site(project: Project, destination: Path) -> Path:
                     for choice in (banjo_config.banjos_choice if banjo_config else [])
                     if choice.video_id == item.video_id
                 ), ""),
-            } if project.project_type is ProjectType.BANJO else {}))
+            } if project.project_type is ProjectType.BANJO else ({
+                "description": local_candidates[item.video_id].description,
+                "storyText": local_candidates[item.video_id].description or (
+                    f"{item.display_title}. Discovered around {local_candidates[item.video_id].matched_location}."
+                ),
+                "metadata": (
+                    f"{item.channel_title} • {local_candidates[item.video_id].matched_location} • "
+                    f"{'+'.join(local_candidates[item.video_id].match_basis).upper()} MATCH"
+                ),
+                "ctaLabel": local_candidates[item.video_id].cta_label,
+                "ctaURL": local_candidates[item.video_id].cta_url or "",
+                "ctaType": local_candidates[item.video_id].cta_type.value if local_candidates[item.video_id].cta_type else "",
+                "matchedLocation": local_candidates[item.video_id].matched_location,
+                "matchBasis": list(local_candidates[item.video_id].match_basis),
+                "relevanceScore": local_candidates[item.video_id].relevance_score,
+                "isShort": local_candidates[item.video_id].is_short,
+            } if project.project_type is ProjectType.LOVE_MY_LOCALS else {})))
             for item in included_videos
         ],
     }
@@ -616,6 +654,18 @@ def build_project_site(project: Project, destination: Path) -> Path:
             "transparentMarginPercent": project.white_label_config.transparent_margin_percent,
             "aspectRatio": project.white_label_config.aspect_ratio,
             "poweredBy": "CRISPY BITS",
+        }
+    if project.project_type is ProjectType.LOVE_MY_LOCALS and project.love_my_locals_config:
+        locals_config = project.love_my_locals_config
+        payload["loveMyLocalsConfig"] = {
+            "locations": list(locals_config.locations),
+            "resolvedGeography": locals_config.resolved_geography,
+            "resolvedLocations": list(locals_config.resolved_locations),
+            "includeShorts": locals_config.include_shorts,
+            "candidateCount": len(locals_config.candidates),
+            "selectedCount": len(locals_config.selected_videos),
+            "logoAssetUrl": "assets/love-my-locals/love-my-locals-logo.png",
+            "brandTeal": "#00C7CC",
         }
     (destination / "machine.json").write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     create_qr_card(project, destination / "qr-card.png")

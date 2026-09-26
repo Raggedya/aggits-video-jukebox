@@ -79,6 +79,7 @@ CTA_CHOICES_BY_PROJECT = {
     ProjectType.BANJO: (),
     ProjectType.CHANNEL_MASTER: CHANNEL_MASTER_CTA_CHOICES,
     ProjectType.WHITE_LABEL: CHANNEL_MASTER_CTA_CHOICES,
+    ProjectType.LOVE_MY_LOCALS: CHANNEL_MASTER_CTA_CHOICES,
 }
 CTA_LABEL_TO_TYPE_BY_PROJECT = {kind: dict(choices) for kind, choices in CTA_CHOICES_BY_PROJECT.items()}
 CTA_TYPE_TO_LABEL_BY_PROJECT = {kind: {cta_type: label for label, cta_type in choices} for kind, choices in CTA_CHOICES_BY_PROJECT.items()}

@@ -21,6 +21,8 @@ MAX_VIDEOS = 30
 MAX_BANJO_VIDEOS = 40
 MAX_CHANNEL_MASTER_VIDEOS = 50
 MAX_CHANNEL_MASTER_REVIEW_VIDEOS = 50
+MAX_LOVE_MY_LOCALS_VIDEOS = 50
+MAX_LOVE_MY_LOCALS_CANDIDATES = 150
 MAX_SPONSOR_CREATIVES = 4
 MAX_SPONSOR_MP4_BYTES = 10 * 1024 * 1024
 MAX_SPONSOR_LOGO_BYTES = 2 * 1024 * 1024
@@ -36,6 +38,7 @@ def video_limit_for_project_type(project_type: object) -> int:
         "banjo": MAX_BANJO_VIDEOS,
         "channel_master": MAX_CHANNEL_MASTER_VIDEOS,
         "white_label": MAX_CHANNEL_MASTER_VIDEOS,
+        "love_my_locals": MAX_LOVE_MY_LOCALS_VIDEOS,
     }
     return limits.get(str(value).lower(), MAX_VIDEOS)
 
@@ -47,6 +50,7 @@ def ticker_limit_for_project_type(project_type: object) -> int:
         "banjo": MAX_BANJO_TICKER_LENGTH,
         "channel_master": MAX_CHANNEL_MASTER_TICKER_LENGTH,
         "white_label": MAX_CHANNEL_MASTER_TICKER_LENGTH,
+        "love_my_locals": MAX_CHANNEL_MASTER_TICKER_LENGTH,
     }
     return limits.get(str(value).lower(), MAX_TICKER_LENGTH)
 

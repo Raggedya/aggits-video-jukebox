@@ -48,6 +48,8 @@ from aggits_video_factory.delivery import (
 from aggits_video_factory.diagnostics import configure_logging, log_directory, open_log_folder
 from aggits_video_factory.desktop_forms import (
     CTA_CHOICES_BY_PROJECT,
+    CTA_LABEL_TO_TYPE_BY_PROJECT,
+    CTA_TYPE_TO_LABEL_BY_PROJECT,
     DEFAULT_CTA_LABEL_BY_PROJECT,
     FormValidationError,
     MAX_INDIVIDUAL_VIDEO_URLS,
@@ -59,7 +61,17 @@ from aggits_video_factory.desktop_forms import (
     youtube_urls_for_project_review,
 )
 from aggits_video_factory.models import Project, ProjectType, utc_now
-from aggits_video_factory.models import CHANNEL_MASTER_PALETTES, ChannelMasterConfig
+from aggits_video_factory.models import CHANNEL_MASTER_PALETTES, ChannelMasterConfig, LoveMyLocalsConfig, PrimaryCtaType
+from aggits_video_factory.love_my_locals import (
+    DEFAULT_GEOGRAPHY,
+    LoveMyLocalsDiscoveryService,
+    LoveMyLocalsError,
+    LoveMyLocalsFormValues,
+    assemble_project as assemble_love_my_locals_project,
+    default_ticker as love_my_locals_default_ticker,
+    replace_candidate as replace_love_my_locals_candidate,
+    validate_form as validate_love_my_locals_form,
+)
 from aggits_video_factory.preview import PreviewServer
 from aggits_video_factory.publisher import PublicationVerificationPending, PublishError, Publisher, UnpublishVerificationPending
 from aggits_video_factory.site_builder import build_project_site
@@ -763,6 +775,143 @@ class ProjectForm(tk.Frame):
         self.validation_label.configure(text="")
 
 
+class LoveMyLocalsForm(tk.Frame):
+    """Compact, isolated operator form for location-led YouTube discovery."""
+
+    project_type = ProjectType.LOVE_MY_LOCALS
+
+    def __init__(self, parent: tk.Misc, submit, new_project) -> None:
+        super().__init__(parent, bg=PANEL)
+        self.submit_callback = submit
+        self.new_callback = new_project
+        self.editing_project_id: str | None = None
+        self.location_vars = [tk.StringVar() for _ in range(3)]
+        self.geography_var = tk.StringVar(value=DEFAULT_GEOGRAPHY)
+        self.include_shorts_var = tk.BooleanVar(value=False)
+        self.field_widgets: dict[str, tk.Widget] = {}
+        self._baseline: tuple[object, ...] = ()
+        self._logo_image: ImageTk.PhotoImage | None = None
+        self._build()
+        self.clear_new()
+
+    def _build(self) -> None:
+        self.columnconfigure(1, weight=1)
+        heading = tk.Frame(self, bg=PANEL)
+        heading.grid(row=0, column=0, columnspan=2, sticky="ew", padx=22, pady=(16, 8))
+        self.mode_label = tk.Label(heading, text="NEW LOVE MY LOCALS PROJECT", bg=PANEL, fg=PAPER, font=("Segoe UI Semibold", 15))
+        self.mode_label.pack(side="left")
+        tk.Button(heading, text="NEW PROJECT", command=self.new_callback, bg=PANEL_2, fg=CREAM, relief="flat", bd=0, font=("Segoe UI Semibold", 9), padx=12, pady=7).pack(side="right")
+        try:
+            image = Image.open(resource_path("static/love-my-locals/love-my-locals-logo.png")).convert("RGBA")
+            image.thumbnail((245, 82), Image.Resampling.LANCZOS)
+            self._logo_image = ImageTk.PhotoImage(image, master=self)
+            tk.Label(self, image=self._logo_image, bg=PANEL).grid(row=1, column=0, columnspan=2, pady=(0, 8))
+        except OSError:
+            tk.Label(self, text="LOVE MY LOCALS", bg=PANEL, fg="#00C7CC", font=("Segoe UI Semibold", 17)).grid(row=1, column=0, columnspan=2, pady=(0, 8))
+        row = 2
+        for index, variable in enumerate(self.location_vars, start=1):
+            label = f"LOCATION {index}" + ("" if index == 1 else " (OPTIONAL)")
+            row = self._entry_row(row, label, variable, f"location_{index}")
+        row = self._entry_row(row, "GEOGRAPHIC CONTEXT", self.geography_var, "geography")
+        self.resolved_label = tk.Label(self, text="", bg=PANEL, fg="#00C7CC", anchor="w", justify="left", font=("Segoe UI Semibold", 8))
+        self.resolved_label.grid(row=row, column=1, sticky="ew", padx=(0, 22), pady=(0, 6))
+        row += 1
+        tk.Checkbutton(
+            self, text="INCLUDE YOUTUBE SHORTS", variable=self.include_shorts_var,
+            bg=PANEL, fg=CREAM, selectcolor=PANEL_2, activebackground=PANEL, activeforeground=PAPER,
+            font=("Segoe UI Semibold", 9),
+        ).grid(row=row, column=1, sticky="w", padx=(0, 22), pady=5)
+        row += 1
+        tk.Label(self, text="TICKER TEXT", bg=PANEL, fg=CREAM, anchor="ne", font=("Segoe UI", 9)).grid(row=row, column=0, sticky="ne", padx=(22, 12), pady=5)
+        self.ticker_text = tk.Text(self, height=5, wrap="word", bg="#101217", fg=PAPER, insertbackground=PAPER, relief="flat", highlightbackground=DEEP_BRASS, highlightthickness=1, font=("Segoe UI", 10))
+        self.ticker_text.grid(row=row, column=1, sticky="ew", padx=(0, 22), pady=5)
+        self.field_widgets["ticker_text"] = self.ticker_text
+        row += 1
+        self.validation_label = tk.Label(self, text="", bg=PANEL, fg=ERROR, anchor="w", justify="left", wraplength=460, font=("Segoe UI Semibold", 8))
+        self.validation_label.grid(row=row, column=1, sticky="ew", padx=(0, 22), pady=(3, 4))
+        row += 1
+        self.stage_note = tk.Label(self, text="", bg=PANEL, fg=MUTED, anchor="w", justify="left", wraplength=500, font=("Segoe UI", 8))
+        self.stage_note.grid(row=row, column=1, sticky="ew", padx=(0, 22), pady=(0, 8))
+        row += 1
+        self.submit_button = tk.Button(
+            self, text="FIND LOCALS", command=self.submit_callback, bg="#008F94", fg=PAPER,
+            activebackground="#00C7CC", activeforeground=INK, relief="flat", bd=0,
+            font=("Segoe UI Semibold", 11), padx=22, pady=12, cursor="hand2",
+        )
+        self.submit_button.grid(row=row, column=1, sticky="e", padx=(0, 22), pady=(2, 18))
+        for variable in [*self.location_vars, self.geography_var]:
+            variable.trace_add("write", lambda *_args: self._update_resolved())
+
+    def _entry_row(self, row: int, label: str, variable: tk.StringVar, field_name: str) -> int:
+        tk.Label(self, text=label, bg=PANEL, fg=CREAM, anchor="e", font=("Segoe UI", 9)).grid(row=row, column=0, sticky="e", padx=(22, 12), pady=5)
+        entry = tk.Entry(self, textvariable=variable, bg="#101217", fg=PAPER, insertbackground=PAPER, relief="flat", highlightbackground=DEEP_BRASS, highlightthickness=1, font=("Segoe UI", 10))
+        entry.grid(row=row, column=1, sticky="ew", padx=(0, 22), pady=5, ipady=7)
+        self.field_widgets[field_name] = entry
+        return row + 1
+
+    def _update_resolved(self) -> None:
+        locations = [value.get().strip() for value in self.location_vars if value.get().strip()]
+        geography = self.geography_var.get().strip()
+        resolved = "  •  ".join(f"{item}, {geography}" for item in locations) if locations and geography else ""
+        self.resolved_label.configure(text=f"SEARCH LOCATION: {resolved}" if resolved else "")
+
+    def values(self) -> LoveMyLocalsFormValues:
+        return LoveMyLocalsFormValues(
+            locations=[item.get() for item in self.location_vars],
+            geography=self.geography_var.get(),
+            include_shorts=self.include_shorts_var.get(),
+            ticker_text=self.ticker_text.get("1.0", "end-1c"),
+        )
+
+    def set_values(self, values: LoveMyLocalsFormValues) -> None:
+        for variable, value in zip(self.location_vars, [*values.locations, "", ""][:3]):
+            variable.set(value)
+        self.geography_var.set(values.geography or DEFAULT_GEOGRAPHY)
+        self.include_shorts_var.set(values.include_shorts)
+        self.ticker_text.delete("1.0", "end")
+        self.ticker_text.insert("1.0", values.ticker_text)
+        self.clear_validation()
+        self._update_resolved()
+
+    def clear_new(self) -> None:
+        self.editing_project_id = None
+        self.set_values(LoveMyLocalsFormValues(geography=DEFAULT_GEOGRAPHY))
+        self.mode_label.configure(text="NEW LOVE MY LOCALS PROJECT")
+        self.submit_button.configure(text="FIND LOCALS")
+        self.stage_note.configure(text="Enter 1–3 places. FIND LOCALS discovers and auto-populates up to 50 local YouTube videos. No CSV step.")
+        self.mark_clean()
+
+    def load_project(self, project: Project) -> None:
+        config = project.love_my_locals_config
+        if not config:
+            return
+        self.editing_project_id = project.id
+        self.set_values(LoveMyLocalsFormValues(list(config.locations), config.resolved_geography, config.include_shorts, project.ticker_text))
+        self.mode_label.configure(text="EDIT LOVE MY LOCALS PROJECT")
+        self.submit_button.configure(text="SEARCH AGAIN")
+        self.stage_note.configure(text=f"{len(config.selected_videos)} active videos · {len(config.candidates)} saved candidates · {config.resolved_geography}")
+        self.mark_clean()
+
+    def mark_clean(self) -> None:
+        self._baseline = self.values().comparable()
+
+    def is_dirty(self) -> bool:
+        return self.values().comparable() != self._baseline
+
+    def restore_baseline(self) -> None:
+        if not self._baseline:
+            return
+        self.set_values(LoveMyLocalsFormValues(list(self._baseline[0]), str(self._baseline[1]), bool(self._baseline[2]), str(self._baseline[3])))
+        self.mark_clean()
+
+    def show_validation(self, error: Exception) -> None:
+        self.validation_label.configure(text=str(error))
+        self.field_widgets["location_1"].focus_set()
+
+    def clear_validation(self) -> None:
+        self.validation_label.configure(text="")
+
+
 class LibraryPanel(tk.Frame):
     def __init__(self, parent: tk.Misc, project_type: ProjectType, owner: "Factory") -> None:
         super().__init__(parent, bg=PANEL)
@@ -1176,7 +1325,7 @@ class Factory(tk.Tk):
         self._async_results: queue.Queue[tuple[str, object, object | None]] = queue.Queue()
         self._async_poll_id: str | None = None
         self.projects: dict[str, Project] = {}
-        self.forms: dict[ProjectType, ProjectForm] = {}
+        self.forms: dict[ProjectType, ProjectForm | LoveMyLocalsForm] = {}
         self.libraries: dict[ProjectType, LibraryPanel] = {}
         self.active_project_type = ProjectType.BUSINESS
         self.active_tab_key: ProjectType | str = ProjectType.BUSINESS
@@ -1216,7 +1365,7 @@ class Factory(tk.Tk):
         self.notebook.pack(fill="both", expand=True, padx=12, pady=(0, 10))
         self.tab_types: list[ProjectType] = [
             ProjectType.BUSINESS, ProjectType.MUSIC, ProjectType.TOURISM,
-            ProjectType.BANJO, ProjectType.CHANNEL_MASTER, ProjectType.WHITE_LABEL,
+            ProjectType.BANJO, ProjectType.CHANNEL_MASTER, ProjectType.WHITE_LABEL, ProjectType.LOVE_MY_LOCALS,
         ]
         for project_type in self.tab_types:
             page = tk.Frame(self.notebook, bg=INK)
@@ -1232,12 +1381,19 @@ class Factory(tk.Tk):
             form_canvas.configure(yscrollcommand=form_scrollbar.set)
             form_scrollbar.pack(side="right", fill="y")
             form_canvas.pack(side="left", fill="both", expand=True)
-            form = ProjectForm(
-                form_canvas,
-                project_type,
-                submit=lambda kind=project_type: self._submit_project(kind),
-                new_project=lambda kind=project_type: self._new_project(kind),
-            )
+            if project_type is ProjectType.LOVE_MY_LOCALS:
+                form = LoveMyLocalsForm(
+                    form_canvas,
+                    submit=lambda kind=project_type: self._submit_project(kind),
+                    new_project=lambda kind=project_type: self._new_project(kind),
+                )
+            else:
+                form = ProjectForm(
+                    form_canvas,
+                    project_type,
+                    submit=lambda kind=project_type: self._submit_project(kind),
+                    new_project=lambda kind=project_type: self._new_project(kind),
+                )
             form_window = form_canvas.create_window((0, 0), window=form, anchor="nw")
             form.bind("<Configure>", lambda _event, canvas=form_canvas: canvas.configure(scrollregion=canvas.bbox("all")))
             form_canvas.bind("<Configure>", lambda event, canvas=form_canvas, window=form_window: canvas.itemconfigure(window, width=event.width))
@@ -1373,7 +1529,10 @@ class Factory(tk.Tk):
         if form.is_dirty() and not self._resolve_unsaved(form, "open another project"):
             return
         form.load_project(project)
-        form.field_widgets["channel_url" if project.project_type is ProjectType.BANJO else "title"].focus_set()
+        focus_field = "location_1" if project.project_type is ProjectType.LOVE_MY_LOCALS else (
+            "channel_url" if project.project_type is ProjectType.BANJO else "title"
+        )
+        form.field_widgets[focus_field].focus_set()
 
     def _edit_videos_selected(self) -> None:
         project = self._selected_project()
@@ -1384,6 +1543,17 @@ class Factory(tk.Tk):
             return
         if not project.videos:
             messagebox.showerror(DESKTOP_TITLE, "This saved project has no persisted videos to edit.")
+            return
+        if project.project_type is ProjectType.LOVE_MY_LOCALS and project.love_my_locals_config:
+            config = project.love_my_locals_config
+            self._review_love_my_locals({
+                "config": LoveMyLocalsConfig.from_dict(config.to_dict()),
+                "values": LoveMyLocalsFormValues(
+                    list(config.locations), config.resolved_geography, config.include_shorts, project.ticker_text,
+                ),
+                "slug": project.slug,
+                "editing_project_id": project.id,
+            })
             return
         self.logger.info("Video editor opened project_id=%s type=%s", project.id, project.project_type.value)
         self._open_video_editor(project)
@@ -1581,7 +1751,10 @@ class Factory(tk.Tk):
         if form.is_dirty() and not self._resolve_unsaved(form, "start a new project"):
             return
         form.clear_new()
-        form.field_widgets["channel_url" if project_type is ProjectType.BANJO else "title"].focus_set()
+        focus_field = "location_1" if project_type is ProjectType.LOVE_MY_LOCALS else (
+            "channel_url" if project_type is ProjectType.BANJO else "title"
+        )
+        form.field_widgets[focus_field].focus_set()
 
     def _submit_project(self, project_type: ProjectType) -> bool:
         if self.busy:
@@ -1672,7 +1845,205 @@ class Factory(tk.Tk):
         self._set_busy(False, "READY")
         complete(result)
 
+    def _create_love_my_locals(self) -> bool:
+        form = self.forms[ProjectType.LOVE_MY_LOCALS]
+        form.clear_validation()
+        try:
+            values = validate_love_my_locals_form(form.values())
+        except LoveMyLocalsError as error:
+            form.show_validation(error)
+            return False
+        api_key = str(self.settings.get("youtubeApiKey") or "")
+        if not api_key:
+            messagebox.showinfo(DESKTOP_TITLE, "Save a YouTube Data API key in SETTINGS once, then press FIND LOCALS again.")
+            self._open_settings()
+            return False
+        existing = self.projects.get(form.editing_project_id or "")
+        if existing and existing.project_type is not ProjectType.LOVE_MY_LOCALS:
+            messagebox.showerror(DESKTOP_TITLE, "A saved project cannot be changed to a different project type.")
+            return False
+        if existing and existing.love_my_locals_config and not messagebox.askyesno(
+            "Search again?",
+            "This will create a fresh candidate set. Your current curated results will not be overwritten unless you save the new review. Continue?",
+        ):
+            return False
+        slug = existing.slug if existing else self.store.allocate_slug("-".join(values.locations))
+
+        def worker() -> dict[str, object]:
+            config = LoveMyLocalsDiscoveryService(YouTubeClient(api_key)).discover(
+                values.locations,
+                values.geography,
+                include_shorts=values.include_shorts,
+            )
+            thumbnails: dict[str, bytes] = {}
+            active = [item for item in config.candidates if item.active]
+
+            def fetch_thumbnail(candidate) -> tuple[str, bytes]:
+                if not candidate.video.thumbnail_url:
+                    return candidate.video.video_id, b""
+                try:
+                    response = requests.get(candidate.video.thumbnail_url, timeout=10)
+                    response.raise_for_status()
+                    return candidate.video.video_id, response.content
+                except requests.RequestException:
+                    return candidate.video.video_id, b""
+
+            with ThreadPoolExecutor(max_workers=8) as pool:
+                for video_id, content in pool.map(fetch_thumbnail, active):
+                    if content:
+                        thumbnails[video_id] = content
+            return {
+                "config": config,
+                "values": values,
+                "slug": slug,
+                "editing_project_id": existing.id if existing else None,
+                "thumbnails": thumbnails,
+            }
+
+        self._run_async("FINDING LOCAL YOUTUBE VIDEOS…", worker, self._review_love_my_locals)
+        return False
+
+    def _review_love_my_locals(self, candidate: dict[str, object]) -> None:
+        config: LoveMyLocalsConfig = candidate["config"]
+        thumbnails = dict(candidate.get("thumbnails") or {})
+        dialog = tk.Toplevel(self)
+        dialog.title("Review Love My Locals Videos")
+        dialog.geometry("1080x760")
+        dialog.minsize(820, 600)
+        dialog.configure(bg=INK)
+        dialog.transient(self)
+        heading = tk.Frame(dialog, bg=PANEL, highlightbackground="#00C7CC", highlightthickness=1)
+        heading.pack(fill="x", padx=18, pady=(18, 10))
+        tk.Label(heading, text="REVIEW LOCAL DISCOVERIES", bg=PANEL, fg="#00C7CC", font=("Segoe UI Semibold", 16)).pack(anchor="w", padx=20, pady=(14, 3))
+        resolved = "  •  ".join(config.resolved_locations)
+        tk.Label(heading, text=resolved, bg=PANEL, fg=PAPER, font=("Segoe UI Semibold", 9), wraplength=980, justify="left").pack(anchor="w", padx=20)
+        active_count = len(config.selected_videos)
+        status_copy = f"{active_count} VALID LOCAL VIDEOS FOUND"
+        if active_count < 50:
+            status_copy += " — continue with these, broaden the locations, or search again."
+        status_label = tk.Label(heading, text=status_copy, bg=PANEL, fg=CREAM, font=("Segoe UI", 9), wraplength=980, justify="left")
+        status_label.pack(anchor="w", padx=20, pady=(5, 14))
+
+        shell = tk.Frame(dialog, bg="#080b0c", highlightbackground=DEEP_BRASS, highlightthickness=1)
+        shell.pack(fill="both", expand=True, padx=18)
+        canvas = tk.Canvas(shell, bg="#080b0c", bd=0, highlightthickness=0)
+        scrollbar = ttk.Scrollbar(shell, orient="vertical", command=canvas.yview, style="Factory.Vertical.TScrollbar")
+        canvas.configure(yscrollcommand=scrollbar.set)
+        scrollbar.pack(side="right", fill="y")
+        canvas.pack(side="left", fill="both", expand=True)
+        rows = tk.Frame(canvas, bg="#080b0c")
+        canvas_window = canvas.create_window((0, 0), window=rows, anchor="nw")
+        rows.bind("<Configure>", lambda _event: canvas.configure(scrollregion=canvas.bbox("all")))
+        canvas.bind("<Configure>", lambda event: canvas.itemconfigure(canvas_window, width=event.width))
+        thumbnail_images: list[ImageTk.PhotoImage] = []
+        cta_choices = CTA_CHOICES_BY_PROJECT[ProjectType.LOVE_MY_LOCALS]
+        cta_labels = [label for label, _type in cta_choices]
+        label_to_type = CTA_LABEL_TO_TYPE_BY_PROJECT[ProjectType.LOVE_MY_LOCALS]
+        type_to_label = CTA_TYPE_TO_LABEL_BY_PROJECT[ProjectType.LOVE_MY_LOCALS]
+
+        def render_rows() -> None:
+            for child in rows.winfo_children():
+                child.destroy()
+            thumbnail_images.clear()
+            active_candidates = [item for item in config.candidates if item.active]
+            status_label.configure(text=(
+                f"{len(active_candidates)} VALID LOCAL VIDEOS FOUND"
+                + (" — continue with these, broaden the locations, or search again." if len(active_candidates) < 50 else "")
+            ))
+            for index, item in enumerate(active_candidates, start=1):
+                row = tk.Frame(rows, bg="#111719" if index % 2 else "#0c1112", height=122)
+                row.pack(fill="x", padx=4, pady=(4 if index == 1 else 0, 2))
+                row.pack_propagate(False)
+                image_data = thumbnails.get(item.video.video_id)
+                if image_data:
+                    try:
+                        image = Image.open(BytesIO(image_data)).convert("RGB")
+                        image = ImageOps.fit(image, (128, 72), method=Image.Resampling.LANCZOS)
+                        thumb = ImageTk.PhotoImage(image, master=dialog)
+                        thumbnail_images.append(thumb)
+                        tk.Label(row, image=thumb, bg="#050708").pack(side="left", padx=10)
+                    except OSError:
+                        tk.Label(row, text="YOUTUBE\nVIDEO", width=16, bg="#050708", fg=MUTED).pack(side="left", fill="y", padx=10)
+                else:
+                    tk.Label(row, text="YOUTUBE\nVIDEO", width=16, bg="#050708", fg=MUTED).pack(side="left", fill="y", padx=10)
+                detail = tk.Frame(row, bg=row["bg"])
+                detail.pack(side="left", fill="both", expand=True, pady=8)
+                tk.Label(detail, text=item.video.title, bg=row["bg"], fg=PAPER, anchor="w", font=("Segoe UI Semibold", 9)).pack(fill="x")
+                basis = " + ".join(value.upper() for value in item.match_basis)
+                tk.Label(detail, text=f"{item.video.channel_title}  •  {item.matched_location}  •  {basis} MATCH ({item.relevance_score})", bg=row["bg"], fg="#00C7CC", anchor="w", font=("Segoe UI Semibold", 8)).pack(fill="x", pady=(2, 4))
+                controls = tk.Frame(detail, bg=row["bg"])
+                controls.pack(fill="x")
+                cta_var = tk.StringVar(value=type_to_label.get(item.cta_type, "Visit Website"))
+                cta_combo = ttk.Combobox(controls, textvariable=cta_var, values=cta_labels, state="readonly", width=20)
+                cta_combo.pack(side="left")
+                url_var = tk.StringVar(value=item.cta_url or "")
+                url_entry = tk.Entry(controls, textvariable=url_var, bg="#101217", fg=PAPER, insertbackground=PAPER, relief="flat", highlightbackground=DEEP_BRASS, highlightthickness=1, font=("Segoe UI", 8))
+                url_entry.pack(side="left", fill="x", expand=True, padx=(7, 0), ipady=5)
+                cta_var.trace_add("write", lambda *_args, record=item, variable=cta_var: setattr(record, "cta_type", label_to_type.get(variable.get(), PrimaryCtaType.VISIT_WEBSITE)))
+                url_var.trace_add("write", lambda *_args, record=item, variable=url_var: setattr(record, "cta_url", variable.get().strip() or None))
+                actions = tk.Frame(row, bg=row["bg"])
+                actions.pack(side="right", padx=9)
+                tk.Button(actions, text="REMOVE", command=lambda record=item: (setattr(record, "active", False), render_rows()), bg=PANEL_2, fg=CREAM, relief="flat", bd=0, font=("Segoe UI Semibold", 8), padx=9, pady=6).pack(pady=(0, 5))
+
+                def replace(record=item) -> None:
+                    replacement = replace_love_my_locals_candidate(config, record.video.video_id)
+                    if replacement is None:
+                        messagebox.showinfo(DESKTOP_TITLE, "No unused candidate remains. Use SEARCH AGAIN to build a fresh pool.", parent=dialog)
+                    render_rows()
+
+                tk.Button(actions, text="REPLACE", command=replace, bg="#10383a", fg="#bffcff", relief="flat", bd=0, font=("Segoe UI Semibold", 8), padx=9, pady=6).pack()
+            dialog._love_my_locals_thumbnail_images = thumbnail_images
+
+        footer = tk.Frame(dialog, bg=INK)
+        footer.pack(fill="x", padx=18, pady=(10, 18))
+
+        def save_review() -> None:
+            active = [item for item in config.candidates if item.active]
+            if not active:
+                messagebox.showerror(DESKTOP_TITLE, "Keep at least one valid local video before building.", parent=dialog)
+                return
+            try:
+                for item in config.candidates:
+                    item.__post_init__()
+                config.__post_init__()
+            except Exception as error:
+                messagebox.showerror(DESKTOP_TITLE, str(error), parent=dialog)
+                return
+            canvas.unbind_all("<MouseWheel>")
+            dialog.destroy()
+            self._finish_love_my_locals(candidate)
+
+        self._button(footer, "BUILD LOVE MY LOCALS", save_review, primary=True, compact=True).pack(side="right")
+        self._button(footer, "CANCEL", dialog.destroy, compact=True).pack(side="right", padx=8)
+        canvas.bind("<Enter>", lambda _event: canvas.bind_all("<MouseWheel>", lambda event: canvas.yview_scroll(int(-event.delta / 120), "units")))
+        canvas.bind("<Leave>", lambda _event: canvas.unbind_all("<MouseWheel>"))
+        render_rows()
+        dialog.grab_set()
+        dialog.lift()
+
+    def _finish_love_my_locals(self, candidate: dict[str, object]) -> None:
+        config: LoveMyLocalsConfig = candidate["config"]
+        values: LoveMyLocalsFormValues = candidate["values"]
+        slug = str(candidate["slug"])
+        existing_id = str(candidate.get("editing_project_id") or "")
+        existing = self.projects.get(existing_id) if existing_id else None
+
+        def worker() -> Project:
+            project = assemble_love_my_locals_project(values, config, slug, existing=existing)
+            project_dir = self.store.project_dir(project.slug)
+            build_project_site(project, project_dir / "site")
+            self.store.save_project(project)
+            self.logger.info(
+                "Love My Locals build completed slug=%s selected=%s candidates=%s",
+                project.slug, len(config.selected_videos), len(config.candidates),
+            )
+            return project
+
+        self._run_async("BUILDING LOVE MY LOCALS…", worker, self._create_complete)
+
     def _create_jukebox(self, project_type: ProjectType) -> bool:
+        if project_type is ProjectType.LOVE_MY_LOCALS:
+            return self._create_love_my_locals()
         form = self.forms[project_type]
         form.clear_validation()
         try:

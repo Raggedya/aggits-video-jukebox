@@ -28,6 +28,7 @@ class ProjectType(str, Enum):
     BANJO = "banjo"
     CHANNEL_MASTER = "channel_master"
     WHITE_LABEL = "white_label"
+    LOVE_MY_LOCALS = "love_my_locals"
 
 
 class PrimaryCtaType(str, Enum):
@@ -760,7 +761,7 @@ def allowed_primary_cta_types(project_type: ProjectType | str) -> frozenset[Prim
         return MUSIC_CTA_TYPES
     if kind is ProjectType.TOURISM:
         return TOURISM_CTA_TYPES
-    if kind in {ProjectType.CHANNEL_MASTER, ProjectType.WHITE_LABEL}:
+    if kind in {ProjectType.CHANNEL_MASTER, ProjectType.WHITE_LABEL, ProjectType.LOVE_MY_LOCALS}:
         return CHANNEL_MASTER_CTA_TYPES
     return frozenset()
 
@@ -817,6 +818,147 @@ class Video:
 
 
 @dataclass(slots=True)
+class LoveMyLocalsCandidate:
+    video: Video
+    description: str = ""
+    tags: list[str] = field(default_factory=list)
+    matched_location: str = ""
+    match_basis: list[str] = field(default_factory=list)
+    relevance_score: int = 0
+    is_short: bool = False
+    cta_type: PrimaryCtaType | str | None = None
+    cta_url: str | None = None
+    active: bool = False
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.video, Video) or not self.video.video_id:
+            raise ProjectValidationError("A Love My Locals candidate requires a valid YouTube video.")
+        self.description = str(self.description or "").strip()
+        self.tags = [str(item).strip() for item in self.tags if str(item).strip()]
+        self.matched_location = str(self.matched_location or "").strip()
+        self.match_basis = list(dict.fromkeys(str(item).strip().lower() for item in self.match_basis if str(item).strip()))
+        if any(item not in {"title", "description", "tag"} for item in self.match_basis):
+            raise ProjectValidationError("Love My Locals match basis must be title, description or tag.")
+        self.relevance_score = int(self.relevance_score or 0)
+        if self.relevance_score not in {1, 2, 3}:
+            raise ProjectValidationError("Love My Locals relevance score must be 1, 2 or 3.")
+        self.is_short = bool(self.is_short)
+        self.active = bool(self.active)
+        if self.cta_type in (None, ""):
+            self.cta_type = None
+        else:
+            try:
+                self.cta_type = PrimaryCtaType(self.cta_type)
+            except ValueError as error:
+                raise ProjectValidationError("Select a valid Love My Locals CTA.") from error
+            if self.cta_type not in CHANNEL_MASTER_CTA_TYPES:
+                raise ProjectValidationError("The selected Love My Locals CTA is not supported.")
+        self.cta_url = _optional_http_url(self.cta_url, "Love My Locals CTA URL")
+
+    @property
+    def cta_label(self) -> str:
+        return PRIMARY_CTA_LABELS.get(self.cta_type, self.cta_type.value.replace("_", " ").upper()) if self.cta_type else "MORE INFO"
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "video": self.video.to_dict(),
+            "description": self.description,
+            "tags": list(self.tags),
+            "matched_location": self.matched_location,
+            "match_basis": list(self.match_basis),
+            "relevance_score": self.relevance_score,
+            "is_short": self.is_short,
+            "cta_type": self.cta_type.value if self.cta_type else None,
+            "cta_url": self.cta_url,
+            "active": self.active,
+        }
+
+    @classmethod
+    def from_dict(cls, value: dict[str, Any]) -> "LoveMyLocalsCandidate":
+        video = value.get("video")
+        if not isinstance(video, dict):
+            raise ProjectValidationError("Love My Locals candidate video must be an object.")
+        return cls(
+            video=Video.from_dict(video),
+            description=str(value.get("description") or ""),
+            tags=[str(item) for item in (value.get("tags") or [])],
+            matched_location=str(value.get("matched_location") or value.get("matchedLocation") or ""),
+            match_basis=[str(item) for item in (value.get("match_basis", value.get("matchBasis", [])) or [])],
+            relevance_score=int(value.get("relevance_score") or value.get("relevanceScore") or 0),
+            is_short=bool(value.get("is_short", value.get("isShort", False))),
+            cta_type=value.get("cta_type", value.get("ctaType")),
+            cta_url=value.get("cta_url", value.get("ctaUrl")),
+            active=bool(value.get("active", False)),
+        )
+
+
+@dataclass(slots=True)
+class LoveMyLocalsConfig:
+    locations: list[str]
+    resolved_geography: str = "Victoria, Australia"
+    resolved_locations: list[str] = field(default_factory=list)
+    include_shorts: bool = False
+    candidates: list[LoveMyLocalsCandidate] = field(default_factory=list)
+    last_search_at: str = ""
+
+    def __post_init__(self) -> None:
+        self.locations = [re.sub(r"\s+", " ", str(item)).strip() for item in self.locations if str(item).strip()]
+        if not 1 <= len(self.locations) <= 3:
+            raise ProjectValidationError("Love My Locals requires between one and three locations.")
+        if len({item.casefold() for item in self.locations}) != len(self.locations):
+            raise ProjectValidationError("Love My Locals locations must be unique.")
+        self.resolved_geography = re.sub(r"\s+", " ", str(self.resolved_geography or "Victoria, Australia")).strip()
+        if not self.resolved_geography:
+            raise ProjectValidationError("Love My Locals geographic context is required.")
+        self.resolved_locations = [
+            re.sub(r"\s+", " ", str(item)).strip() for item in self.resolved_locations if str(item).strip()
+        ] or [f"{item}, {self.resolved_geography}" for item in self.locations]
+        if len(self.resolved_locations) != len(self.locations):
+            raise ProjectValidationError("Love My Locals resolved locations do not match the nominated locations.")
+        self.include_shorts = bool(self.include_shorts)
+        if any(not isinstance(item, LoveMyLocalsCandidate) for item in self.candidates):
+            raise ProjectValidationError("Love My Locals candidates are invalid.")
+        ids = [item.video.video_id for item in self.candidates]
+        if len(ids) != len(set(ids)):
+            raise ProjectValidationError("Love My Locals candidates contain duplicate YouTube video IDs.")
+        if sum(item.active for item in self.candidates) > 50:
+            raise ProjectValidationError("Love My Locals can include no more than 50 videos.")
+        if not self.include_shorts and any(item.active and item.is_short for item in self.candidates):
+            raise ProjectValidationError("YouTube Shorts are disabled for this Love My Locals project.")
+        self.last_search_at = str(self.last_search_at or "")
+
+    @property
+    def selected_videos(self) -> list[Video]:
+        return [item.video for item in self.candidates if item.active]
+
+    @property
+    def plaque_title(self) -> str:
+        return " + ".join(location.upper() for location in self.locations)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "locations": list(self.locations),
+            "resolved_geography": self.resolved_geography,
+            "resolved_locations": list(self.resolved_locations),
+            "include_shorts": self.include_shorts,
+            "candidates": [item.to_dict() for item in self.candidates],
+            "last_search_at": self.last_search_at,
+        }
+
+    @classmethod
+    def from_dict(cls, value: dict[str, Any] | None) -> "LoveMyLocalsConfig":
+        source = dict(value or {})
+        return cls(
+            locations=[str(item) for item in (source.get("locations") or [])],
+            resolved_geography=str(source.get("resolved_geography") or source.get("resolvedGeography") or "Victoria, Australia"),
+            resolved_locations=[str(item) for item in (source.get("resolved_locations", source.get("resolvedLocations", [])) or [])],
+            include_shorts=bool(source.get("include_shorts", source.get("includeShorts", False))),
+            candidates=[LoveMyLocalsCandidate.from_dict(item) for item in (source.get("candidates") or []) if isinstance(item, dict)],
+            last_search_at=str(source.get("last_search_at") or source.get("lastSearchAt") or ""),
+        )
+
+
+@dataclass(slots=True)
 class Project:
     slug: str
     title: str
@@ -834,6 +976,7 @@ class Project:
     banjo_config: BanjoConfig | None = None
     channel_master_config: ChannelMasterConfig | None = None
     white_label_config: WhiteLabelConfig | None = None
+    love_my_locals_config: LoveMyLocalsConfig | None = None
     source_channel_url: str = ""
     manual_video_urls: list[str] = field(default_factory=list)
     excluded_video_ids: list[str] = field(default_factory=list)
@@ -879,7 +1022,7 @@ class Project:
         if len(self.ticker_text) > ticker_limit:
             label = (
                 "Banjo Ticker Text" if self.project_type is ProjectType.BANJO
-                else "Ticker Text" if self.project_type in {ProjectType.CHANNEL_MASTER, ProjectType.WHITE_LABEL}
+                else "Ticker Text" if self.project_type in {ProjectType.CHANNEL_MASTER, ProjectType.WHITE_LABEL, ProjectType.LOVE_MY_LOCALS}
                 else "Bio / Story Information"
             )
             raise ProjectValidationError(f"{label} cannot exceed {ticker_limit} characters.")
@@ -889,19 +1032,19 @@ class Project:
             _optional_http_url(url, "Additional URL") or "" for url in self.additional_urls if str(url or "").strip()
         ]
         if self.project_type is ProjectType.BUSINESS:
-            if self.music_config is not None or self.tourism_config is not None or self.banjo_config is not None or self.channel_master_config is not None or self.white_label_config is not None:
+            if self.music_config is not None or self.tourism_config is not None or self.banjo_config is not None or self.channel_master_config is not None or self.white_label_config is not None or self.love_my_locals_config is not None:
                 raise ProjectValidationError("A Business project cannot have another project type's configuration.")
             self.business_config = self.business_config or BusinessConfig()
         elif self.project_type is ProjectType.MUSIC:
-            if self.business_config is not None or self.tourism_config is not None or self.banjo_config is not None or self.channel_master_config is not None or self.white_label_config is not None:
+            if self.business_config is not None or self.tourism_config is not None or self.banjo_config is not None or self.channel_master_config is not None or self.white_label_config is not None or self.love_my_locals_config is not None:
                 raise ProjectValidationError("A Music project cannot have another project type's configuration.")
             self.music_config = self.music_config or MusicConfig()
         elif self.project_type is ProjectType.TOURISM:
-            if self.business_config is not None or self.music_config is not None or self.banjo_config is not None or self.channel_master_config is not None or self.white_label_config is not None:
+            if self.business_config is not None or self.music_config is not None or self.banjo_config is not None or self.channel_master_config is not None or self.white_label_config is not None or self.love_my_locals_config is not None:
                 raise ProjectValidationError("A Tourism project cannot have another project type's configuration.")
             self.tourism_config = self.tourism_config or TourismConfig()
         elif self.project_type is ProjectType.BANJO:
-            if self.business_config is not None or self.music_config is not None or self.tourism_config is not None or self.channel_master_config is not None or self.white_label_config is not None:
+            if self.business_config is not None or self.music_config is not None or self.tourism_config is not None or self.channel_master_config is not None or self.white_label_config is not None or self.love_my_locals_config is not None:
                 raise ProjectValidationError("A Banjo project cannot have Business, Music or Tourism configuration.")
             if self.title != "BANJO'S WORLD OF CARS":
                 raise ProjectValidationError("Banjo project title must be exactly BANJO'S WORLD OF CARS.")
@@ -915,10 +1058,12 @@ class Project:
                 raise ProjectValidationError("A Channel Master project cannot have another project type's configuration.")
             if self.white_label_config is not None:
                 raise ProjectValidationError("A Channel Master project cannot have White Label configuration.")
+            if self.love_my_locals_config is not None:
+                raise ProjectValidationError("A Channel Master project cannot have Love My Locals configuration.")
             self.channel_master_config = self.channel_master_config or ChannelMasterConfig()
             if not self.channel_master_config.primary_cta or not self.channel_master_config.primary_cta.destination_url:
                 raise ProjectValidationError("Channel Master Primary CTA URL is required.")
-        else:
+        elif self.project_type is ProjectType.WHITE_LABEL:
             if self.business_config is not None or self.music_config is not None or self.tourism_config is not None or self.banjo_config is not None:
                 raise ProjectValidationError("A White Label project cannot have another project type's configuration.")
             self.channel_master_config = self.channel_master_config or ChannelMasterConfig()
@@ -926,6 +1071,20 @@ class Project:
                 raise ProjectValidationError("White Label Primary CTA URL is required.")
             if self.white_label_config is None:
                 raise ProjectValidationError("Please upload a logo before saving this White Label project.")
+            if self.love_my_locals_config is not None:
+                raise ProjectValidationError("A White Label project cannot have Love My Locals configuration.")
+        else:
+            if any(config is not None for config in (
+                self.business_config, self.music_config, self.tourism_config, self.banjo_config, self.white_label_config,
+            )):
+                raise ProjectValidationError("A Love My Locals project cannot have another project type's configuration.")
+            self.channel_master_config = self.channel_master_config or ChannelMasterConfig()
+            if self.love_my_locals_config is None:
+                raise ProjectValidationError("Love My Locals discovery data is required.")
+            selected_ids = {item.video.video_id for item in self.love_my_locals_config.candidates if item.active}
+            included_ids = {video.video_id for video in self.videos if video.video_id not in set(self.excluded_video_ids)}
+            if included_ids != selected_ids:
+                raise ProjectValidationError("Love My Locals selected videos are not synchronized with the discovery data.")
         primary_cta = project_primary_cta(self)
         if primary_cta and primary_cta.cta_type not in allowed_primary_cta_types(self.project_type):
             raise ProjectValidationError(
@@ -955,6 +1114,7 @@ class Project:
             "banjo_config": self.banjo_config.to_dict() if self.banjo_config else None,
             "channel_master_config": self.channel_master_config.to_dict() if self.channel_master_config else None,
             "white_label_config": self.white_label_config.to_dict() if self.white_label_config else None,
+            "love_my_locals_config": self.love_my_locals_config.to_dict() if self.love_my_locals_config else None,
             "source_channel_url": self.source_channel_url,
             "manual_video_urls": list(self.manual_video_urls),
             "excluded_video_ids": list(self.excluded_video_ids),
@@ -979,7 +1139,7 @@ class Project:
             "schemaVersion", "slug", "title", "ticker_text", "tickerText", "channel_url", "channelUrl",
             "channel_id", "channelId", "channel_title", "channelTitle", "channel_thumbnail", "channelThumbnail",
             "id", "project_id", "projectId", "project_type", "projectType", "additional_urls", "additionalUrls",
-            "business_config", "businessConfig", "music_config", "musicConfig", "tourism_config", "tourismConfig", "banjo_config", "banjoConfig", "channel_master_config", "channelMasterConfig", "white_label_config", "whiteLabelConfig",
+            "business_config", "businessConfig", "music_config", "musicConfig", "tourism_config", "tourismConfig", "banjo_config", "banjoConfig", "channel_master_config", "channelMasterConfig", "white_label_config", "whiteLabelConfig", "love_my_locals_config", "loveMyLocalsConfig",
             "source_channel_url", "sourceChannelUrl",
             "manual_video_urls", "manualVideoUrls", "excluded_video_ids", "excludedVideoIds", "videos", "status",
             "created_at", "createdAt", "updated_at", "updatedAt", "published_at", "publishedAt", "published_url",
@@ -993,6 +1153,7 @@ class Project:
         banjo_value = value.get("banjo_config", value.get("banjoConfig"))
         channel_master_value = value.get("channel_master_config", value.get("channelMasterConfig"))
         white_label_value = value.get("white_label_config", value.get("whiteLabelConfig"))
+        love_my_locals_value = value.get("love_my_locals_config", value.get("loveMyLocalsConfig"))
         if business_value is not None and not isinstance(business_value, dict):
             raise ProjectValidationError("business_config must be an object or null.")
         if music_value is not None and not isinstance(music_value, dict):
@@ -1005,6 +1166,8 @@ class Project:
             raise ProjectValidationError("channel_master_config must be an object or null.")
         if white_label_value is not None and not isinstance(white_label_value, dict):
             raise ProjectValidationError("white_label_config must be an object or null.")
+        if love_my_locals_value is not None and not isinstance(love_my_locals_value, dict):
+            raise ProjectValidationError("love_my_locals_config must be an object or null.")
         return cls(
             slug=str(value.get("slug") or ""),
             title=str(value.get("title") or ""),
@@ -1022,6 +1185,7 @@ class Project:
             banjo_config=BanjoConfig.from_dict(banjo_value) if banjo_value is not None else None,
             channel_master_config=ChannelMasterConfig.from_dict(channel_master_value) if channel_master_value is not None else None,
             white_label_config=WhiteLabelConfig.from_dict(white_label_value) if white_label_value is not None else None,
+            love_my_locals_config=LoveMyLocalsConfig.from_dict(love_my_locals_value) if love_my_locals_value is not None else None,
             source_channel_url=str(value.get("source_channel_url") or value.get("sourceChannelUrl") or value.get("channel_url") or value.get("channelUrl") or ""),
             manual_video_urls=[str(item) for item in (value.get("manual_video_urls", value.get("manualVideoUrls", [])) or []) if str(item).strip()],
             excluded_video_ids=[str(item) for item in (value.get("excluded_video_ids", value.get("excludedVideoIds", [])) or []) if str(item).strip()],

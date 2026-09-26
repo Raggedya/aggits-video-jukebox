@@ -199,6 +199,20 @@ test("valid authenticated White Label request reuses the protected delivery cont
 });
 
 
+test("valid authenticated Love My Locals request reuses the protected delivery contract", async () => {
+  const env = environment();
+  const mock = installFetchMock({ machineProjectType: "love_my_locals", machineTitle: "BOX HILL" });
+  try {
+    const body = payload({ projectType: "love_my_locals", title: "BOX HILL", productName: "LOVE MY LOCALS" });
+    const response = await worker.fetch(signedRequest(body, { nonce: "ae".repeat(16) }), env);
+    assert.equal(response.status, 201);
+    const resend = mock.calls.find((call) => call.url.includes("api.resend.com"));
+    assert.deepEqual(JSON.parse(resend.init.body).to, ["listener@example.com"]);
+    assert.equal(env.DB.deliveries.size, 1);
+  } finally { mock.restore(); }
+});
+
+
 test("missing invalid modified expired and future authentication is rejected without secret disclosure", async () => {
   const now = Math.floor(Date.now() / 1000);
   const cases = [

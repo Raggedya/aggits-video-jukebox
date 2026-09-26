@@ -262,6 +262,39 @@ class YouTubeClient:
             videos=videos,
         )
 
+    def search_video_items(self, query: str, maximum: int = 75) -> list[dict[str, Any]]:
+        """Return authoritative public video detail records for a YouTube search.
+
+        Search results are hydrated through ``videos.list`` so callers can
+        validate privacy, embeddability, duration, description and tags rather
+        than trusting lightweight search snippets.
+        """
+        target = max(1, min(100, int(maximum)))
+        ids: list[str] = []
+        page_token = ""
+        while len(ids) < target:
+            page = self._get(
+                "search", part="snippet", type="video", q=query,
+                maxResults=min(50, target - len(ids)), pageToken=page_token,
+                safeSearch="moderate", order="relevance",
+            )
+            for item in page.get("items", []):
+                if not isinstance(item, dict):
+                    continue
+                identifier = item.get("id") if isinstance(item.get("id"), dict) else {}
+                video_id = str(identifier.get("videoId") or "")
+                if video_id and video_id not in ids:
+                    ids.append(video_id)
+            page_token = str(page.get("nextPageToken") or "")
+            if not page_token:
+                break
+        details: list[dict[str, Any]] = []
+        for group in chunks(ids, 50):
+            page = self._get("videos", part="snippet,contentDetails,status", id=",".join(group), maxResults=50)
+            details.extend(item for item in page.get("items", []) if isinstance(item, dict))
+        by_id = {str(item.get("id") or ""): item for item in details}
+        return [by_id[video_id] for video_id in ids if video_id in by_id]
+
     def fetch_catalogue(self, channel_url: str, maximum: int = MAX_VIDEOS) -> ChannelCatalogue:
         maximum = max(1, min(MAX_CHANNEL_MASTER_REVIEW_VIDEOS, int(maximum)))
         channel = self.resolve_channel(channel_url)

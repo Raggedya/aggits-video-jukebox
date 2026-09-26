@@ -110,7 +110,7 @@ def request_delivery(
 ) -> dict[str, Any]:
     if project.project_type not in {
         ProjectType.BUSINESS, ProjectType.MUSIC, ProjectType.TOURISM,
-        ProjectType.BANJO, ProjectType.CHANNEL_MASTER, ProjectType.WHITE_LABEL,
+        ProjectType.BANJO, ProjectType.CHANNEL_MASTER, ProjectType.WHITE_LABEL, ProjectType.LOVE_MY_LOCALS,
     }:
         raise DeliveryError(f"Unsupported project type: {project.project_type!r}.", code="unsupported_project_type")
     if project.status != "published" or not project.published_url or not project.publication_revision:
@@ -132,6 +132,7 @@ def request_delivery(
             ProjectType.BANJO: "BANJO'S WORLD OF CARS",
             ProjectType.CHANNEL_MASTER: "CRISPY BITS CHANNEL MASTER",
             ProjectType.WHITE_LABEL: "CRISPY BITS WHITE LABEL",
+            ProjectType.LOVE_MY_LOCALS: "LOVE MY LOCALS",
         }[project.project_type],
     }
     body = json.dumps(payload, separators=(",", ":"), sort_keys=True, ensure_ascii=False).encode("utf-8")

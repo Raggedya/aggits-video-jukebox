@@ -9,6 +9,8 @@ from aggits_video_factory.models import (
     BanjoConfig,
     ChannelMasterConfig,
     MusicConfig,
+    LoveMyLocalsCandidate,
+    LoveMyLocalsConfig,
     PrimaryCta,
     PrimaryCtaType,
     Project,
@@ -56,6 +58,7 @@ def project_for(project_type: ProjectType) -> Project:
             ProjectType.BANJO: "BANJO'S WORLD OF CARS",
             ProjectType.CHANNEL_MASTER: "CHANNEL MASTER FIXTURE",
             ProjectType.WHITE_LABEL: "WHITE LABEL FIXTURE",
+            ProjectType.LOVE_MY_LOCALS: "BOX HILL",
         }[project_type],
         ticker_text="Fixture Bio remains below the machine controls.",
         channel_url="https://www.youtube.com/channel/UChero",
@@ -98,6 +101,18 @@ def project_for(project_type: ProjectType) -> Project:
             white_label_config=WhiteLabelConfig(
                 logo_asset_path=str(logo), original_filename=logo.name,
                 media_type="image/png", width=1280, height=432,
+            ),
+        )
+    if project_type is ProjectType.LOVE_MY_LOCALS:
+        video = common["videos"][0]
+        return Project(
+            **common,
+            channel_master_config=ChannelMasterConfig(),
+            love_my_locals_config=LoveMyLocalsConfig(
+                locations=["Box Hill"],
+                candidates=[LoveMyLocalsCandidate(
+                    video=video, matched_location="Box Hill", match_basis=["title"], relevance_score=3, active=True,
+                )],
             ),
         )
     return Project(**common, banjo_config=BanjoConfig())
@@ -181,7 +196,7 @@ class MachineBrandHierarchyTests(unittest.TestCase):
                 self.assertEqual(page.count('class="customer-identity"'), 1)
                 self.assertEqual(
                     page.count('class="brand-signature"'),
-                    0 if project_type in {ProjectType.CHANNEL_MASTER, ProjectType.WHITE_LABEL} else 1,
+                    0 if project_type in {ProjectType.CHANNEL_MASTER, ProjectType.WHITE_LABEL, ProjectType.LOVE_MY_LOCALS} else 1,
                 )
                 self.assertNotIn('class="brand-masthead"', page)
                 self.assertIn("customer-identity-subtitle", page)

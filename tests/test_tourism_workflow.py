@@ -416,7 +416,7 @@ class TourismWorkflowTests(unittest.TestCase):
             try:
                 self.assertEqual(
                     [app.notebook.tab(index, "text") for index in range(app.notebook.index("end"))],
-                    ["BUSINESS", "MUSIC", "TOURISM", "BANJO", "CHANNEL MASTER", "WHITE LABEL", "BULK UPLOAD"],
+                    ["BUSINESS", "MUSIC", "TOURISM", "BANJO", "CHANNEL MASTER", "WHITE LABEL", "LOVE MY LOCALS", "BULK UPLOAD"],
                 )
                 for width, height in ((1320, 820), (1120, 720)):
                     app.geometry(f"{width}x{height}")

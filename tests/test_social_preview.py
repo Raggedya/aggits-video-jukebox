@@ -17,6 +17,8 @@ from aggits_video_factory.models import (
     BanjoConfig,
     ChannelMasterConfig,
     MusicConfig,
+    LoveMyLocalsCandidate,
+    LoveMyLocalsConfig,
     PrimaryCta,
     PrimaryCtaType,
     Project,
@@ -133,6 +135,18 @@ def project_for(project_type: ProjectType, title: str = "WRAITH") -> Project:
                 media_type="image/png", width=1280, height=432,
             ),
         )
+    if project_type is ProjectType.LOVE_MY_LOCALS:
+        video = common["videos"][0]
+        return Project(
+            **common,
+            channel_master_config=ChannelMasterConfig(),
+            love_my_locals_config=LoveMyLocalsConfig(
+                locations=[title],
+                candidates=[LoveMyLocalsCandidate(
+                    video=video, matched_location=title, match_basis=["title"], relevance_score=3, active=True,
+                )],
+            ),
+        )
     return Project(**common, banjo_config=BanjoConfig())
 
 
@@ -181,12 +195,12 @@ class UniversalSocialPreviewTests(unittest.TestCase):
                 filename = social_preview_filename(project.title, project.project_type)
                 expected_image = f"{expected_url}{filename}"
                 expected_description = (
-                    f"Hit it. Discover {project.title}." if project_type in {ProjectType.CHANNEL_MASTER, ProjectType.WHITE_LABEL}
+                    f"Hit it. Discover {project.title}." if project_type in {ProjectType.CHANNEL_MASTER, ProjectType.WHITE_LABEL, ProjectType.LOVE_MY_LOCALS}
                     else f"Hit it. Discover {project.title} with Crispy Bits."
                 )
                 self.assertEqual(
                     parser.title,
-                    project.title if project_type in {ProjectType.CHANNEL_MASTER, ProjectType.WHITE_LABEL} else f"{project.title} | Crispy Bits",
+                    project.title if project_type in {ProjectType.CHANNEL_MASTER, ProjectType.WHITE_LABEL, ProjectType.LOVE_MY_LOCALS} else f"{project.title} | Crispy Bits",
                 )
                 self.assertEqual(parser.canonical, expected_url)
                 self.assertEqual(parser.meta["og:type"], "website")
