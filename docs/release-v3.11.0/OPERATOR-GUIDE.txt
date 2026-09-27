@@ -1,0 +1,48 @@
+CRISPY BITS DESKTOP v3.11.0 — TOURISM DISCOVERY DECK GUIDE
+==========================================================
+
+CREATE OR OPEN A TOURISM PROJECT
+
+Use the TOURISM tab. Enter the Destination Title, Location, YouTube source and
+Official Tourism Website URL. Analyse and review videos using the established
+workflow.
+
+LOCAL DISCOVERY DECK
+
+Select MANAGE DISCOVERIES to add destination-specific Discovery Cards.
+Each card contains:
+
+- Category
+- Hook
+- Headline
+- One short supporting sentence
+- Optional operator-supplied image
+- CTA label and official destination URL
+- Source URL for editorial verification
+
+Use MOVE UP and MOVE DOWN to organise the editor list. ENABLE controls whether
+a card is included in the published deck. PREVIEW shows the poster treatment.
+IMPORT JSON is optional; manual entry remains fully supported.
+
+EDITORIAL REQUIREMENT
+
+The desktop does not research or invent Tourism content. Verify every claim,
+image right, CTA destination and source before publication. Prefer official
+tourism, parks, council or other authoritative information pages.
+
+PREVIEW AND PUBLISH
+
+Preview the project before publishing and spin repeatedly to inspect both
+videos and Discovery Cards. Published Tourism machines select from one mixed
+deck. Discovery Cards appear unpredictably at an approximate 25 percent rate
+and should not normally appear twice in succession.
+
+EXISTING PROJECTS
+
+Existing Tourism projects with no Discovery Cards remain video-only. Other
+Crispy Bits product modes are unaffected.
+
+VERSION NOTE
+
+Projects saved with v3.11.0 should continue to be edited with v3.11.0 or a
+later compatible release unless backward editing has specifically been tested.

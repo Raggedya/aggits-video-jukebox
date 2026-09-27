@@ -10,7 +10,7 @@ LOVE MY LOCALS accepts one to three locations, discovers and scores a varied poo
 
 1. Open **Settings** once and save a YouTube Data API v3 key, Delivery Email and provisioned delivery credential.
 2. Choose **BUSINESS**, **MUSIC** or **TOURISM**, enter a title and Bio / Story, then supply a channel URL, up to 15 individual video URLs, or both.
-3. Business projects may configure a Shop URL. Music projects configure one Primary Call to Action and Destination URL. Tourism projects may configure distinct More Info and Stay URLs.
+3. Business projects may configure a Shop URL. Music projects configure one Primary Call to Action and Destination URL. Tourism projects configure an official destination URL and may add a manually verified Local Discovery Deck alongside their YouTube videos.
 4. Press **Analyse + Review Videos**. Explicit videos are included first; duplicates are removed and the channel fills the remaining places up to 30 public, embeddable videos.
 5. Review the resolved list, then build using only the videos you keep checked.
 6. Preview privately, then publish or unpublish from the Library.

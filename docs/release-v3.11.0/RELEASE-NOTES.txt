@@ -1,0 +1,35 @@
+CRISPY BITS DESKTOP v3.11.0
+================================
+
+TOURISM MIXED DISCOVERY DECK
+
+- Extends the existing Tourism product with one random discovery pool made
+  from YouTube videos and manually curated Local Discovery Cards.
+- Discovery Cards use the existing video chamber as a full-bleed destination
+  poster with a concise hook, headline, supporting sentence and official CTA.
+- The runtime targets an approximately 25 percent Discovery Card appearance
+  rate, avoids consecutive cards where videos are available and retains the
+  established video anti-repeat behaviour.
+- Legacy Tourism projects without a saved Discovery Deck remain video-only.
+
+DESKTOP AUTHORING
+
+- Adds a compact Local Discovery Deck editor with add, edit, delete,
+  enable/disable, reordering, image selection, preview and optional JSON import.
+- Discovery artwork is copied into project-owned assets and then packaged into
+  each published machine independently.
+- Cards require operator-reviewed copy and an official destination CTA. No web
+  research, Google Places, AI API or paid discovery service has been added.
+
+VERIFICATION
+
+- Desktop and 390 x 844 mobile Tourism previews were verified without
+  horizontal overflow.
+- The full Python, Tourism compatibility and Worker/security suites were run.
+- Reel calculations, landing mathematics and mechanical modules are unchanged.
+- Love My Locals and all other Crispy Bits product modes remain unchanged.
+
+CODE SIGNING
+
+This release contains embedded Windows product and version metadata but is
+unsigned because no trusted code-signing certificate is configured.
