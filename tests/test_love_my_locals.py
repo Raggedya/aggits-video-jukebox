@@ -401,6 +401,7 @@ class LoveMyLocalsTests(unittest.TestCase):
             page = (destination / "index.html").read_text(encoding="utf-8")
             self.assertEqual(machine["projectType"], "love_my_locals")
             self.assertEqual(machine["loveMyLocalsConfig"]["brandTeal"], "#00C7CC")
+            self.assertEqual(machine["loveMyLocalsConfig"]["publicTitle"], "Box Hill")
             self.assertEqual(machine["channelMasterConfig"]["palette"], {
                 "name": "MIDNIGHT",
                 "customPrimary": None,

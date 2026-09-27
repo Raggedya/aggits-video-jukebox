@@ -204,6 +204,11 @@ class Publisher:
             shutil.copytree(source, target)
 
             library = [item for item in _load_library(workspace) if str(item.get("slug")) != project.slug]
+            social_title = (
+                project.love_my_locals_config.public_title
+                if project.project_type is ProjectType.LOVE_MY_LOCALS and project.love_my_locals_config
+                else project.title
+            )
             library.append({
                 "slug": project.slug,
                 "title": project.title,
@@ -213,7 +218,7 @@ class Publisher:
                 "videoCount": len(project.videos),
                 "publishedAt": utc_now(),
                 "url": public_url,
-                "socialImage": social_preview_filename(project.title, project.project_type),
+                "socialImage": social_preview_filename(social_title, project.project_type),
             })
             _write_library(workspace, library)
             _run([self.git, "add", "--", f"public/{PUBLIC_PATH}/{project.slug}", f"public/{PUBLIC_PATH}/library.json", f"public/{PUBLIC_PATH}/index.html"], cwd=workspace)

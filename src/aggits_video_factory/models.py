@@ -932,6 +932,7 @@ class LoveMyLocalsConfig:
     exclusion_diagnostics: list[dict[str, str]] = field(default_factory=list)
     discovery_summary: dict[str, int] = field(default_factory=dict)
     last_search_at: str = ""
+    public_title: str = ""
 
     def __post_init__(self) -> None:
         self.locations = [re.sub(r"\s+", " ", str(item)).strip() for item in self.locations if str(item).strip()]
@@ -939,6 +940,9 @@ class LoveMyLocalsConfig:
             raise ProjectValidationError("Love My Locals requires between one and three locations.")
         if len({item.casefold() for item in self.locations}) != len(self.locations):
             raise ProjectValidationError("Love My Locals locations must be unique.")
+        self.public_title = re.sub(r"\s+", " ", str(self.public_title or "")).strip() or self.locations[0]
+        if len(self.public_title) > 80:
+            raise ProjectValidationError("Love My Locals Public Title cannot exceed 80 characters.")
         self.resolved_geography = re.sub(r"\s+", " ", str(self.resolved_geography or "Victoria, Australia")).strip()
         if not self.resolved_geography:
             raise ProjectValidationError("Love My Locals geographic context is required.")
@@ -997,6 +1001,7 @@ class LoveMyLocalsConfig:
     def to_dict(self) -> dict[str, Any]:
         return {
             "locations": list(self.locations),
+            "public_title": self.public_title,
             "resolved_geography": self.resolved_geography,
             "resolved_locations": list(self.resolved_locations),
             "include_shorts": self.include_shorts,
@@ -1016,6 +1021,7 @@ class LoveMyLocalsConfig:
         source = dict(value or {})
         return cls(
             locations=[str(item) for item in (source.get("locations") or [])],
+            public_title=str(source.get("public_title") or source.get("publicTitle") or ""),
             resolved_geography=str(source.get("resolved_geography") or source.get("resolvedGeography") or "Victoria, Australia"),
             resolved_locations=[str(item) for item in (source.get("resolved_locations", source.get("resolvedLocations", [])) or [])],
             include_shorts=bool(source.get("include_shorts", source.get("includeShorts", False))),

@@ -136,6 +136,7 @@ class LoveMyLocalsFormValues:
     tourism_mode: str = "limited"
     include_council_meetings: bool = False
     explore_url: str = ""
+    public_title: str = ""
 
     def comparable(self) -> tuple[object, ...]:
         return (
@@ -148,6 +149,7 @@ class LoveMyLocalsFormValues:
             self.tourism_mode,
             bool(self.include_council_meetings),
             self.explore_url,
+            self.public_title,
         )
 
 
@@ -164,6 +166,9 @@ def normalize_locations(values: Iterable[str]) -> list[str]:
 
 def validate_form(values: LoveMyLocalsFormValues) -> LoveMyLocalsFormValues:
     locations = normalize_locations(values.locations)
+    public_title = re.sub(r"\s+", " ", str(values.public_title or "")).strip() or locations[0]
+    if len(public_title) > 80:
+        raise LoveMyLocalsError("Public Title must be 80 characters or fewer.")
     geography = re.sub(r"\s+", " ", str(values.geography or DEFAULT_GEOGRAPHY)).strip()
     if not geography or len(geography) > 100:
         raise LoveMyLocalsError("Enter a valid geographic context, such as Victoria, Australia.")
@@ -190,8 +195,16 @@ def validate_form(values: LoveMyLocalsFormValues) -> LoveMyLocalsFormValues:
         if parsed.scheme not in {"http", "https"} or not parsed.netloc:
             raise LoveMyLocalsError("Explore Tourism URL must be a complete http or https URL.")
     return LoveMyLocalsFormValues(
-        locations, geography, bool(values.include_shorts), ticker, cta_type, cta_url,
-        tourism_mode, bool(values.include_council_meetings), explore_url,
+        locations=locations,
+        public_title=public_title,
+        geography=geography,
+        include_shorts=bool(values.include_shorts),
+        ticker_text=ticker,
+        default_cta_type=cta_type,
+        default_cta_url=cta_url,
+        tourism_mode=tourism_mode,
+        include_council_meetings=bool(values.include_council_meetings),
+        explore_url=explore_url,
     )
 
 
@@ -689,6 +702,7 @@ def assemble_project(
     config.default_cta_type = validated.default_cta_type
     config.default_cta_url = validated.default_cta_url or None
     config.explore_url = validated.explore_url or None
+    config.public_title = validated.public_title
     config.__post_init__()
     if not config.selected_videos:
         raise LoveMyLocalsError("No active local videos are available to build this machine.")

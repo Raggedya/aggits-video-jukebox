@@ -14,12 +14,16 @@ from .config import resource_path
 
 SOCIAL_PREVIEW_SIZE = (1200, 630)
 SOCIAL_PREVIEW_VERSION = "v2"
+LOVE_MY_LOCALS_SOCIAL_PREVIEW_VERSION = "love-my-locals-v1"
+LOVE_MY_LOCALS_LOGO_RESOURCE = "static/love-my-locals/love-my-locals-logo.png"
+LOVE_MY_LOCALS_TEAL = "#00C7CC"
 BANJO_SOCIAL_PREVIEW_SIZE = (1731, 909)
 BANJO_SOCIAL_PREVIEW_VERSION = "banjo-v1"
 BANJO_SOCIAL_PREVIEW_RESOURCE = "templates/social-preview/banjo-world-of-cars-social-preview.png"
 BANJO_SOCIAL_PREVIEW_SHA256 = "6274661228cf248d4b27f701823752197d863cad2fb88b6c209674ef0fa1fbe2"
 TITLE_SAFE_REGION = (110, 132, 1090, 370)
 TOUCH_ICON_BOUNDS = (558, 394, 642, 496)
+LOVE_MY_LOCALS_TOUCH_ICON_BOUNDS = (566, 522, 634, 605)
 TITLE_FILL = "#f3ede0"
 TITLE_EDGE = "#8c846f"
 TITLE_SHADOW = "#010205"
@@ -45,9 +49,17 @@ def _is_banjo(project_type: object | None) -> bool:
     return str(getattr(project_type, "value", project_type) or "").lower() == "banjo"
 
 
+def _is_love_my_locals(project_type: object | None) -> bool:
+    return str(getattr(project_type, "value", project_type) or "").lower() == "love_my_locals"
+
+
 def social_preview_filename(title: str | None, project_type: object | None = None) -> str:
     if _is_banjo(project_type):
         return f"social-card-{BANJO_SOCIAL_PREVIEW_VERSION}-{BANJO_SOCIAL_PREVIEW_SHA256[:12]}.png"
+    if _is_love_my_locals(project_type):
+        source = f"{LOVE_MY_LOCALS_SOCIAL_PREVIEW_VERSION}\0{normalise_social_title(title)}".encode("utf-8")
+        digest = hashlib.sha256(source).hexdigest()[:12]
+        return f"social-card-{LOVE_MY_LOCALS_SOCIAL_PREVIEW_VERSION}-{digest}.png"
     source = f"{SOCIAL_PREVIEW_VERSION}\0{normalise_social_title(title)}".encode("utf-8")
     digest = hashlib.sha256(source).hexdigest()[:12]
     return f"social-card-{SOCIAL_PREVIEW_VERSION}-{digest}.jpg"
@@ -83,6 +95,20 @@ def _font(size: int) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
         return ImageFont.load_default()
 
 
+def _sans_font(size: int) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
+    candidates = (
+        Path("C:/Windows/Fonts/segoeuib.ttf"),
+        Path("C:/Windows/Fonts/arialbd.ttf"),
+    )
+    for candidate in candidates:
+        if candidate.is_file():
+            return ImageFont.truetype(str(candidate), size)
+    try:
+        return ImageFont.truetype("DejaVuSans-Bold.ttf", size)
+    except OSError:
+        return ImageFont.load_default()
+
+
 def _candidate_lines(words: list[str], line_count: int) -> list[tuple[str, ...]]:
     if line_count == 1:
         return [(" ".join(words),)] if words else []
@@ -93,6 +119,64 @@ def _candidate_lines(words: list[str], line_count: int) -> list[tuple[str, ...]]
         boundaries = (0, *cuts, len(words))
         candidates.append(tuple(" ".join(words[boundaries[index]:boundaries[index + 1]]) for index in range(line_count)))
     return candidates
+
+
+def draw_love_my_locals_title(
+    canvas: Image.Image,
+    title: str | None,
+    region: tuple[int, int, int, int],
+    *,
+    maximum: int = 82,
+    minimum: int = 28,
+) -> TitleLayout:
+    value = normalise_social_title(title).upper()
+    if not value:
+        raise ValueError("Love My Locals artwork requires a Public Title.")
+    draw = ImageDraw.Draw(canvas)
+    left, top, right, bottom = region
+    max_width = right - left
+    max_height = bottom - top
+    words = value.split()
+    candidates = _candidate_lines(words, 1) + _candidate_lines(words, 2)
+    if not candidates:
+        midpoint = max(1, len(value) // 2)
+        candidates = [(value[:midpoint], value[midpoint:])]
+
+    selected: tuple[tuple[str, ...], ImageFont.ImageFont, list[int], list[int], int] | None = None
+    for size in range(maximum, minimum - 1, -2):
+        font = _sans_font(size)
+        spacing = max(8, size // 8)
+        fitting: list[tuple[int, tuple[str, ...], list[int], list[int]]] = []
+        for lines in candidates:
+            widths, heights = _line_metrics(draw, lines, font)
+            total_height = sum(heights) + spacing * (len(lines) - 1)
+            if max(widths) <= max_width and total_height <= max_height:
+                fitting.append((max(widths) - min(widths), lines, widths, heights))
+        if fitting:
+            _, lines, widths, heights = min(fitting, key=lambda item: (len(item[1]), item[0]))
+            selected = lines, font, widths, heights, spacing
+            break
+    if selected is None:
+        raise ValueError("Love My Locals Public Title is too long for the sharing artwork.")
+
+    lines, font, widths, heights, spacing = selected
+    total_height = sum(heights) + spacing * (len(lines) - 1)
+    y = top + (max_height - total_height) // 2
+    rendered_left = right
+    rendered_right = left
+    rendered_top = y
+    for line, width, height in zip(lines, widths, heights):
+        bounds = draw.textbbox((0, 0), line, font=font, stroke_width=1)
+        x = (canvas.width - width) // 2 - bounds[0]
+        draw.text((x, y - bounds[1]), line, font=font, fill="#FFFFFF", stroke_width=1, stroke_fill="#111111")
+        rendered_left = min(rendered_left, x + bounds[0])
+        rendered_right = max(rendered_right, x + bounds[2])
+        y += height + spacing
+    return TitleLayout(
+        lines=lines,
+        font_size=getattr(font, "size", minimum),
+        bounds=(rendered_left, rendered_top, rendered_right, y - spacing),
+    )
 
 
 def _line_metrics(draw: ImageDraw.ImageDraw, lines: tuple[str, ...], font: ImageFont.ImageFont) -> tuple[list[int], list[int]]:
@@ -199,9 +283,15 @@ def _create_luxe_background() -> Image.Image:
     return ImageOps.colorize(gradient, black=VIGNETTE_CENTER, white=VIGNETTE_EDGE).convert("RGB")
 
 
-def _draw_touch_icon(canvas: Image.Image) -> None:
+def _draw_touch_icon(
+    canvas: Image.Image,
+    bounds: tuple[int, int, int, int] = TOUCH_ICON_BOUNDS,
+    *,
+    primary: str = TOUCH_FILL,
+    muted: str = TOUCH_MUTED,
+) -> None:
     """Draw a restrained static finger/target affordance without external assets."""
-    left, top, right, bottom = TOUCH_ICON_BOUNDS
+    left, top, right, bottom = bounds
     scale = 4
     width = (right - left) * scale
     height = (bottom - top) * scale
@@ -212,13 +302,13 @@ def _draw_touch_icon(canvas: Image.Image) -> None:
         return round(x * scale), round(y * scale)
 
     centre_x, centre_y = 42, 20
-    for radius, colour, line_width in ((18, TOUCH_MUTED, 1.5), (10, TOUCH_FILL, 1.4)):
+    for radius, colour, line_width in ((18, muted, 1.5), (10, primary, 1.4)):
         cx, cy = xy(centre_x, centre_y)
         r = round(radius * scale)
         draw.ellipse((cx - r, cy - r, cx + r, cy + r), outline=colour, width=max(1, round(line_width * scale)))
     cx, cy = xy(centre_x, centre_y)
     point_radius = round(2.3 * scale)
-    draw.ellipse((cx - point_radius, cy - point_radius, cx + point_radius, cy + point_radius), fill=TOUCH_FILL)
+    draw.ellipse((cx - point_radius, cy - point_radius, cx + point_radius, cy + point_radius), fill=primary)
 
     # The hand follows the same finger-press silhouette used by the live machine,
     # simplified into a small static line icon for reliable raster rendering.
@@ -231,9 +321,9 @@ def _draw_touch_icon(canvas: Image.Image) -> None:
     ]
     dark_fill = (7, 13, 22, 245)
     draw.polygon(hand_points, fill=dark_fill)
-    draw.line(hand_points + [hand_points[0]], fill=TOUCH_FILL, width=round(2.3 * scale), joint="curve")
-    draw.line([xy(59, 55), xy(59, 67)], fill=TOUCH_MUTED, width=round(1.2 * scale))
-    draw.line([xy(48, 51), xy(48, 67)], fill=TOUCH_MUTED, width=round(1.2 * scale))
+    draw.line(hand_points + [hand_points[0]], fill=primary, width=round(2.3 * scale), joint="curve")
+    draw.line([xy(59, 55), xy(59, 67)], fill=muted, width=round(1.2 * scale))
+    draw.line([xy(48, 51), xy(48, 67)], fill=muted, width=round(1.2 * scale))
 
     icon = icon.resize((right - left, bottom - top), Image.Resampling.LANCZOS)
     canvas.paste(icon, (left, top), icon)
@@ -247,6 +337,36 @@ def create_social_preview(title: str | None, destination: Path) -> TitleLayout:
     destination.parent.mkdir(parents=True, exist_ok=True)
     # Baseline JPEG maximises compatibility with conservative social crawlers.
     canvas.save(destination, format="JPEG", quality=92, optimize=True, progressive=False)
+    return layout
+
+
+def create_love_my_locals_social_preview(title: str | None, destination: Path) -> TitleLayout:
+    value = normalise_social_title(title)
+    if not value:
+        raise ValueError("Love My Locals social preview requires a Public Title.")
+
+    canvas = Image.new("RGB", SOCIAL_PREVIEW_SIZE, "#000000")
+    logo_source = resource_path(LOVE_MY_LOCALS_LOGO_RESOURCE)
+    if not logo_source.is_file():
+        raise FileNotFoundError(f"Approved Love My Locals logo is missing: {logo_source}")
+    with Image.open(logo_source) as source:
+        logo = source.convert("RGBA")
+    logo.thumbnail((760, 250), Image.Resampling.LANCZOS)
+    logo_left = (canvas.width - logo.width) // 2
+    canvas.paste(logo, (logo_left, 64), logo)
+
+    draw = ImageDraw.Draw(canvas)
+    draw.line((250, 365, 950, 365), fill=LOVE_MY_LOCALS_TEAL, width=3)
+    layout = draw_love_my_locals_title(canvas, value, (80, 390, 1120, 510))
+    _draw_touch_icon(
+        canvas,
+        LOVE_MY_LOCALS_TOUCH_ICON_BOUNDS,
+        primary="#FFFFFF",
+        muted=LOVE_MY_LOCALS_TEAL,
+    )
+
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    canvas.save(destination, format="PNG", optimize=True)
     return layout
 
 
@@ -264,6 +384,8 @@ def replace_social_preview(
         source = verify_banjo_social_preview()
         destination.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(source, destination)
+    elif _is_love_my_locals(project_type):
+        create_love_my_locals_social_preview(title, destination)
     else:
         create_social_preview(title, destination)
     return destination

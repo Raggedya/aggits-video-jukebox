@@ -17,7 +17,10 @@ from .banjo import BANJO_TITLE, validate_sponsor_logo, validate_sponsor_mp4, ver
 from .models import Project, ProjectType, project_primary_cta
 from .social_preview import (
     BANJO_SOCIAL_PREVIEW_SIZE,
+    LOVE_MY_LOCALS_LOGO_RESOURCE,
+    LOVE_MY_LOCALS_TEAL,
     SOCIAL_PREVIEW_SIZE,
+    draw_love_my_locals_title,
     replace_social_preview,
     social_preview_filename,
 )
@@ -136,6 +139,9 @@ def _fit_text(draw: ImageDraw.ImageDraw, text: str, max_width: int, start_size: 
 
 
 def create_qr_card(project: Project, destination: Path) -> None:
+    if project.project_type is ProjectType.LOVE_MY_LOCALS:
+        create_love_my_locals_qr_card(project, destination)
+        return
     public_url = project.published_url or f"{PUBLIC_BASE_URL}/{project.slug}/"
     qr = qrcode.QRCode(version=None, error_correction=ERROR_CORRECT_H, box_size=12, border=4)
     qr.add_data(public_url)
@@ -165,6 +171,43 @@ def create_qr_card(project: Project, destination: Path) -> None:
         (star_x, star_y - 11), (star_x + 3, star_y - 3), (star_x + 11, star_y), (star_x + 3, star_y + 3),
         (star_x, star_y + 11), (star_x - 3, star_y + 3), (star_x - 11, star_y), (star_x - 3, star_y - 3),
     ], fill="#a9772d")
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    canvas.save(destination, format="PNG", optimize=True)
+
+
+def create_love_my_locals_qr_card(project: Project, destination: Path) -> None:
+    config = project.love_my_locals_config
+    public_title = str(config.public_title if config else "").strip()
+    if not public_title:
+        raise ValueError("Love My Locals QR artwork requires a Public Title or Location 1.")
+
+    public_url = project.published_url or f"{PUBLIC_BASE_URL}/{project.slug}/"
+    probe = qrcode.QRCode(version=None, error_correction=ERROR_CORRECT_H, box_size=1, border=4)
+    probe.add_data(public_url)
+    probe.make(fit=True)
+    module_count = 17 + (4 * int(probe.version or 1)) + 8
+    box_size = max(8, min(16, 880 // module_count))
+    qr = qrcode.QRCode(version=probe.version, error_correction=ERROR_CORRECT_H, box_size=box_size, border=4)
+    qr.add_data(public_url)
+    qr.make(fit=False)
+    qr_image = qr.make_image(fill_color="#000000", back_color="#FFFFFF").convert("RGB")
+
+    canvas = Image.new("RGB", (1200, 1500), "#000000")
+    logo_path = resource_path(LOVE_MY_LOCALS_LOGO_RESOURCE)
+    if not logo_path.is_file():
+        raise FileNotFoundError(f"Approved Love My Locals logo is missing: {logo_path}")
+    with Image.open(logo_path) as source:
+        logo = source.convert("RGBA")
+    logo.thumbnail((820, 250), Image.Resampling.LANCZOS)
+    canvas.paste(logo, ((canvas.width - logo.width) // 2, 62), logo)
+
+    draw = ImageDraw.Draw(canvas)
+    draw_love_my_locals_title(canvas, public_title, (80, 326, 1120, 444), maximum=76, minimum=26)
+    draw.line((230, 460, 970, 460), fill=LOVE_MY_LOCALS_TEAL, width=4)
+
+    code_left = (canvas.width - qr_image.width) // 2
+    code_top = 510
+    canvas.paste(qr_image, (code_left, code_top))
     destination.parent.mkdir(parents=True, exist_ok=True)
     canvas.save(destination, format="PNG", optimize=True)
 
@@ -224,12 +267,23 @@ def build_project_site(project: Project, destination: Path) -> Path:
             sponsor_logo_public_url = f"assets/banjo-sponsor/{logo_name}"
 
     canonical = project.published_url if str(project.published_url or "").startswith("https://") else f"{PUBLIC_BASE_URL}/{project.slug}/"
-    social_filename = social_preview_filename(project.title, project.project_type)
+    public_social_title = (
+        project.love_my_locals_config.public_title
+        if project.project_type is ProjectType.LOVE_MY_LOCALS and project.love_my_locals_config
+        else project.title
+    )
+    if not str(public_social_title or "").strip():
+        raise ValueError("Love My Locals publishing requires a Public Title or Location 1.")
+    social_filename = social_preview_filename(public_social_title, project.project_type)
     social_url = f"{canonical.rstrip('/')}/{social_filename}"
     included_videos = included_project_videos(project)
     if not included_videos:
         raise ValueError("A project must include at least one video before generation.")
-    social_title = project.title.strip() or BRAND_NAME
+    social_title = (
+        f"Love My Locals — {public_social_title}"
+        if project.project_type is ProjectType.LOVE_MY_LOCALS
+        else project.title.strip() or BRAND_NAME
+    )
     description = (
         f"Hit it. Discover {social_title}." if channel_product
         else f"Hit it. Discover {social_title} with Crispy Bits."
@@ -238,6 +292,10 @@ def build_project_site(project: Project, destination: Path) -> Path:
         social_image_type = "image/png"
         social_image_width, social_image_height = BANJO_SOCIAL_PREVIEW_SIZE
         social_image_alt = "Fresh Video Update — Banjo's World of Cars"
+    elif project.project_type is ProjectType.LOVE_MY_LOCALS:
+        social_image_type = "image/png"
+        social_image_width, social_image_height = SOCIAL_PREVIEW_SIZE
+        social_image_alt = f"Love My Locals — {public_social_title}"
     else:
         social_image_type = "image/jpeg"
         social_image_width, social_image_height = SOCIAL_PREVIEW_SIZE
@@ -667,6 +725,7 @@ def build_project_site(project: Project, destination: Path) -> Path:
         locals_config = project.love_my_locals_config
         payload["loveMyLocalsConfig"] = {
             "locations": list(locals_config.locations),
+            "publicTitle": locals_config.public_title,
             "resolvedGeography": locals_config.resolved_geography,
             "resolvedLocations": list(locals_config.resolved_locations),
             "includeShorts": locals_config.include_shorts,
@@ -676,5 +735,5 @@ def build_project_site(project: Project, destination: Path) -> Path:
         }
     (destination / "machine.json").write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     create_qr_card(project, destination / "qr-card.png")
-    replace_social_preview(project.title, destination, project.project_type)
+    replace_social_preview(public_social_title, destination, project.project_type)
     return destination / "index.html"

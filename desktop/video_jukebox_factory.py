@@ -787,6 +787,8 @@ class LoveMyLocalsForm(tk.Frame):
         self.new_callback = new_project
         self.editing_project_id: str | None = None
         self.location_vars = [tk.StringVar() for _ in range(3)]
+        self.public_title_var = tk.StringVar()
+        self._public_title_explicit = False
         self.geography_var = tk.StringVar(value=DEFAULT_GEOGRAPHY)
         self.include_shorts_var = tk.BooleanVar(value=False)
         self.tourism_mode_var = tk.StringVar(value="LIMITED")
@@ -818,6 +820,15 @@ class LoveMyLocalsForm(tk.Frame):
         for index, variable in enumerate(self.location_vars, start=1):
             label = f"LOCATION {index}" + ("" if index == 1 else " (OPTIONAL)")
             row = self._entry_row(row, label, variable, f"location_{index}")
+        row = self._entry_row(row, "PUBLIC TITLE", self.public_title_var, "public_title")
+        self.field_widgets["public_title"].bind("<KeyRelease>", self._mark_public_title_explicit)
+        self.field_widgets["public_title"].bind("<FocusOut>", self._mark_public_title_explicit)
+        tk.Label(
+            self,
+            text="Defaults to Location 1. This is the single location shown on the public QR and social preview.",
+            bg=PANEL, fg=MUTED, anchor="w", justify="left", wraplength=500, font=("Segoe UI", 8),
+        ).grid(row=row, column=1, sticky="ew", padx=(0, 22), pady=(0, 6))
+        row += 1
         row = self._entry_row(row, "GEOGRAPHIC CONTEXT", self.geography_var, "geography")
         self.resolved_label = tk.Label(self, text="", bg=PANEL, fg="#00C7CC", anchor="w", justify="left", font=("Segoe UI Semibold", 8))
         self.resolved_label.grid(row=row, column=1, sticky="ew", padx=(0, 22), pady=(0, 6))
@@ -901,6 +912,7 @@ class LoveMyLocalsForm(tk.Frame):
         self.submit_button.pack(side="right")
         for variable in [*self.location_vars, self.geography_var]:
             variable.trace_add("write", lambda *_args: self._update_resolved())
+        self.location_vars[0].trace_add("write", lambda *_args: self._sync_public_title_default())
 
     def _entry_row(self, row: int, label: str, variable: tk.StringVar, field_name: str) -> int:
         tk.Label(self, text=label, bg=PANEL, fg=CREAM, anchor="e", font=("Segoe UI", 9)).grid(row=row, column=0, sticky="e", padx=(22, 12), pady=5)
@@ -915,12 +927,23 @@ class LoveMyLocalsForm(tk.Frame):
         resolved = "  •  ".join(f"{item}, {geography}" for item in locations) if locations and geography else ""
         self.resolved_label.configure(text=f"SEARCH LOCATION: {resolved}" if resolved else "")
 
+    def _mark_public_title_explicit(self, _event=None) -> None:
+        location_one = self.location_vars[0].get().strip()
+        self._public_title_explicit = bool(self.public_title_var.get().strip()) and (
+            self.public_title_var.get().strip().casefold() != location_one.casefold()
+        )
+
+    def _sync_public_title_default(self) -> None:
+        if not self._public_title_explicit or not self.public_title_var.get().strip():
+            self.public_title_var.set(self.location_vars[0].get().strip())
+
     def values(self) -> LoveMyLocalsFormValues:
         cta_type = CTA_LABEL_TO_TYPE_BY_PROJECT[ProjectType.LOVE_MY_LOCALS].get(
             self.cta_var.get(), PrimaryCtaType.VISIT_WEBSITE,
         )
         return LoveMyLocalsFormValues(
             locations=[item.get() for item in self.location_vars],
+            public_title=self.public_title_var.get(),
             geography=self.geography_var.get(),
             include_shorts=self.include_shorts_var.get(),
             ticker_text=self.ticker_text.get("1.0", "end-1c"),
@@ -932,8 +955,14 @@ class LoveMyLocalsForm(tk.Frame):
         )
 
     def set_values(self, values: LoveMyLocalsFormValues) -> None:
+        self._public_title_explicit = False
         for variable, value in zip(self.location_vars, [*values.locations, "", ""][:3]):
             variable.set(value)
+        public_title = str(values.public_title or "").strip() or (values.locations[0].strip() if values.locations else "")
+        self.public_title_var.set(public_title)
+        self._public_title_explicit = bool(
+            public_title and values.locations and public_title.casefold() != values.locations[0].strip().casefold()
+        )
         self.geography_var.set(values.geography or DEFAULT_GEOGRAPHY)
         self.include_shorts_var.set(values.include_shorts)
         try:
@@ -967,9 +996,11 @@ class LoveMyLocalsForm(tk.Frame):
             return
         self.editing_project_id = project.id
         self.set_values(LoveMyLocalsFormValues(
-            list(config.locations), config.resolved_geography, config.include_shorts, project.ticker_text,
-            config.default_cta_type, config.default_cta_url or "", config.tourism_mode, config.include_council_meetings,
-            config.explore_url or "",
+            locations=list(config.locations), public_title=config.public_title,
+            geography=config.resolved_geography, include_shorts=config.include_shorts, ticker_text=project.ticker_text,
+            default_cta_type=config.default_cta_type, default_cta_url=config.default_cta_url or "",
+            tourism_mode=config.tourism_mode, include_council_meetings=config.include_council_meetings,
+            explore_url=config.explore_url or "",
         ))
         self.mode_label.configure(text="EDIT LOVE MY LOCALS PROJECT")
         self.submit_button.configure(text="SEARCH AGAIN")
@@ -987,9 +1018,11 @@ class LoveMyLocalsForm(tk.Frame):
         if not self._baseline:
             return
         self.set_values(LoveMyLocalsFormValues(
-            list(self._baseline[0]), str(self._baseline[1]), bool(self._baseline[2]), str(self._baseline[3]),
-            str(self._baseline[4]), str(self._baseline[5]), str(self._baseline[6]), bool(self._baseline[7]),
-            str(self._baseline[8]),
+            locations=list(self._baseline[0]), geography=str(self._baseline[1]), include_shorts=bool(self._baseline[2]),
+            ticker_text=str(self._baseline[3]), default_cta_type=str(self._baseline[4]),
+            default_cta_url=str(self._baseline[5]), tourism_mode=str(self._baseline[6]),
+            include_council_meetings=bool(self._baseline[7]), explore_url=str(self._baseline[8]),
+            public_title=str(self._baseline[9]),
         ))
         self.mark_clean()
 
@@ -1641,9 +1674,11 @@ class Factory(tk.Tk):
             self._review_love_my_locals({
                 "config": LoveMyLocalsConfig.from_dict(config.to_dict()),
                 "values": LoveMyLocalsFormValues(
-                    list(config.locations), config.resolved_geography, config.include_shorts, project.ticker_text,
-                    config.default_cta_type, config.default_cta_url or "", config.tourism_mode, config.include_council_meetings,
-                    config.explore_url or "",
+                    locations=list(config.locations), public_title=config.public_title,
+                    geography=config.resolved_geography, include_shorts=config.include_shorts, ticker_text=project.ticker_text,
+                    default_cta_type=config.default_cta_type, default_cta_url=config.default_cta_url or "",
+                    tourism_mode=config.tourism_mode, include_council_meetings=config.include_council_meetings,
+                    explore_url=config.explore_url or "",
                 ),
                 "slug": project.slug,
                 "editing_project_id": project.id,

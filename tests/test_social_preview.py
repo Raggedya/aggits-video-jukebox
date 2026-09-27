@@ -195,16 +195,18 @@ class UniversalSocialPreviewTests(unittest.TestCase):
                 filename = social_preview_filename(project.title, project.project_type)
                 expected_image = f"{expected_url}{filename}"
                 expected_description = (
-                    f"Hit it. Discover {project.title}." if project_type in {ProjectType.CHANNEL_MASTER, ProjectType.WHITE_LABEL, ProjectType.LOVE_MY_LOCALS}
+                    f"Hit it. Discover Love My Locals — {project.title}." if project_type is ProjectType.LOVE_MY_LOCALS
+                    else f"Hit it. Discover {project.title}." if project_type in {ProjectType.CHANNEL_MASTER, ProjectType.WHITE_LABEL}
                     else f"Hit it. Discover {project.title} with Crispy Bits."
                 )
+                expected_title = f"Love My Locals — {project.title}" if project_type is ProjectType.LOVE_MY_LOCALS else project.title
                 self.assertEqual(
                     parser.title,
-                    project.title if project_type in {ProjectType.CHANNEL_MASTER, ProjectType.WHITE_LABEL, ProjectType.LOVE_MY_LOCALS} else f"{project.title} | Crispy Bits",
+                    expected_title if project_type in {ProjectType.CHANNEL_MASTER, ProjectType.WHITE_LABEL, ProjectType.LOVE_MY_LOCALS} else f"{project.title} | Crispy Bits",
                 )
                 self.assertEqual(parser.canonical, expected_url)
                 self.assertEqual(parser.meta["og:type"], "website")
-                self.assertEqual(parser.meta["og:title"], project.title)
+                self.assertEqual(parser.meta["og:title"], expected_title)
                 self.assertEqual(parser.meta["og:description"], expected_description)
                 self.assertEqual(parser.meta["og:url"], expected_url)
                 self.assertEqual(parser.meta["og:image"], expected_image)
@@ -214,6 +216,11 @@ class UniversalSocialPreviewTests(unittest.TestCase):
                     self.assertEqual(parser.meta["og:image:width"], str(BANJO_SOCIAL_PREVIEW_SIZE[0]))
                     self.assertEqual(parser.meta["og:image:height"], str(BANJO_SOCIAL_PREVIEW_SIZE[1]))
                     expected_alt = "Fresh Video Update — Banjo's World of Cars"
+                elif project_type is ProjectType.LOVE_MY_LOCALS:
+                    self.assertEqual(parser.meta["og:image:type"], "image/png")
+                    self.assertEqual(parser.meta["og:image:width"], "1200")
+                    self.assertEqual(parser.meta["og:image:height"], "630")
+                    expected_alt = expected_title
                 else:
                     self.assertEqual(parser.meta["og:image:type"], "image/jpeg")
                     self.assertEqual(parser.meta["og:image:width"], "1200")
@@ -221,7 +228,7 @@ class UniversalSocialPreviewTests(unittest.TestCase):
                     expected_alt = f"{project.title} — Crispy Bits social preview"
                 self.assertEqual(parser.meta["og:image:alt"], expected_alt)
                 self.assertEqual(parser.meta["twitter:card"], "summary_large_image")
-                self.assertEqual(parser.meta["twitter:title"], project.title)
+                self.assertEqual(parser.meta["twitter:title"], expected_title)
                 self.assertEqual(parser.meta["twitter:description"], expected_description)
                 self.assertEqual(parser.meta["twitter:image"], expected_image)
                 self.assertEqual(parser.meta["twitter:image:alt"], expected_alt)
@@ -232,6 +239,9 @@ class UniversalSocialPreviewTests(unittest.TestCase):
                 with Image.open(image_path) as image:
                     if project_type is ProjectType.BANJO:
                         self.assertEqual(image.size, BANJO_SOCIAL_PREVIEW_SIZE)
+                        self.assertEqual(image.format, "PNG")
+                    elif project_type is ProjectType.LOVE_MY_LOCALS:
+                        self.assertEqual(image.size, SOCIAL_PREVIEW_SIZE)
                         self.assertEqual(image.format, "PNG")
                     else:
                         self.assertEqual(image.size, SOCIAL_PREVIEW_SIZE)
