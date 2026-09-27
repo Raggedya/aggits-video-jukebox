@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import random
+import queue
 import re
 import threading
 import time
@@ -22,6 +23,7 @@ OVERPASS_ENDPOINTS = (
 USER_AGENT = "CRISPY-BITS-Desktop/3.9 Local-Picks (operator-triggered OpenStreetMap discovery)"
 MAX_LOCAL_PICKS = 9
 CACHE_SECONDS = 15 * 60
+REQUEST_DEADLINE_SECONDS = 15.0
 TARGET_CATEGORIES = (
     "CAFE",
     "PUB / BAR",
@@ -65,6 +67,32 @@ _candidate_cache: dict[str, tuple[float, list[LocalPick], dict[str, object]]] = 
 
 class LocalPicksError(RuntimeError):
     pass
+
+
+def _call_with_deadline(operation, seconds: float):
+    """Run one provider call with a firm wall-clock deadline.
+
+    ``requests`` read timeouts restart whenever a provider sends another byte,
+    so a slow streaming response can otherwise keep the desktop busy forever.
+    The provider thread is deliberately daemonised so an abandoned request
+    cannot prevent the desktop from closing.
+    """
+    result: queue.Queue[tuple[bool, object]] = queue.Queue(maxsize=1)
+
+    def execute() -> None:
+        try:
+            result.put((True, operation()))
+        except Exception as error:
+            result.put((False, error))
+
+    threading.Thread(target=execute, daemon=True).start()
+    try:
+        succeeded, value = result.get(timeout=max(0.01, float(seconds)))
+    except queue.Empty as error:
+        raise requests.Timeout("OpenStreetMap request exceeded its time limit.") from error
+    if succeeded:
+        return value
+    raise value
 
 
 @dataclass(slots=True)
@@ -238,20 +266,35 @@ def replacement_for(
 
 
 class OverpassLocalPicksService:
-    def __init__(self, *, session: requests.Session | None = None, rng: random.Random | None = None) -> None:
-        self.session = session or requests.Session()
+    def __init__(
+        self,
+        *,
+        session: requests.Session | None = None,
+        rng: random.Random | None = None,
+        request_deadline_seconds: float = REQUEST_DEADLINE_SECONDS,
+    ) -> None:
+        self.session = session
         self.rng = rng or random.SystemRandom()
+        self.request_deadline_seconds = max(0.01, float(request_deadline_seconds))
+
+    def _json_request(self, method: str, url: str, **kwargs):
+        def request_json():
+            client = self.session or requests
+            request_method = getattr(client, method)
+            response = request_method(url, timeout=(5, 12), **kwargs)
+            response.raise_for_status()
+            response.encoding = "utf-8"
+            return response.json()
+
+        return _call_with_deadline(request_json, self.request_deadline_seconds)
 
     def _resolve(self, location: str) -> tuple[tuple[float, float, float, float], str]:
-        response = self.session.get(
+        payload = self._json_request(
+            "get",
             NOMINATIM_URL,
             params={"q": location, "format": "jsonv2", "limit": 1, "addressdetails": 1},
             headers={"User-Agent": USER_AGENT, "Accept": "application/json"},
-            timeout=(8, 20),
         )
-        response.raise_for_status()
-        response.encoding = "utf-8"
-        payload = response.json()
         if not isinstance(payload, list) or not payload or not isinstance(payload[0], dict):
             raise LocalPicksError(f'OpenStreetMap could not resolve "{location}" in Australia.')
         result = payload[0]
@@ -291,15 +334,12 @@ class OverpassLocalPicksService:
         errors: list[str] = []
         for endpoint in OVERPASS_ENDPOINTS:
             try:
-                response = self.session.post(
+                payload = self._json_request(
+                    "post",
                     endpoint,
                     data={"data": query},
                     headers={"User-Agent": USER_AGENT, "Accept": "application/json"},
-                    timeout=(10, 50),
                 )
-                response.raise_for_status()
-                response.encoding = "utf-8"
-                payload = response.json()
                 if not isinstance(payload, dict) or not isinstance(payload.get("elements"), list):
                     raise LocalPicksError("Overpass returned malformed business data.")
                 return payload

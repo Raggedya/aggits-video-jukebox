@@ -64,6 +64,7 @@ from aggits_video_factory.models import Project, ProjectType, utc_now
 from aggits_video_factory.models import CHANNEL_MASTER_PALETTES, ChannelMasterConfig, LocalPick, LoveMyLocalsConfig, PrimaryCtaType
 from aggits_video_factory.local_picks import (
     LocalPicksDiscovery,
+    LocalPicksError,
     OverpassLocalPicksService,
     replacement_for as replacement_local_pick,
 )
@@ -1685,6 +1686,7 @@ class Factory(tk.Tk):
             form.submit_button.configure(state="disabled" if busy else "normal")
             if isinstance(form, LoveMyLocalsForm):
                 form.save_button.configure(state="disabled" if busy or not form.editing_project_id else "normal")
+                form.local_picks_button.configure(state="disabled" if busy else "normal")
         self.settings_button.configure(state="disabled" if busy else "normal")
         self._update_actions()
 
@@ -2006,6 +2008,10 @@ class Factory(tk.Tk):
     def _async_failed(self, error: Exception) -> None:
         self._set_busy(False, "OPERATION PAUSED")
         self.logger.error("Operation paused type=%s error=%s", type(error).__name__, error)
+        if isinstance(error, LocalPicksError):
+            form: LoveMyLocalsForm = self.forms[ProjectType.LOVE_MY_LOCALS]
+            form.set_local_picks(form.local_picks)
+            form.local_picks_status.configure(text=f"Local Picks search stopped: {error}")
         if isinstance(error, (PublicationVerificationPending, UnpublishVerificationPending)):
             self._refresh_library(error.project.id)
             messagebox.showwarning(DESKTOP_TITLE, f"{error}\n\nNo second Git operation was attempted. Use CHECK LIVE STATUS to reconcile it.\n\nDiagnostics: {log_directory(self.store.root)}")
@@ -2038,6 +2044,10 @@ class Factory(tk.Tk):
         def worker() -> LocalPicksDiscovery:
             return OverpassLocalPicksService().discover(query, force_refresh=force_refresh)
 
+        form.local_picks_status.configure(
+            text="Searching OpenStreetMap… this can take up to about one minute."
+        )
+        form.local_picks_button.configure(text="SEARCHING…", state="disabled")
         self._run_async(
             "DISCOVERING LOCAL BUSINESSES VIA OPENSTREETMAP…",
             worker,
@@ -2046,6 +2056,7 @@ class Factory(tk.Tk):
 
     def _review_local_picks(self, discovery: LocalPicksDiscovery) -> None:
         form: LoveMyLocalsForm = self.forms[ProjectType.LOVE_MY_LOCALS]
+        form.set_local_picks(form.local_picks)
         selected = [LocalPick.from_dict(item.to_dict()) for item in discovery.selected]
         candidates = [LocalPick.from_dict(item.to_dict()) for item in discovery.candidates]
         dialog = tk.Toplevel(self)

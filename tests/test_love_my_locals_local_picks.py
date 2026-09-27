@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import random
 import tempfile
+import time
 import unittest
 from pathlib import Path
 
@@ -166,6 +167,22 @@ class LocalPicksTests(unittest.TestCase):
         self.assertEqual(len(session.post_calls), 2)
         self.assertEqual({item.id for item in first.candidates}, {item.id for item in second.candidates})
 
+    def test_provider_has_a_firm_wall_clock_deadline(self):
+        class SlowSession(FakeSession):
+            def post(self, _url, **kwargs):
+                self.post_calls.append(kwargs)
+                time.sleep(0.2)
+                return FakeResponse({"elements": self.elements})
+
+        service = OverpassLocalPicksService(
+            session=SlowSession([element(1, "Slow Cafe", amenity="cafe")]),
+            request_deadline_seconds=0.02,
+        )
+        started = time.monotonic()
+        with self.assertRaisesRegex(LocalPicksError, "temporarily unavailable"):
+            service.discover("Slowville, Victoria, Australia", force_refresh=True)
+        self.assertLess(time.monotonic() - started, 0.3)
+
     def test_unresolvable_location_fails_without_fabricating_businesses(self):
         session = FakeSession([])
         session.get = lambda *_args, **_kwargs: FakeResponse([])
@@ -224,6 +241,8 @@ class LocalPicksTests(unittest.TestCase):
         source = (ROOT / "desktop" / "video_jukebox_factory.py").read_text(encoding="utf-8")
         for text in ("GENERATE LOCAL PICKS", "REGENERATE ALL", "KEEP ✓", "REPLACE", "REMOVE"):
             self.assertIn(text, source)
+        self.assertIn("SEARCHING…", source)
+        self.assertIn("up to about one minute", source)
 
 
 if __name__ == "__main__":
