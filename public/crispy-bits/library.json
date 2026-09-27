@@ -290,6 +290,17 @@
     "socialImage": "social-card-v2-09675d48534a.jpg"
   },
   {
+    "slug": "street-machine-magazine",
+    "title": "STREET MACHINE MAGAZINE",
+    "projectType": "channel_master",
+    "channelId": "UCGMSD1d9hUCx5zuckdDKtDA",
+    "channelTitle": "STREET MACHINE",
+    "videoCount": 50,
+    "publishedAt": "2026-09-27T05:07:11Z",
+    "url": "https://raggedya.github.io/aggits-video-jukebox/crispy-bits/street-machine-magazine/",
+    "socialImage": "social-card-v2-61f72eada441.jpg"
+  },
+  {
     "slug": "street-spec-tv",
     "title": "STREET SPEC TV",
     "projectType": "channel_master",
