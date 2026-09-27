@@ -111,6 +111,45 @@ def _reel_short_title(source: str) -> str:
     return " ".join(words)[:24].rstrip()
 
 
+def _love_my_locals_local_picks_markup(project: Project) -> str:
+    config = project.love_my_locals_config
+    if project.project_type is not ProjectType.LOVE_MY_LOCALS or not config or not config.local_picks:
+        return ""
+    cards: list[str] = []
+    for index, pick in enumerate(config.local_picks):
+        view = (
+            f'<a class="local-pick-view" href="{html.escape(pick.website_url, quote=True)}" '
+            'target="_blank" rel="noopener noreferrer" data-local-pick-view '
+            f'data-local-pick-id="{html.escape(pick.id, quote=True)}">VIEW <span aria-hidden="true">→</span></a>'
+            if pick.website_url else ""
+        )
+        cards.append(
+            f'<article class="local-pick-card" data-local-pick-card data-local-pick-page="{index // 3}">'
+            f'<small>{html.escape(pick.category)}</small>'
+            f'<h3>{html.escape(pick.business_name)}</h3>'
+            f'<strong>{html.escape(pick.location)}</strong>'
+            f'<p>{html.escape(pick.short_description)}</p>{view}</article>'
+        )
+    page_count = (len(cards) + 2) // 3
+    dots = "".join(
+        f'<button type="button" data-local-picks-page="{page}" aria-label="Show Local Picks page {page + 1}" '
+        f'aria-current="{"true" if page == 0 else "false"}"></button>'
+        for page in range(page_count)
+    )
+    return (
+        '<section class="local-picks" data-local-picks aria-label="Local Picks">'
+        '<header><h2>★ LOCAL PICKS ★</h2>'
+        f'<p>{html.escape(config.public_title or config.locations[0])}</p></header>'
+        f'<div class="local-picks-grid" data-local-picks-grid>{"".join(cards)}</div>'
+        '<nav class="local-picks-navigation" aria-label="Local Picks pages">'
+        '<button type="button" data-local-picks-previous aria-label="Previous Local Picks page">‹</button>'
+        f'<span class="local-picks-dots">{dots}</span>'
+        '<button type="button" data-local-picks-next aria-label="Next Local Picks page">›</button>'
+        '</nav><a class="local-picks-attribution" href="https://www.openstreetmap.org/copyright" '
+        'target="_blank" rel="noopener noreferrer">DATA © OPENSTREETMAP CONTRIBUTORS</a></section>'
+    )
+
+
 def _font(size: int, bold: bool = False, serif: bool = False) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
     candidates: list[Path] = []
     if serif:
@@ -486,6 +525,7 @@ def build_project_site(project: Project, destination: Path) -> Path:
         ),
         "{{BANJO_SPONSOR_AREA_MARKUP}}": banjo_sponsor_area_markup,
         "{{CHANNEL_MASTER_CONTACT_MARKUP}}": channel_master_contact_markup,
+        "{{LOVE_MY_LOCALS_LOCAL_PICKS_MARKUP}}": _love_my_locals_local_picks_markup(project),
         "{{CHANNEL_MASTER_FOOTER_MARKUP}}": (
             '<footer class="white-label-powered-by" aria-label="Powered by Crispy Bits">'
             '<small>POWERED BY</small><strong>CRISPY BITS</strong></footer>'
@@ -732,6 +772,7 @@ def build_project_site(project: Project, destination: Path) -> Path:
             "logoAssetUrl": "assets/love-my-locals/love-my-locals-logo.png",
             "brandTeal": "#00C7CC",
             "exploreUrl": locals_config.explore_url or "",
+            "localPicks": [item.to_dict() for item in locals_config.local_picks],
         }
     (destination / "machine.json").write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     create_qr_card(project, destination / "qr-card.png")

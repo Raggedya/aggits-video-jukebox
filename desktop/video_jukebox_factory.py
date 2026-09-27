@@ -61,7 +61,12 @@ from aggits_video_factory.desktop_forms import (
     youtube_urls_for_project_review,
 )
 from aggits_video_factory.models import Project, ProjectType, utc_now
-from aggits_video_factory.models import CHANNEL_MASTER_PALETTES, ChannelMasterConfig, LoveMyLocalsConfig, PrimaryCtaType
+from aggits_video_factory.models import CHANNEL_MASTER_PALETTES, ChannelMasterConfig, LocalPick, LoveMyLocalsConfig, PrimaryCtaType
+from aggits_video_factory.local_picks import (
+    LocalPicksDiscovery,
+    OverpassLocalPicksService,
+    replacement_for as replacement_local_pick,
+)
 from aggits_video_factory.love_my_locals import (
     DEFAULT_GEOGRAPHY,
     LoveMyLocalsDiscoveryService,
@@ -780,10 +785,11 @@ class LoveMyLocalsForm(tk.Frame):
 
     project_type = ProjectType.LOVE_MY_LOCALS
 
-    def __init__(self, parent: tk.Misc, submit, save, new_project) -> None:
+    def __init__(self, parent: tk.Misc, submit, save, generate_local_picks, new_project) -> None:
         super().__init__(parent, bg=PANEL)
         self.submit_callback = submit
         self.save_callback = save
+        self.generate_local_picks_callback = generate_local_picks
         self.new_callback = new_project
         self.editing_project_id: str | None = None
         self.location_vars = [tk.StringVar() for _ in range(3)]
@@ -797,7 +803,9 @@ class LoveMyLocalsForm(tk.Frame):
         self.destination_url_var = tk.StringVar()
         self.explore_url_var = tk.StringVar()
         self.field_widgets: dict[str, tk.Widget] = {}
+        self.local_picks: list[LocalPick] = []
         self._baseline: tuple[object, ...] = ()
+        self._local_picks_baseline: tuple[tuple[tuple[str, object], ...], ...] = ()
         self._logo_image: ImageTk.PhotoImage | None = None
         self._build()
         self.clear_new()
@@ -890,6 +898,24 @@ class LoveMyLocalsForm(tk.Frame):
         self.ticker_text.grid(row=row, column=1, sticky="ew", padx=(0, 22), pady=5)
         self.field_widgets["ticker_text"] = self.ticker_text
         row += 1
+        local_picks = tk.LabelFrame(
+            self, text=" LOCAL PICKS ", bg=PANEL, fg="#00C7CC",
+            highlightbackground=DEEP_BRASS, bd=1, font=("Segoe UI Semibold", 9),
+        )
+        local_picks.grid(row=row, column=1, sticky="ew", padx=(0, 22), pady=(7, 8))
+        local_picks.columnconfigure(0, weight=1)
+        self.local_picks_status = tk.Label(
+            local_picks, text="No Local Picks generated. Optional; public machine remains unchanged.",
+            bg=PANEL, fg=MUTED, anchor="w", justify="left", wraplength=350, font=("Segoe UI", 8),
+        )
+        self.local_picks_status.grid(row=0, column=0, sticky="ew", padx=10, pady=10)
+        self.local_picks_button = tk.Button(
+            local_picks, text="GENERATE LOCAL PICKS", command=self.generate_local_picks_callback,
+            bg="#10383a", fg="#bffcff", activebackground="#00C7CC", activeforeground=INK,
+            relief="flat", bd=0, font=("Segoe UI Semibold", 9), padx=12, pady=8, cursor="hand2",
+        )
+        self.local_picks_button.grid(row=0, column=1, sticky="e", padx=(8, 10), pady=8)
+        row += 1
         self.validation_label = tk.Label(self, text="", bg=PANEL, fg=ERROR, anchor="w", justify="left", wraplength=460, font=("Segoe UI Semibold", 8))
         self.validation_label.grid(row=row, column=1, sticky="ew", padx=(0, 22), pady=(3, 4))
         row += 1
@@ -981,9 +1007,20 @@ class LoveMyLocalsForm(tk.Frame):
         self.clear_validation()
         self._update_resolved()
 
+    def set_local_picks(self, picks: list[LocalPick]) -> None:
+        self.local_picks = [LocalPick.from_dict(item.to_dict()) for item in picks]
+        count = len(self.local_picks)
+        with_websites = sum(bool(item.website_url) for item in self.local_picks)
+        self.local_picks_status.configure(text=(
+            f"{count} reviewed Local Pick{'s' if count != 1 else ''} · {with_websites} website link{'s' if with_websites != 1 else ''}"
+            if count else "No Local Picks generated. Optional; public machine remains unchanged."
+        ))
+        self.local_picks_button.configure(text="REGENERATE ALL" if count else "GENERATE LOCAL PICKS")
+
     def clear_new(self) -> None:
         self.editing_project_id = None
         self.set_values(LoveMyLocalsFormValues(geography=DEFAULT_GEOGRAPHY))
+        self.set_local_picks([])
         self.mode_label.configure(text="NEW LOVE MY LOCALS PROJECT")
         self.submit_button.configure(text="FIND LOCALS")
         self.save_button.configure(state="disabled")
@@ -1002,6 +1039,7 @@ class LoveMyLocalsForm(tk.Frame):
             tourism_mode=config.tourism_mode, include_council_meetings=config.include_council_meetings,
             explore_url=config.explore_url or "",
         ))
+        self.set_local_picks(config.local_picks)
         self.mode_label.configure(text="EDIT LOVE MY LOCALS PROJECT")
         self.submit_button.configure(text="SEARCH AGAIN")
         self.save_button.configure(state="normal")
@@ -1010,9 +1048,11 @@ class LoveMyLocalsForm(tk.Frame):
 
     def mark_clean(self) -> None:
         self._baseline = self.values().comparable()
+        self._local_picks_baseline = tuple(tuple(sorted(item.to_dict().items())) for item in self.local_picks)
 
     def is_dirty(self) -> bool:
-        return self.values().comparable() != self._baseline
+        current_picks = tuple(tuple(sorted(item.to_dict().items())) for item in self.local_picks)
+        return self.values().comparable() != self._baseline or current_picks != self._local_picks_baseline
 
     def restore_baseline(self) -> None:
         if not self._baseline:
@@ -1024,6 +1064,7 @@ class LoveMyLocalsForm(tk.Frame):
             include_council_meetings=bool(self._baseline[7]), explore_url=str(self._baseline[8]),
             public_title=str(self._baseline[9]),
         ))
+        self.set_local_picks([LocalPick.from_dict(dict(item)) for item in self._local_picks_baseline])
         self.mark_clean()
 
     def show_validation(self, error: Exception) -> None:
@@ -1508,6 +1549,7 @@ class Factory(tk.Tk):
                     form_canvas,
                     submit=lambda kind=project_type: self._submit_project(kind),
                     save=self._save_love_my_locals,
+                    generate_local_picks=self._generate_local_picks,
                     new_project=lambda kind=project_type: self._new_project(kind),
                 )
             else:
@@ -1976,6 +2018,126 @@ class Factory(tk.Tk):
         self._set_busy(False, "READY")
         complete(result)
 
+    def _generate_local_picks(self, force_refresh: bool = False, skip_confirmation: bool = False) -> None:
+        if self.busy:
+            return
+        form: LoveMyLocalsForm = self.forms[ProjectType.LOVE_MY_LOCALS]
+        location = form.location_vars[0].get().strip()
+        geography = form.geography_var.get().strip()
+        if not location:
+            messagebox.showinfo(DESKTOP_TITLE, "Enter Location 1 before generating Local Picks.")
+            form.field_widgets["location_1"].focus_set()
+            return
+        if form.local_picks and not skip_confirmation and not messagebox.askyesno(
+            "Regenerate Local Picks?",
+            "This will create a fresh OpenStreetMap selection. Your saved picks will not change unless you approve the new review. Continue?",
+        ):
+            return
+        query = ", ".join(value for value in (location, geography) if value)
+
+        def worker() -> LocalPicksDiscovery:
+            return OverpassLocalPicksService().discover(query, force_refresh=force_refresh)
+
+        self._run_async(
+            "DISCOVERING LOCAL BUSINESSES VIA OPENSTREETMAP…",
+            worker,
+            self._review_local_picks,
+        )
+
+    def _review_local_picks(self, discovery: LocalPicksDiscovery) -> None:
+        form: LoveMyLocalsForm = self.forms[ProjectType.LOVE_MY_LOCALS]
+        selected = [LocalPick.from_dict(item.to_dict()) for item in discovery.selected]
+        candidates = [LocalPick.from_dict(item.to_dict()) for item in discovery.candidates]
+        dialog = tk.Toplevel(self)
+        dialog.title("Review Love My Locals — Local Picks")
+        dialog.geometry("1040x760")
+        dialog.minsize(820, 600)
+        dialog.configure(bg=INK)
+        dialog.transient(self)
+        heading = tk.Frame(dialog, bg=PANEL, highlightbackground="#00C7CC", highlightthickness=1)
+        heading.pack(fill="x", padx=18, pady=(18, 10))
+        tk.Label(heading, text="REVIEW LOCAL PICKS", bg=PANEL, fg="#00C7CC", font=("Segoe UI Semibold", 16)).pack(anchor="w", padx=20, pady=(13, 3))
+        tk.Label(heading, text=discovery.resolved_location, bg=PANEL, fg=PAPER, font=("Segoe UI Semibold", 9), wraplength=960, justify="left").pack(anchor="w", padx=20)
+        status = tk.Label(
+            heading,
+            text=f"{discovery.raw_count} OSM records · {len(candidates)} eligible · {discovery.rejected_count} rejected · {len(selected)} selected",
+            bg=PANEL, fg=MUTED, font=("Segoe UI", 8),
+        )
+        status.pack(anchor="w", padx=20, pady=(4, 12))
+        shell = tk.Frame(dialog, bg="#080b0c", highlightbackground=DEEP_BRASS, highlightthickness=1)
+        shell.pack(fill="both", expand=True, padx=18)
+        canvas = tk.Canvas(shell, bg="#080b0c", bd=0, highlightthickness=0)
+        scrollbar = ttk.Scrollbar(shell, orient="vertical", command=canvas.yview)
+        canvas.configure(yscrollcommand=scrollbar.set)
+        scrollbar.pack(side="right", fill="y")
+        canvas.pack(side="left", fill="both", expand=True)
+        rows = tk.Frame(canvas, bg="#080b0c")
+        window = canvas.create_window((0, 0), window=rows, anchor="nw")
+        rows.bind("<Configure>", lambda _event: canvas.configure(scrollregion=canvas.bbox("all")))
+        canvas.bind("<Configure>", lambda event: canvas.itemconfigure(window, width=event.width))
+
+        def render_rows() -> None:
+            for child in rows.winfo_children():
+                child.destroy()
+            status.configure(text=f"{discovery.raw_count} OSM records · {len(candidates)} eligible · {discovery.rejected_count} rejected · {len(selected)} selected")
+            for index, item in enumerate(selected, start=1):
+                row = tk.Frame(rows, bg="#111719" if index % 2 else "#0c1112")
+                row.pack(fill="x", padx=4, pady=(4 if index == 1 else 0, 3), ipady=7)
+                row.columnconfigure(1, weight=1)
+                name_var = tk.StringVar(value=item.business_name)
+                category_var = tk.StringVar(value=item.category)
+                description_var = tk.StringVar(value=item.short_description)
+                website_var = tk.StringVar(value=item.website_url or "")
+                tk.Label(row, text=f"{index:02d}", bg=row["bg"], fg="#00C7CC", font=("Segoe UI Semibold", 11), width=4).grid(row=0, column=0, rowspan=4, padx=(8, 5))
+                for field_row, (label, variable) in enumerate((
+                    ("BUSINESS NAME", name_var), ("CATEGORY", category_var),
+                    ("DESCRIPTION", description_var), ("WEBSITE URL", website_var),
+                )):
+                    tk.Label(row, text=label, bg=row["bg"], fg=MUTED, font=("Segoe UI Semibold", 7), width=15, anchor="e").grid(row=field_row, column=1, sticky="e", padx=(0, 7), pady=2)
+                    entry = tk.Entry(row, textvariable=variable, bg="#101217", fg=PAPER, insertbackground=PAPER, relief="flat", highlightbackground=DEEP_BRASS, highlightthickness=1, font=("Segoe UI", 8))
+                    entry.grid(row=field_row, column=2, sticky="ew", padx=(0, 8), pady=2, ipady=4)
+                row.columnconfigure(2, weight=1)
+                name_var.trace_add("write", lambda *_args, record=item, variable=name_var: setattr(record, "business_name", variable.get()))
+                category_var.trace_add("write", lambda *_args, record=item, variable=category_var: setattr(record, "category", variable.get()))
+                description_var.trace_add("write", lambda *_args, record=item, variable=description_var: setattr(record, "short_description", variable.get()))
+                website_var.trace_add("write", lambda *_args, record=item, variable=website_var: setattr(record, "website_url", variable.get().strip() or None))
+                actions = tk.Frame(row, bg=row["bg"])
+                actions.grid(row=0, column=3, rowspan=4, padx=(3, 10))
+                tk.Button(actions, text="KEEP ✓", state="disabled", disabledforeground=SUCCESS, bg=PANEL_2, relief="flat", bd=0, font=("Segoe UI Semibold", 8), padx=10, pady=6).pack(fill="x", pady=(0, 5))
+
+                def replace(record=item) -> None:
+                    replacement = replacement_local_pick(record, candidates, selected)
+                    if replacement is None:
+                        messagebox.showinfo(DESKTOP_TITLE, "No unused OpenStreetMap candidate remains for this category.", parent=dialog)
+                        return
+                    position = selected.index(record)
+                    selected[position] = LocalPick.from_dict(replacement.to_dict())
+                    render_rows()
+
+                tk.Button(actions, text="REPLACE", command=replace, bg="#10383a", fg="#bffcff", relief="flat", bd=0, font=("Segoe UI Semibold", 8), padx=10, pady=6).pack(fill="x", pady=(0, 5))
+                tk.Button(actions, text="REMOVE", command=lambda record=item: (selected.remove(record), render_rows()), bg=PANEL_2, fg=CREAM, relief="flat", bd=0, font=("Segoe UI Semibold", 8), padx=10, pady=6).pack(fill="x")
+
+        footer = tk.Frame(dialog, bg=INK)
+        footer.pack(fill="x", padx=18, pady=(10, 18))
+
+        def save_review() -> None:
+            try:
+                validated = [LocalPick.from_dict(item.to_dict()) for item in selected]
+            except Exception as error:
+                messagebox.showerror(DESKTOP_TITLE, str(error), parent=dialog)
+                return
+            form.set_local_picks(validated)
+            dialog.destroy()
+
+        def regenerate() -> None:
+            dialog.destroy()
+            self._generate_local_picks(skip_confirmation=True)
+
+        self._button(footer, "SAVE LOCAL PICKS", save_review, primary=True).pack(side="right", padx=(8, 0))
+        self._button(footer, "REGENERATE ALL", regenerate).pack(side="right", padx=(8, 0))
+        self._button(footer, "CANCEL", dialog.destroy).pack(side="right")
+        render_rows()
+
     def _create_love_my_locals(self) -> bool:
         form = self.forms[ProjectType.LOVE_MY_LOCALS]
         form.clear_validation()
@@ -1999,6 +2161,7 @@ class Factory(tk.Tk):
         ):
             return False
         slug = existing.slug if existing else self.store.allocate_slug("-".join(values.locations))
+        local_picks = [LocalPick.from_dict(item.to_dict()) for item in form.local_picks]
 
         def worker() -> dict[str, object]:
             config = LoveMyLocalsDiscoveryService(YouTubeClient(api_key)).discover(
@@ -2010,6 +2173,8 @@ class Factory(tk.Tk):
                 default_cta_type=values.default_cta_type,
                 default_cta_url=values.default_cta_url or None,
             )
+            config.local_picks = local_picks
+            config.__post_init__()
             thumbnails: dict[str, bytes] = {}
             active = [item for item in config.candidates if item.active]
 
@@ -2053,6 +2218,8 @@ class Factory(tk.Tk):
             form.show_validation(error)
             return False
         config = LoveMyLocalsConfig.from_dict(existing.love_my_locals_config.to_dict())
+        config.local_picks = [LocalPick.from_dict(item.to_dict()) for item in form.local_picks]
+        config.__post_init__()
         if [item.casefold() for item in values.locations] != [item.casefold() for item in config.locations]:
             messagebox.showinfo(DESKTOP_TITLE, "The locations changed. Press SEARCH AGAIN so the saved videos match the new locations.")
             return False

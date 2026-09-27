@@ -49,6 +49,11 @@ if (machine) {
   const contentMeta = machine.querySelector('[data-content-meta]');
   const contentDescription = machine.querySelector('[data-content-description]');
   const viewYouTube = machine.querySelector('[data-view-youtube]');
+  const localPicksPanel = machine.querySelector('[data-local-picks]');
+  const localPickCards = [...machine.querySelectorAll('[data-local-pick-card]')];
+  const localPickDots = [...machine.querySelectorAll('[data-local-picks-page]')];
+  const localPicksPrevious = machine.querySelector('[data-local-picks-previous]');
+  const localPicksNext = machine.querySelector('[data-local-picks-next]');
   const customerLogo = machine.querySelector('[data-customer-logo]');
   const customerMonogram = machine.querySelector('[data-customer-monogram]');
   const needles = [...machine.querySelectorAll('[data-meter-needle]')];
@@ -104,6 +109,7 @@ if (machine) {
   let meterFrame = 0;
   let meterStartedAt = performance.now();
   let meterLastAt = meterStartedAt;
+  let localPicksPage = 0;
   let leverProgress = 0;
   let leverPointer = null;
   let leverStartY = 0;
@@ -125,6 +131,45 @@ if (machine) {
     window.dispatchEvent(new CustomEvent('crispy-bits:banjo', {
       detail: {name, projectType: 'banjo', ...detail},
     }));
+  }
+
+  function renderLocalPicksPage(page) {
+    if (!localPicksPanel || !localPickCards.length) return;
+    const pageCount = Math.max(1, Math.ceil(localPickCards.length / 3));
+    localPicksPage = Math.max(0, Math.min(pageCount - 1, Number(page) || 0));
+    localPickCards.forEach(card => {
+      const visible = Number(card.dataset.localPickPage) === localPicksPage;
+      card.hidden = !visible;
+      card.setAttribute('aria-hidden', String(!visible));
+    });
+    localPickDots.forEach((dot, index) => dot.setAttribute('aria-current', String(index === localPicksPage)));
+    if (localPicksPrevious) localPicksPrevious.disabled = localPicksPage === 0;
+    if (localPicksNext) localPicksNext.disabled = localPicksPage === pageCount - 1;
+  }
+
+  function configureLocalPicks() {
+    if (!localPicksPanel || !localPickCards.length) return;
+    localPicksPrevious?.addEventListener('click', () => renderLocalPicksPage(localPicksPage - 1));
+    localPicksNext?.addEventListener('click', () => renderLocalPicksPage(localPicksPage + 1));
+    localPickDots.forEach(dot => dot.addEventListener('click', () => renderLocalPicksPage(dot.dataset.localPicksPage)));
+    localPicksPanel.querySelectorAll('[data-local-pick-view]').forEach(link => {
+      link.addEventListener('click', () => {
+        const card = link.closest('[data-local-pick-card]');
+        window.dispatchEvent(new CustomEvent('crispy-bits:local-pick', {
+          detail: {
+            name: 'local_pick_click',
+            projectType: 'love_my_locals',
+            localPickId: link.dataset.localPickId || '',
+            businessName: card?.querySelector('h3')?.textContent?.trim() || '',
+            category: card?.querySelector('small')?.textContent?.trim() || '',
+            location: card?.querySelector('strong')?.textContent?.trim() || '',
+            destinationUrl: link.href,
+            timestamp: new Date().toISOString(),
+          },
+        }));
+      });
+    });
+    renderLocalPicksPage(0);
   }
 
   function readBanjoSession() {
@@ -1209,6 +1254,7 @@ if (machine) {
       machineDescription = String(config.customerConfig?.customerStory || config.tickerText || '').trim();
       activeProjectType = String(config.projectType || 'business').trim().toLowerCase();
       machine.dataset.projectType = activeProjectType;
+      configureLocalPicks();
       banjoConfig = activeProjectType === 'banjo' ? (config.banjoConfig || {}) : null;
       if (activeProjectType === 'banjo') {
         banjoSubmissionEndpoint = String(banjoConfig?.submission?.endpoint || '').trim();

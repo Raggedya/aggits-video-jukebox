@@ -917,6 +917,85 @@ class LoveMyLocalsCandidate:
         )
 
 
+LOCAL_PICK_CATEGORIES = frozenset({
+    "CAFE",
+    "PUB / BAR",
+    "RESTAURANT",
+    "BAKERY",
+    "SHOP",
+    "LOCAL SERVICE",
+    "TAKEAWAY / FOOD",
+    "SPECIALTY / INTERESTING LOCAL BUSINESS",
+    "WILDCARD",
+})
+
+
+@dataclass(slots=True)
+class LocalPick:
+    id: str
+    osm_type: str
+    osm_id: str
+    business_name: str
+    category: str
+    short_description: str
+    location: str
+    website_url: str | None = None
+    source_url: str = ""
+    generated_at: str = ""
+
+    def __post_init__(self) -> None:
+        self.id = str(self.id or "").strip()[:120]
+        self.osm_type = str(self.osm_type or "").strip().lower()
+        self.osm_id = str(self.osm_id or "").strip()[:40]
+        self.business_name = re.sub(r"\s+", " ", str(self.business_name or "")).strip()[:140]
+        self.category = re.sub(r"\s+", " ", str(self.category or "")).strip().upper()
+        self.short_description = re.sub(r"\s+", " ", str(self.short_description or "")).strip()[:100]
+        self.location = re.sub(r"\s+", " ", str(self.location or "")).strip()[:100]
+        if not self.id or self.osm_type not in {"node", "way", "relation"} or not self.osm_id.isdigit():
+            raise ProjectValidationError("A Local Pick requires a valid OpenStreetMap element reference.")
+        if not self.business_name:
+            raise ProjectValidationError("A Local Pick requires a business name.")
+        if self.category not in LOCAL_PICK_CATEGORIES:
+            raise ProjectValidationError("Select a valid Local Pick category.")
+        if not self.short_description or not self.location:
+            raise ProjectValidationError("A Local Pick requires a short description and location.")
+        self.website_url = _optional_http_url(self.website_url, "Local Pick website URL")
+        self.source_url = _optional_http_url(self.source_url, "Local Pick source URL") or ""
+        expected_source = f"https://www.openstreetmap.org/{self.osm_type}/{self.osm_id}"
+        if self.source_url != expected_source:
+            raise ProjectValidationError("A Local Pick source must reference its OpenStreetMap element.")
+        self.generated_at = str(self.generated_at or "").strip() or utc_now()
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "id": self.id,
+            "osmType": self.osm_type,
+            "osmId": self.osm_id,
+            "businessName": self.business_name,
+            "category": self.category,
+            "shortDescription": self.short_description,
+            "location": self.location,
+            "websiteUrl": self.website_url,
+            "sourceUrl": self.source_url,
+            "generatedAt": self.generated_at,
+        }
+
+    @classmethod
+    def from_dict(cls, value: dict[str, Any]) -> "LocalPick":
+        return cls(
+            id=str(value.get("id") or ""),
+            osm_type=str(value.get("osm_type") or value.get("osmType") or ""),
+            osm_id=str(value.get("osm_id") or value.get("osmId") or ""),
+            business_name=str(value.get("business_name") or value.get("businessName") or ""),
+            category=str(value.get("category") or ""),
+            short_description=str(value.get("short_description") or value.get("shortDescription") or ""),
+            location=str(value.get("location") or ""),
+            website_url=value.get("website_url", value.get("websiteUrl")),
+            source_url=str(value.get("source_url") or value.get("sourceUrl") or ""),
+            generated_at=str(value.get("generated_at") or value.get("generatedAt") or ""),
+        )
+
+
 @dataclass(slots=True)
 class LoveMyLocalsConfig:
     locations: list[str]
@@ -933,6 +1012,7 @@ class LoveMyLocalsConfig:
     discovery_summary: dict[str, int] = field(default_factory=dict)
     last_search_at: str = ""
     public_title: str = ""
+    local_picks: list[LocalPick] = field(default_factory=list)
 
     def __post_init__(self) -> None:
         self.locations = [re.sub(r"\s+", " ", str(item)).strip() for item in self.locations if str(item).strip()]
@@ -989,6 +1069,13 @@ class LoveMyLocalsConfig:
             if str(key).strip()
         }
         self.last_search_at = str(self.last_search_at or "")
+        if any(not isinstance(item, LocalPick) for item in self.local_picks):
+            raise ProjectValidationError("Love My Locals Local Picks are invalid.")
+        if len(self.local_picks) > 9:
+            raise ProjectValidationError("Love My Locals supports no more than 9 Local Picks.")
+        pick_ids = [item.id for item in self.local_picks]
+        if len(pick_ids) != len(set(pick_ids)):
+            raise ProjectValidationError("Love My Locals Local Picks contain duplicates.")
 
     @property
     def selected_videos(self) -> list[Video]:
@@ -1014,6 +1101,7 @@ class LoveMyLocalsConfig:
             "exclusion_diagnostics": [dict(item) for item in self.exclusion_diagnostics],
             "discovery_summary": dict(self.discovery_summary),
             "last_search_at": self.last_search_at,
+            "localPicks": [item.to_dict() for item in self.local_picks],
         }
 
     @classmethod
@@ -1041,6 +1129,11 @@ class LoveMyLocalsConfig:
                 for key, value in dict(source.get("discovery_summary") or source.get("discoverySummary") or {}).items()
             },
             last_search_at=str(source.get("last_search_at") or source.get("lastSearchAt") or ""),
+            local_picks=[
+                LocalPick.from_dict(item)
+                for item in (source.get("local_picks", source.get("localPicks", [])) or [])
+                if isinstance(item, dict)
+            ],
         )
 
 
