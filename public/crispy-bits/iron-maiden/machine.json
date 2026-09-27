@@ -21,8 +21,8 @@
     "subscribeURL": "",
     "primaryCTA": "VIEW ON YOUTUBE",
     "primaryAction": {
-      "type": "stay",
-      "displayLabel": "STAY",
+      "type": "whats_on",
+      "displayLabel": "WHAT'S ON",
       "destinationURL": "https://www.ironmaiden.com/tour/run-for-your-lives-world-tour-2026/",
       "enabled": true
     }
@@ -270,8 +270,8 @@
       "resolvedAccent": "#777E89"
     },
     "primaryAction": {
-      "type": "stay",
-      "displayLabel": "STAY",
+      "type": "whats_on",
+      "displayLabel": "WHAT'S ON",
       "destinationURL": "https://www.ironmaiden.com/tour/run-for-your-lives-world-tour-2026/",
       "enabled": true
     },
