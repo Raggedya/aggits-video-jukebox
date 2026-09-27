@@ -4,7 +4,7 @@ A standalone Windows desktop application for creating and managing CRISPY BITS B
 
 WHITE LABEL retains the proven Channel Master machine and replaces its prominent top Crispy Bits mark with a project-specific customer logo. Each logo is stored and published independently, while a discreet POWERED BY CRISPY BITS attribution remains at the bottom of the machine.
 
-LOVE MY LOCALS accepts one to three locations, discovers and scores a varied pool of geographically relevant YouTube material, and prepares up to 50 reviewed videos for a random local-discovery machine. Its public machine retains the focused SHARE, PLAY VIDEO, EXPLORE and RE-SPIN controls without directory or utility panels.
+LOVE MY LOCALS accepts one to three locations, discovers and scores a varied pool of geographically relevant YouTube material, and prepares up to 50 reviewed videos for a random local-discovery machine. Its public machine retains the focused SHARE, PLAY VIDEO, EXPLORE and RE-SPIN controls without directory or utility panels. A separate Public Title gives its QR artwork and 1200×630 social preview one clear primary place name while all nominated locations remain active for discovery.
 
 ## Factory workflow
 

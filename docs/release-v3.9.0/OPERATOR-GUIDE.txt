@@ -1,0 +1,49 @@
+CRISPY BITS DESKTOP v3.9.0 — LOVE MY LOCALS SHARING GUIDE
+==========================================================
+
+SEARCH LOCATIONS
+
+Enter Location 1 and, if useful, Location 2 and Location 3. All nominated
+locations remain active inputs for YouTube discovery.
+
+PUBLIC TITLE
+
+Public Title defaults to Location 1. It is the one primary place name used on
+the Love My Locals QR artwork, URL preview image and social/page title.
+
+Example:
+
+Location 1: Box Hill
+Location 2: Box Hill North
+Location 3: Box Hill South
+Public Title: Box Hill
+
+The discovery search still uses all three locations. Public sharing presents
+only BOX HILL.
+
+PREVIEW
+
+Use Preview to inspect the generated project before publication. The preview
+output includes:
+
+- qr-card.png — approved Love My Locals logo, Public Title and real QR code
+- social-card-love-my-locals-v1-*.png — 1200 x 630 black social card with the
+  Love My Locals logo, Public Title and touch icon
+- page metadata using "Love My Locals — [Public Title]"
+
+SAVE AND REOPEN
+
+Public Title is stored with the Love My Locals project. It survives save,
+close, reopen, preview, publish and rebuild. Editing a secondary search
+location does not overwrite the Public Title.
+
+PUBLISH
+
+Publishing uses the existing verified publication workflow. The QR code points
+to the final machine URL and the Open Graph/Twitter preview references the
+project-specific social image.
+
+VERSION NOTE
+
+Projects saved with v3.9.0 should continue to be edited with v3.9.0 or a later
+compatible release unless backward editing has specifically been verified.

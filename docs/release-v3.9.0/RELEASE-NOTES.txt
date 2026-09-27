@@ -1,0 +1,43 @@
+CRISPY BITS DESKTOP v3.9.0
+================================
+
+LOVE MY LOCALS SHARING IDENTITY
+
+- LOVE MY LOCALS now has a dedicated Public Title field.
+- Public Title defaults to Location 1, supports multi-word place names and can
+  be edited independently before publication.
+- Secondary nominated locations remain active discovery inputs but no longer
+  expand the QR title or social-sharing metadata.
+
+QR ARTWORK
+
+- LOVE MY LOCALS QR artwork now uses the approved transparent Love My Locals
+  logo instead of the Crispy Bits hero brand.
+- The card shows one primary location on a restrained black, white and
+  canonical teal (#00C7CC) presentation.
+- The underlying generated QR remains high-contrast, high-error-correction and
+  preserves a full quiet zone for scan reliability.
+
+SOCIAL / URL PREVIEW
+
+- Published LOVE MY LOCALS machines receive a dedicated 1200 x 630 PNG social
+  card with a black background, approved logo, primary location and restrained
+  white/teal touch icon.
+- Open Graph and Twitter metadata use the dedicated image and the title format
+  "Love My Locals — [Public Title]".
+- The preview excludes secondary search locations, Crispy Bits hero branding,
+  reels, levers, QR artwork and marketing copy.
+
+PRESERVED
+
+- All nominated Love My Locals search locations remain active in discovery.
+- Local Texture discovery, tourism suppression, property-video exclusion,
+  channel diversity, the final 50, ticker, reel, lever, landing and playback
+  are unchanged.
+- QR artwork and social metadata for every other Crispy Bits machine type are
+  unchanged.
+
+CODE SIGNING
+
+This release contains embedded Windows product and version metadata but is
+unsigned because no trusted code-signing certificate is configured.
