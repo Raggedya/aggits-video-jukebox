@@ -24,6 +24,11 @@ if (machine) {
   const soundLabel = machine.querySelector('[data-sound-label]');
   const homeButton = machine.querySelector('[data-action="home"]');
   const player = machine.querySelector('[data-youtube-player]');
+  const tourismDiscoveryPoster = machine.querySelector('[data-tourism-discovery-poster]');
+  const tourismDiscoveryBackdrop = machine.querySelector('[data-tourism-discovery-backdrop]');
+  const tourismDiscoveryHook = machine.querySelector('[data-tourism-discovery-hook]');
+  const tourismDiscoveryHeadline = machine.querySelector('[data-tourism-discovery-headline]');
+  const tourismDiscoveryBody = machine.querySelector('[data-tourism-discovery-body]');
   const sponsorPlayer = machine.querySelector('[data-sponsor-player]');
   const banjoChoiceOverlay = machine.querySelector('[data-banjo-choice-overlay]');
   const banjoChoiceTitle = machine.querySelector('[data-banjo-choice-title]');
@@ -75,6 +80,8 @@ if (machine) {
     catch { return true; }
   })();
   let bag = [];
+  let tourismVideoBag = [];
+  let tourismDiscoveryBag = [];
   let machineIdentity = '';
   let machineDescription = '';
   let masterStorySections = [];
@@ -83,6 +90,7 @@ if (machine) {
   let primaryActionLabel = 'SHOP NOW';
   let plaqueDestination = '';
   let activeProjectType = 'business';
+  let tourismMixedMode = false;
   let banjoConfig = null;
   let banjoSubmissionEndpoint = '';
   let banjoSubmissionReturnFocus = null;
@@ -130,6 +138,19 @@ if (machine) {
     if (activeProjectType !== 'banjo') return;
     window.dispatchEvent(new CustomEvent('crispy-bits:banjo', {
       detail: {name, projectType: 'banjo', ...detail},
+    }));
+  }
+
+  function emitTourismEvent(name, detail = {}) {
+    if (activeProjectType !== 'tourism' || !tourismMixedMode) return;
+    window.dispatchEvent(new CustomEvent('crispy-bits:tourism', {
+      detail: {
+        name,
+        projectType: 'tourism',
+        destination: machineIdentity,
+        timestamp: new Date().toISOString(),
+        ...detail,
+      },
     }));
   }
 
@@ -450,7 +471,36 @@ if (machine) {
     bag = indexes;
   }
 
+  function refillTourismBag(contentType) {
+    const source = catalogue.filter(item => (item.contentType || 'video') === contentType);
+    const result = [...source];
+    for (let index = result.length - 1; index > 0; index -= 1) {
+      const swap = Math.floor(Math.random() * (index + 1));
+      [result[index], result[swap]] = [result[swap], result[index]];
+    }
+    if (current && result.length > 1 && reelIdentity(result[0]) === reelIdentity(current)) {
+      [result[0], result[1]] = [result[1], result[0]];
+    }
+    if (contentType === 'discovery') tourismDiscoveryBag = result;
+    else tourismVideoBag = result;
+  }
+
   function nextWinner() {
+    if (activeProjectType === 'tourism' && tourismMixedMode) {
+      const discoveries = catalogue.filter(item => item.contentType === 'discovery');
+      const videos = catalogue.filter(item => item.contentType !== 'discovery');
+      const chooseDiscovery = discoveries.length > 0 && (
+        videos.length === 0 || (current?.contentType !== 'discovery' && Math.random() < .25)
+      );
+      if (chooseDiscovery) {
+        if (!tourismDiscoveryBag.length) refillTourismBag('discovery');
+        return tourismDiscoveryBag.shift();
+      }
+      if (videos.length) {
+        if (!tourismVideoBag.length) refillTourismBag('video');
+        return tourismVideoBag.shift();
+      }
+    }
     if (!bag.length) refillBag();
     return catalogue[bag.shift()];
   }
@@ -467,40 +517,57 @@ if (machine) {
   function updateSelectedContent(video) {
     const label = titleOnly(video);
     const isSponsor = video.contentType === 'sponsor_mp4';
+    const isTourismDiscovery = activeProjectType === 'tourism' && video.contentType === 'discovery';
     const playText = playButton.querySelector('b');
-    if (playText) playText.textContent = 'PLAY VIDEO';
-    setCustomerBackdrop(isSponsor ? null : video);
+    if (playText) playText.textContent = isTourismDiscovery ? (video.ctaLabel || 'DISCOVER') : 'PLAY VIDEO';
+    // Packaged Discovery artwork is rendered by the poster itself. Passing its
+    // relative path through the stylesheet-backed cabinet blur would resolve
+    // it relative to /assets/ and create an unnecessary /assets/assets/ fetch.
+    setCustomerBackdrop(isSponsor || isTourismDiscovery ? null : video);
     machine.dataset.selectedVideoId = video.videoId;
-    machine.dataset.contentKind = isSponsor ? 'sponsor' : (video.isBanjosChoice ? 'banjos-choice' : 'youtube');
+    machine.dataset.contentKind = isSponsor ? 'sponsor' : isTourismDiscovery ? 'discovery' : (video.isBanjosChoice ? 'banjos-choice' : 'youtube');
     winnerTitle.textContent = label;
     winnerChannel.textContent = video.channelTitle || machineIdentity;
-    contentMeta.textContent = isSponsor
+    contentMeta.textContent = isTourismDiscovery
+      ? `${video.category || 'LOCAL EXPERIENCE'} • ${video.location || video.channelTitle || machineIdentity}`
+      : isSponsor
       ? `A MESSAGE FROM OUR SPONSOR • ${banjoConfig.sponsor.title}`
       : video.isBanjosChoice
         ? `BANJO'S CHOICE AWARD • ${machineIdentity}`
         : activeProjectType === 'banjo'
           ? machineIdentity
           : `${video.channelTitle || machineIdentity} • VIDEO DISCOVERY • YOUTUBE`;
-    contentDescription.textContent = isSponsor
+    contentDescription.textContent = isTourismDiscovery
+      ? video.body || video.description || ''
+      : isSponsor
       ? `Sponsored content from ${banjoConfig.sponsor.title}.`
       : video.description || `A closer look at ${label} from ${video.channelTitle || machineIdentity}.`;
     const logoSource = channelThumbnail || video.thumbnailUrl;
-    if (!isSponsor && logoSource && !['channel_master', 'white_label', 'love_my_locals'].includes(activeProjectType)) {
+    if (!isSponsor && !isTourismDiscovery && logoSource && !['channel_master', 'white_label', 'love_my_locals'].includes(activeProjectType)) {
       contentLogo.src = logoSource;
       contentLogo.alt = `${video.channelTitle || machineIdentity} logo`;
       contentLogo.hidden = false;
       contentMonogram.hidden = true;
     }
-    if (isSponsor) {
+    if (isSponsor || isTourismDiscovery) {
       contentLogo.hidden = true;
       contentMonogram.hidden = false;
-      contentMonogram.textContent = 'SP';
+      contentMonogram.textContent = isTourismDiscovery ? '✦' : 'SP';
       viewYouTube.removeAttribute('href');
       viewYouTube.setAttribute('aria-disabled', 'true');
     } else {
       viewYouTube.href = video.url;
       viewYouTube.setAttribute('aria-disabled', 'false');
       updateStory(video);
+    }
+    if (isTourismDiscovery && tourismDiscoveryPoster) {
+      tourismDiscoveryHook.textContent = video.hook || video.category || 'WHILE YOU\'RE HERE…';
+      tourismDiscoveryHeadline.textContent = video.headline || label;
+      tourismDiscoveryBody.textContent = video.body || video.description || '';
+      const image = safeBackdrop(video.image || video.thumbnailUrl);
+      tourismDiscoveryBackdrop.style.backgroundImage = image
+        ? `url("${image}")`
+        : 'radial-gradient(circle at 70% 20%,#31506b,#101927 46%,#04070b 100%)';
     }
     const primaryText = primaryActionButton.querySelector('b');
     primaryActionDestination = activeProjectType === 'banjo' ? '' : primaryActionDestination;
@@ -513,6 +580,9 @@ if (machine) {
           ? primaryActionDestination ? primaryActionLabel : `${primaryActionLabel || 'Primary action'} unavailable`
           : 'Contextual action unavailable',
     );
+    playButton.setAttribute('aria-label', isTourismDiscovery
+      ? `${video.ctaLabel || 'Discover'}: ${label}`
+      : `Play video: ${label}`);
   }
 
   function showBanjoChoiceAward(video) {
@@ -686,6 +756,7 @@ if (machine) {
     machine.dataset.videoOpen = 'false';
     stage.setAttribute('aria-hidden', 'true');
     player.src = 'about:blank';
+    if (tourismDiscoveryPoster) tourismDiscoveryPoster.hidden = true;
     if (sponsorPlayer) {
       sponsorPlayer.pause();
       sponsorPlayer.removeAttribute('src');
@@ -715,6 +786,7 @@ if (machine) {
     startReelSound();
     const sponsorWinner = activeProjectType === 'banjo' ? nextSponsorPresentation() : null;
     const winner = sponsorWinner || nextWinner();
+    emitTourismEvent('tourism_spin', {contentType: winner?.contentType || 'video'});
     await spinSingleReel({
       reel,
       finalEntry: winner,
@@ -741,7 +813,21 @@ if (machine) {
     }
     machine.dataset.hasWinner = 'true';
     updateSelectedContent(winner);
-    setState('READY_TO_PLAY', `${titleOnly(winner)} selected. Press Play Video to open it.`);
+    if (activeProjectType === 'tourism') {
+      emitTourismEvent(
+        winner.contentType === 'discovery' ? 'tourism_discovery_selected' : 'tourism_video_selected',
+        {
+          contentId: winner.id || winner.videoId,
+          contentType: winner.contentType || 'video',
+          category: winner.category || '',
+          headline: winner.headline || winner.title || '',
+          destinationUrl: winner.ctaURL || winner.ctaUrl || '',
+        },
+      );
+    }
+    setState('READY_TO_PLAY', winner.contentType === 'discovery'
+      ? `${titleOnly(winner)} selected. Open the official discovery link or re-spin.`
+      : `${titleOnly(winner)} selected. Press Play Video to open it.`);
     meterMode = 'idle';
     playButton.disabled = false;
     shareButton.disabled = false;
@@ -829,7 +915,32 @@ if (machine) {
     if (!current || spinning) return;
     ensureMachineSamples();
     const isSponsor = current.contentType === 'sponsor_mp4';
+    const isTourismDiscovery = activeProjectType === 'tourism' && current.contentType === 'discovery';
+    if (playRequested && isTourismDiscovery && machine.dataset.videoOpen !== 'true') {
+      const destinationUrl = String(current.ctaURL || current.ctaUrl || '').trim();
+      if (destinationUrl) {
+        emitTourismEvent('tourism_discovery_cta_click', {
+          contentId: current.id || current.videoId,
+          contentType: 'discovery', category: current.category || '',
+          headline: current.headline || current.title || '', destinationUrl,
+        });
+        window.open(destinationUrl, '_blank', 'noopener,noreferrer');
+      }
+      return;
+    }
     if (machine.dataset.videoOpen === 'true') {
+      if (playRequested && isTourismDiscovery) {
+        const destinationUrl = String(current.ctaURL || current.ctaUrl || '').trim();
+        if (destinationUrl) {
+          emitTourismEvent('tourism_discovery_cta_click', {
+            contentId: current.id || current.videoId,
+            contentType: 'discovery', category: current.category || '',
+            headline: current.headline || current.title || '', destinationUrl,
+          });
+          window.open(destinationUrl, '_blank', 'noopener,noreferrer');
+        }
+        return;
+      }
       if (playRequested && isSponsor && sponsorPlayer) {
         if (sponsorPlayer.ended) {
           sponsorPlaybackMilestones = new Set();
@@ -845,7 +956,11 @@ if (machine) {
     cancelPendingReveal();
     const openingVideoId = current.videoId;
     setState('OPENING_VIDEO', `Opening ${titleOnly(current)}.`);
-    if (isSponsor && sponsorPlayer) {
+    if (isTourismDiscovery) {
+      player.src = 'about:blank';
+      if (sponsorPlayer) sponsorPlayer.hidden = true;
+      if (tourismDiscoveryPoster) tourismDiscoveryPoster.hidden = false;
+    } else if (isSponsor && sponsorPlayer) {
       player.src = 'about:blank';
       sponsorPlaybackMilestones = new Set();
       sponsorPlayer.src = current.assetUrl;
@@ -853,6 +968,7 @@ if (machine) {
       sponsorPlayer.hidden = false;
       sponsorPlayer.load();
     } else {
+      if (tourismDiscoveryPoster) tourismDiscoveryPoster.hidden = true;
       player.src = playerUrl(current);
       if (sponsorPlayer) sponsorPlayer.hidden = true;
     }
@@ -863,7 +979,9 @@ if (machine) {
     await sleep(reducedMotion.matches ? 300 : 900);
     if (spinning || machine.dataset.videoOpen !== 'true' || current?.videoId !== openingVideoId) return;
     meterMode = 'video';
-    setState('VIDEO_READY', `${titleOnly(current)} is ready. Use the video player or press Play Video again.`);
+    setState('VIDEO_READY', isTourismDiscovery
+      ? `${titleOnly(current)} is ready. Use ${current.ctaLabel || 'Discover'} to open official information.`
+      : `${titleOnly(current)} is ready. Use the video player or press Play Video again.`);
     if (isSponsor && sponsorPlayer) {
       if (playRequested || soundEnabled) {
         void sponsorPlayer.play().catch(() => {
@@ -871,7 +989,7 @@ if (machine) {
           if (playText) playText.textContent = 'PLAY VIDEO';
         });
       }
-    } else if (playRequested) {
+    } else if (playRequested && !isTourismDiscovery) {
       requestPlayerPlay();
       window.setTimeout(requestPlayerPlay, 240);
     }
@@ -1132,9 +1250,11 @@ if (machine) {
     });
     shareButton.addEventListener('click', () => {
       if (activeProjectType === 'banjo') emitBanjoEvent('share', {contentKind: machine.dataset.contentKind || ''});
+      if (activeProjectType === 'tourism') emitTourismEvent('tourism_share', {contentId: current?.id || current?.videoId || '', contentType: current?.contentType || 'video'});
       void share();
     });
     primaryActionButton.addEventListener('click', () => {
+      if (activeProjectType === 'tourism') emitTourismEvent('tourism_official_site_click', {destinationUrl: primaryActionDestination});
       openPrimaryAction();
     });
     banjoSubmissionForm?.addEventListener('submit', event => { void submitBanjoForm(event); });
@@ -1264,13 +1384,17 @@ if (machine) {
       const initialReelInstruction = 'PULL THE LEVER  ──────→';
       const musicPrimaryCta = activeProjectType === 'music' ? config.musicConfig?.primaryCTA : null;
       const tourismConfig = activeProjectType === 'tourism' ? config.tourismConfig : null;
+      tourismMixedMode = Boolean(tourismConfig?.mixedDiscoveryEnabled);
       const legacyShopDestination = activeProjectType === 'business'
         ? String(config.customerConfig?.shopURL || '').trim()
         : '';
       const legacyPrimaryAction = activeProjectType === 'music'
         ? musicPrimaryCta
         : activeProjectType === 'tourism'
-          ? {displayLabel: 'MORE INFO', destinationURL: tourismConfig?.moreInfoURL}
+          ? {
+              displayLabel: tourismMixedMode ? 'OFFICIAL WEBSITE' : 'MORE INFO',
+              destinationURL: tourismMixedMode ? (tourismConfig?.officialTourismURL || tourismConfig?.moreInfoURL) : tourismConfig?.moreInfoURL,
+            }
           : {displayLabel: 'SHOP NOW', destinationURL: legacyShopDestination};
       const primaryAction = config.customerConfig?.primaryAction || legacyPrimaryAction || {};
       primaryActionDestination = activeProjectType === 'banjo' ? '' : String(primaryAction.destinationURL || '').trim();
@@ -1301,7 +1425,9 @@ if (machine) {
       shopPlaque.dataset.ctaLabel = ['channel_master', 'white_label', 'love_my_locals'].includes(activeProjectType) ? machineIdentity : primaryActionLabel;
       masterStorySections = [];
       channelThumbnail = String(config.channelThumbnail || '').trim();
-      catalogue = Array.isArray(config.videos) ? config.videos.filter(video => video?.videoId) : [];
+      catalogue = activeProjectType === 'tourism' && Array.isArray(config.contentDeck)
+        ? config.contentDeck.filter(item => item?.videoId)
+        : Array.isArray(config.videos) ? config.videos.filter(video => video?.videoId) : [];
       if (!catalogue.length) throw new Error('No videos');
       titleNode.textContent = config.title || 'VIDEO JUKEBOX';
       fitHeroContent();

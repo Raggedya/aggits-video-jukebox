@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import queue
 import re
+import shutil
 import sys
 import threading
 import webbrowser
@@ -61,7 +62,7 @@ from aggits_video_factory.desktop_forms import (
     youtube_urls_for_project_review,
 )
 from aggits_video_factory.models import Project, ProjectType, utc_now
-from aggits_video_factory.models import CHANNEL_MASTER_PALETTES, ChannelMasterConfig, LocalPick, LoveMyLocalsConfig, PrimaryCtaType
+from aggits_video_factory.models import CHANNEL_MASTER_PALETTES, ChannelMasterConfig, LocalPick, LoveMyLocalsConfig, PrimaryCtaType, TourismDiscovery
 from aggits_video_factory.local_picks import (
     LocalPicksDiscovery,
     LocalPicksError,
@@ -160,10 +161,12 @@ class ProjectForm(tk.Frame):
         self.custom_logo_background_var = tk.StringVar(value="AUTO")
         self.custom_logo_scale_var = tk.IntVar(value=100)
         self.custom_logo_vertical_var = tk.IntVar(value=0)
+        self.tourism_location_var = tk.StringVar()
+        self.tourism_discoveries: list[TourismDiscovery] = []
         self._custom_logo_preview_image: ImageTk.PhotoImage | None = None
         self.field_widgets: dict[str, tk.Widget] = {}
         row = 1
-        row = self._entry_row(row, "Title", self.title_var, "title")
+        row = self._entry_row(row, "Destination Title" if self.project_type is ProjectType.TOURISM else "Title", self.title_var, "title")
         if self.project_type is ProjectType.BANJO:
             self.field_widgets["title"].configure(state="readonly", readonlybackground="#101217")
         channel_label = "YouTube Channel URL (Optional)" if self.project_type in {ProjectType.MUSIC, ProjectType.BANJO, ProjectType.CHANNEL_MASTER, ProjectType.WHITE_LABEL} else "YouTube Channel URL"
@@ -185,7 +188,11 @@ class ProjectForm(tk.Frame):
             self.cta_combo.bind("<<ComboboxSelected>>", lambda _event: self._update_custom_visibility())
             self.field_widgets["cta_type"] = self.cta_combo
             row += 1
-            destination_label = "Primary CTA URL" if self.project_type in {ProjectType.CHANNEL_MASTER, ProjectType.WHITE_LABEL} else "CTA Destination URL"
+            destination_label = (
+                "Official Tourism Website URL" if self.project_type is ProjectType.TOURISM
+                else "Primary CTA URL" if self.project_type in {ProjectType.CHANNEL_MASTER, ProjectType.WHITE_LABEL}
+                else "CTA Destination URL"
+            )
             row = self._entry_row(row, destination_label, self.destination_var, "destination_url")
             self.custom_row = row
             custom_label = "Custom CTA Label" if self.project_type in {ProjectType.CHANNEL_MASTER, ProjectType.WHITE_LABEL} else "Custom Button Label"
@@ -207,6 +214,8 @@ class ProjectForm(tk.Frame):
             self.story_count.grid(row=1, column=0, sticky="e", pady=(3, 0))
             self.field_widgets["story_text"] = self.story_text
             row += 1
+            if self.project_type is ProjectType.TOURISM:
+                row = self._build_tourism_discovery_fields(row)
             if self.project_type in {ProjectType.CHANNEL_MASTER, ProjectType.WHITE_LABEL}:
                 row = self._build_channel_master_fields(row)
             if self.project_type is ProjectType.WHITE_LABEL:
@@ -279,6 +288,221 @@ class ProjectForm(tk.Frame):
         self.stage_note.pack(side="left", padx=14)
         self._toggle_manual(force=False)
         self._update_custom_visibility()
+
+    def _build_tourism_discovery_fields(self, row: int) -> int:
+        row = self._entry_row(row, "Location", self.tourism_location_var, "tourism_location")
+        panel = tk.Frame(self, bg=PANEL_2, highlightbackground=DEEP_BRASS, highlightthickness=1)
+        panel.grid(row=row, column=0, columnspan=2, sticky="ew", padx=22, pady=(9, 5))
+        panel.columnconfigure(0, weight=1)
+        tk.Label(panel, text="LOCAL DISCOVERY DECK", bg=PANEL_2, fg=BRASS, anchor="w", font=("Segoe UI Semibold", 10)).grid(row=0, column=0, sticky="ew", padx=11, pady=(9, 2))
+        self.tourism_discovery_status = tk.Label(panel, text="0 Discovery Cards", bg=PANEL_2, fg=MUTED, anchor="w", font=("Segoe UI", 8))
+        self.tourism_discovery_status.grid(row=1, column=0, sticky="ew", padx=11, pady=(0, 9))
+        tk.Button(
+            panel, text="MANAGE DISCOVERIES", command=self._open_tourism_discovery_editor,
+            bg=ACTIVE, fg=PAPER, activebackground="#3e6cb5", activeforeground=PAPER,
+            relief="flat", bd=0, font=("Segoe UI Semibold", 9), padx=12, pady=8, cursor="hand2",
+        ).grid(row=0, column=1, rowspan=2, padx=10, pady=9)
+        tk.Label(
+            self,
+            text="Manual V1 editor. Cards and images are stored with this Tourism project; no web research or API is used.",
+            bg=PANEL, fg=MUTED, anchor="w", justify="left", wraplength=510, font=("Segoe UI", 8),
+        ).grid(row=row + 1, column=0, columnspan=2, sticky="ew", padx=22, pady=(0, 4))
+        return row + 2
+
+    def _refresh_tourism_discovery_status(self) -> None:
+        if hasattr(self, "tourism_discovery_status"):
+            active = sum(item.enabled for item in self.tourism_discoveries)
+            self.tourism_discovery_status.configure(
+                text=f"{len(self.tourism_discoveries)} Discovery Card(s) · {active} enabled"
+            )
+
+    def _open_tourism_discovery_editor(self) -> None:
+        dialog = tk.Toplevel(self)
+        dialog.title("Tourism — Local Discovery Deck")
+        dialog.configure(bg=PANEL)
+        dialog.geometry("980x650")
+        dialog.minsize(850, 560)
+        dialog.transient(self.winfo_toplevel())
+        dialog.grab_set()
+
+        working = [TourismDiscovery.from_dict(item.to_dict()) for item in self.tourism_discoveries]
+        shell = tk.Frame(dialog, bg=PANEL)
+        shell.pack(fill="both", expand=True, padx=18, pady=16)
+        shell.columnconfigure(0, weight=2)
+        shell.columnconfigure(1, weight=3)
+        shell.rowconfigure(1, weight=1)
+        tk.Label(shell, text="LOCAL DISCOVERY DECK", bg=PANEL, fg=PAPER, font=("Segoe UI Semibold", 16)).grid(row=0, column=0, columnspan=2, sticky="w", pady=(0, 10))
+        listbox = tk.Listbox(shell, bg="#101217", fg=PAPER, selectbackground=ACTIVE, relief="flat", highlightbackground=DEEP_BRASS, highlightthickness=1, font=("Segoe UI", 10))
+        listbox.grid(row=1, column=0, sticky="nsew", padx=(0, 12))
+
+        fields = tk.Frame(shell, bg=PANEL_2, highlightbackground=DEEP_BRASS, highlightthickness=1)
+        fields.grid(row=1, column=1, sticky="nsew")
+        fields.columnconfigure(1, weight=1)
+        variables = {name: tk.StringVar() for name in ("category", "hook", "headline", "body", "image", "cta_label", "cta_url", "source_url")}
+        enabled_var = tk.BooleanVar(value=True)
+        row_index = 0
+        labels = (
+            ("Category", "category"), ("Hook", "hook"), ("Headline", "headline"),
+            ("Body", "body"), ("Image", "image"), ("CTA Label", "cta_label"),
+            ("CTA URL", "cta_url"), ("Source URL", "source_url"),
+        )
+        for label, name in labels:
+            tk.Label(fields, text=label, bg=PANEL_2, fg=CREAM, anchor="e", font=("Segoe UI", 9)).grid(row=row_index, column=0, sticky="e", padx=(10, 8), pady=5)
+            entry_shell = tk.Frame(fields, bg=PANEL_2)
+            entry_shell.grid(row=row_index, column=1, sticky="ew", padx=(0, 10), pady=5)
+            entry_shell.columnconfigure(0, weight=1)
+            entry = tk.Entry(entry_shell, textvariable=variables[name], bg="#0d0f13", fg=PAPER, insertbackground=PAPER, relief="flat", highlightbackground=DEEP_BRASS, highlightthickness=1, font=("Segoe UI", 9))
+            entry.grid(row=0, column=0, sticky="ew", ipady=6)
+            if name == "image":
+                def choose_image() -> None:
+                    selected = filedialog.askopenfilename(parent=dialog, title="Select destination image", filetypes=[("Images", "*.png *.jpg *.jpeg *.webp"), ("All files", "*.*")])
+                    if selected:
+                        variables["image"].set(selected)
+                tk.Button(entry_shell, text="SELECT", command=choose_image, bg=PANEL, fg=CREAM, relief="flat", bd=0, padx=8, pady=6).grid(row=0, column=1, padx=(6, 0))
+            row_index += 1
+        tk.Checkbutton(fields, text="ENABLED", variable=enabled_var, bg=PANEL_2, fg=CREAM, activebackground=PANEL_2, activeforeground=PAPER, selectcolor="#101217").grid(row=row_index, column=1, sticky="w", pady=7)
+        error_label = tk.Label(fields, text="", bg=PANEL_2, fg=ERROR, anchor="w", justify="left", wraplength=500, font=("Segoe UI Semibold", 8))
+        error_label.grid(row=row_index + 1, column=0, columnspan=2, sticky="ew", padx=10)
+
+        selected_index: list[int | None] = [None]
+        def refresh_list(select: int | None = None) -> None:
+            listbox.delete(0, "end")
+            for item in working:
+                state = "" if item.enabled else " [DISABLED]"
+                listbox.insert("end", f"{item.category} — {item.headline}{state}")
+            if select is not None and 0 <= select < len(working):
+                listbox.selection_set(select)
+                listbox.see(select)
+
+        def clear_fields() -> None:
+            selected_index[0] = None
+            defaults = {"cta_label": "DISCOVER", "location": self.tourism_location_var.get()}
+            for name, variable in variables.items():
+                variable.set(defaults.get(name, ""))
+            enabled_var.set(True)
+            error_label.configure(text="")
+
+        def select_item(_event=None) -> None:
+            selection = listbox.curselection()
+            if not selection:
+                return
+            index = int(selection[0])
+            selected_index[0] = index
+            item = working[index]
+            for name, value in (
+                ("category", item.category), ("hook", item.hook), ("headline", item.headline),
+                ("body", item.body), ("image", item.image), ("cta_label", item.cta_label),
+                ("cta_url", item.cta_url or ""), ("source_url", item.source_url or ""),
+            ):
+                variables[name].set(value)
+            enabled_var.set(item.enabled)
+            error_label.configure(text="")
+
+        def save_item() -> None:
+            try:
+                existing_id = working[selected_index[0]].id if selected_index[0] is not None else ""
+                item = TourismDiscovery(
+                    id=existing_id,
+                    location=self.tourism_location_var.get() or self.title_var.get(),
+                    category=variables["category"].get(), hook=variables["hook"].get(),
+                    headline=variables["headline"].get(), body=variables["body"].get(),
+                    image=variables["image"].get(), cta_label=variables["cta_label"].get(),
+                    cta_url=variables["cta_url"].get(), source_url=variables["source_url"].get(),
+                    enabled=enabled_var.get(),
+                )
+            except ValueError as error:
+                error_label.configure(text=str(error))
+                return
+            if selected_index[0] is None:
+                working.append(item)
+                selected_index[0] = len(working) - 1
+            else:
+                working[selected_index[0]] = item
+            refresh_list(selected_index[0])
+            error_label.configure(text="Saved in editor. Use APPLY DECK to keep all changes.")
+
+        def remove_item() -> None:
+            if selected_index[0] is None:
+                return
+            del working[selected_index[0]]
+            clear_fields()
+            refresh_list()
+
+        def move(delta: int) -> None:
+            index = selected_index[0]
+            if index is None:
+                return
+            target = index + delta
+            if not 0 <= target < len(working):
+                return
+            working[index], working[target] = working[target], working[index]
+            selected_index[0] = target
+            refresh_list(target)
+
+        def import_json() -> None:
+            selected = filedialog.askopenfilename(parent=dialog, title="Import Tourism Discovery Cards", filetypes=[("JSON", "*.json")])
+            if not selected:
+                return
+            try:
+                source = json.loads(Path(selected).read_text(encoding="utf-8"))
+                records = source.get("discoveries", []) if isinstance(source, dict) else source
+                if not isinstance(records, list):
+                    raise ValueError("The JSON must be an array or contain a discoveries array.")
+                imported = [TourismDiscovery.from_dict(item) for item in records if isinstance(item, dict)]
+                if not imported:
+                    raise ValueError("No valid Discovery Card records were found.")
+                working.extend(imported)
+                refresh_list(len(working) - 1)
+            except (OSError, json.JSONDecodeError, ValueError) as error:
+                messagebox.showerror("Import failed", str(error), parent=dialog)
+
+        def preview_item() -> None:
+            index = selected_index[0]
+            if index is None:
+                messagebox.showinfo(DESKTOP_TITLE, "Select and save a Discovery Card before previewing it.", parent=dialog)
+                return
+            item = working[index]
+            preview = tk.Toplevel(dialog)
+            preview.title(f"Discovery Preview — {item.headline}")
+            preview.configure(bg="#05080d")
+            preview.geometry("820x500")
+            preview.transient(dialog)
+            image_reference: ImageTk.PhotoImage | None = None
+            if item.image and Path(item.image).is_file():
+                try:
+                    with Image.open(item.image) as source:
+                        fitted = ImageOps.fit(source.convert("RGB"), (820, 500), method=Image.Resampling.LANCZOS)
+                    fitted = ImageOps.autocontrast(fitted).point(lambda value: int(value * .55))
+                    image_reference = ImageTk.PhotoImage(fitted, master=preview)
+                    tk.Label(preview, image=image_reference, bg="#05080d", bd=0).place(relx=0, rely=0, relwidth=1, relheight=1)
+                    preview._tourism_preview_image = image_reference
+                except OSError:
+                    pass
+            copy = tk.Frame(preview, bg="#071019", highlightbackground="#b98b4c", highlightthickness=2)
+            copy.place(relx=.055, rely=.48, relwidth=.89, relheight=.43)
+            tk.Label(copy, text=item.hook.upper(), bg="#071019", fg="#d6aa60", anchor="w", font=("Segoe UI Semibold", 10)).pack(fill="x", padx=22, pady=(18, 4))
+            tk.Label(copy, text=item.headline.upper(), bg="#071019", fg="#fff2cf", anchor="w", font=("Georgia", 24, "bold")).pack(fill="x", padx=22)
+            tk.Label(copy, text=item.body, bg="#071019", fg="#f1eadb", anchor="w", justify="left", wraplength=690, font=("Segoe UI", 11)).pack(fill="x", padx=22, pady=(8, 8))
+            tk.Label(copy, text=f"{item.cta_label}  →", bg="#071019", fg="#d6aa60", anchor="w", font=("Segoe UI Semibold", 11)).pack(fill="x", padx=22, pady=(0, 16))
+
+        listbox.bind("<<ListboxSelect>>", select_item)
+        controls = tk.Frame(shell, bg=PANEL)
+        controls.grid(row=2, column=0, columnspan=2, sticky="ew", pady=(12, 0))
+        for text_value, command in (
+            ("NEW", clear_fields), ("SAVE CARD", save_item), ("DELETE", remove_item),
+            ("MOVE UP", lambda: move(-1)), ("MOVE DOWN", lambda: move(1)), ("PREVIEW", preview_item), ("IMPORT JSON", import_json),
+        ):
+            tk.Button(controls, text=text_value, command=command, bg=PANEL_2, fg=CREAM, relief="flat", bd=0, padx=10, pady=8).pack(side="left", padx=(0, 6))
+
+        def apply() -> None:
+            self.tourism_discoveries = [TourismDiscovery.from_dict(item.to_dict()) for item in working]
+            self._refresh_tourism_discovery_status()
+            dialog.destroy()
+
+        tk.Button(controls, text="APPLY DECK", command=apply, bg=ACTIVE, fg=PAPER, relief="flat", bd=0, padx=14, pady=8).pack(side="right")
+        tk.Button(controls, text="CANCEL", command=dialog.destroy, bg=PANEL_2, fg=CREAM, relief="flat", bd=0, padx=12, pady=8).pack(side="right", padx=(0, 7))
+        refresh_list()
+        clear_fields()
 
     def _build_channel_master_fields(self, row: int) -> int:
         tk.Label(self, text="CHANNEL MASTER APPEARANCE + CONTACT", bg=PANEL_2, fg=BRASS, anchor="w", font=("Segoe UI Semibold", 10), padx=11, pady=8).grid(row=row, column=0, columnspan=2, sticky="ew", padx=22, pady=(10, 5))
@@ -662,6 +886,8 @@ class ProjectForm(tk.Frame):
             logo_background_removal=self.custom_logo_background_var.get().lower(),
             logo_scale_percent=self.custom_logo_scale_var.get(),
             logo_vertical_position=self.custom_logo_vertical_var.get(),
+            tourism_location=self.tourism_location_var.get(),
+            tourism_discoveries=[TourismDiscovery.from_dict(item.to_dict()) for item in self.tourism_discoveries],
         )
 
     def set_values(self, values: ProjectFormValues) -> None:
@@ -702,6 +928,9 @@ class ProjectForm(tk.Frame):
         self.custom_logo_background_var.set(values.logo_background_removal.upper())
         self.custom_logo_scale_var.set(values.logo_scale_percent)
         self.custom_logo_vertical_var.set(values.logo_vertical_position)
+        self.tourism_location_var.set(values.tourism_location)
+        self.tourism_discoveries = [TourismDiscovery.from_dict(item.to_dict()) for item in values.tourism_discoveries]
+        self._refresh_tourism_discovery_status()
         self.story_text.delete("1.0", "end")
         self.story_text.insert("1.0", values.story_text)
         self._story_changed()
@@ -730,6 +959,8 @@ class ProjectForm(tk.Frame):
             self.stage_note.configure(text="Channel optional · up to 50 YouTube videos · title, ticker, palette and actions.")
         elif self.project_type is ProjectType.WHITE_LABEL:
             self.stage_note.configure(text="Channel Master functionality · customer logo required · up to 50 YouTube videos.")
+        elif self.project_type is ProjectType.TOURISM:
+            self.stage_note.configure(text="One mixed deck: YouTube videos + manually curated destination discoveries. No research API.")
         else:
             self.stage_note.configure(text="Analyse and review videos, then build locally.")
         self.mark_clean()
@@ -765,6 +996,8 @@ class ProjectForm(tk.Frame):
             logo_background_removal=str(self._baseline[25]),
             logo_scale_percent=int(self._baseline[26]),
             logo_vertical_position=int(self._baseline[27]),
+            tourism_location=str(self._baseline[28]),
+            tourism_discoveries=[TourismDiscovery.from_dict(json.loads(value)) for value in self._baseline[29]],
         )
         self.set_values(values)
         self.mark_clean()
@@ -2679,6 +2912,29 @@ class Factory(tk.Tk):
                 banjo_config=banjo_config,
                 white_label_config=white_label_config,
             )
+            if project_type is ProjectType.TOURISM and project.tourism_config:
+                discovery_assets = project_dir / "assets"
+                discovery_assets.mkdir(parents=True, exist_ok=True)
+                for item in project.tourism_config.discoveries:
+                    raw = str(item.image or "").strip()
+                    if not raw:
+                        continue
+                    source = Path(raw)
+                    if not source.is_absolute():
+                        source = project_dir / source
+                    if not source.is_file():
+                        raise ValueError(f"Tourism Discovery image is unavailable: {raw}")
+                    suffix = source.suffix.casefold()
+                    if suffix not in {".png", ".jpg", ".jpeg", ".webp"}:
+                        raise ValueError("Tourism Discovery images must be PNG, JPEG or WebP files.")
+                    safe_id = re.sub(r"[^a-zA-Z0-9_-]+", "-", item.id).strip("-") or "discovery"
+                    relative = Path("assets") / f"tourism-discovery-{safe_id}{suffix}"
+                    destination = project_dir / relative
+                    if source.resolve() != destination.resolve():
+                        temporary = destination.with_suffix(destination.suffix + ".tmp")
+                        shutil.copy2(source, temporary)
+                        temporary.replace(destination)
+                    item.image = relative.as_posix()
             build_project_site(project, project_dir / "site")
             self.store.save_project(project)
             if banjo_config:

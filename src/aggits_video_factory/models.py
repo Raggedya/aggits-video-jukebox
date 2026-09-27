@@ -337,15 +337,115 @@ class MusicConfig:
 
 
 @dataclass(slots=True)
+class TourismDiscovery:
+    id: str
+    location: str
+    category: str
+    hook: str
+    headline: str
+    body: str
+    image: str = ""
+    cta_label: str = "DISCOVER"
+    cta_url: str | None = None
+    source_url: str | None = None
+    enabled: bool = True
+    extra_fields: dict[str, Any] = field(default_factory=dict, repr=False)
+
+    def __post_init__(self) -> None:
+        self.id = str(self.id or "").strip() or str(uuid4())
+        self.location = re.sub(r"\s+", " ", str(self.location or "")).strip()
+        self.category = re.sub(r"\s+", " ", str(self.category or "")).strip().upper()
+        self.hook = re.sub(r"\s+", " ", str(self.hook or "")).strip()
+        self.headline = re.sub(r"\s+", " ", str(self.headline or "")).strip()
+        self.body = re.sub(r"\s+", " ", str(self.body or "")).strip()
+        self.image = str(self.image or "").strip()
+        self.cta_label = re.sub(r"\s+", " ", str(self.cta_label or "DISCOVER")).strip().upper()
+        if not self.location:
+            raise ProjectValidationError("Tourism Discovery location is required.")
+        if not self.category or len(self.category) > 40:
+            raise ProjectValidationError("Tourism Discovery category is required and cannot exceed 40 characters.")
+        if not self.hook or len(self.hook) > 60:
+            raise ProjectValidationError("Tourism Discovery hook is required and cannot exceed 60 characters.")
+        if not self.headline or len(self.headline) > 80:
+            raise ProjectValidationError("Tourism Discovery headline is required and cannot exceed 80 characters.")
+        if not self.body or len(self.body) > 220:
+            raise ProjectValidationError("Tourism Discovery body is required and cannot exceed 220 characters.")
+        if not self.cta_label or len(self.cta_label) > 24:
+            raise ProjectValidationError("Tourism Discovery CTA label is required and cannot exceed 24 characters.")
+        self.cta_url = _optional_http_url(self.cta_url, "Tourism Discovery CTA URL")
+        self.source_url = _optional_http_url(self.source_url, "Tourism Discovery Source URL")
+        if not self.cta_url:
+            raise ProjectValidationError("Tourism Discovery CTA URL is required.")
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            **self.extra_fields,
+            "id": self.id,
+            "type": "discovery",
+            "location": self.location,
+            "category": self.category,
+            "hook": self.hook,
+            "headline": self.headline,
+            "body": self.body,
+            "image": self.image,
+            "ctaLabel": self.cta_label,
+            "ctaUrl": self.cta_url,
+            "sourceUrl": self.source_url,
+            "enabled": self.enabled,
+        }
+
+    @classmethod
+    def from_dict(cls, value: dict[str, Any]) -> "TourismDiscovery":
+        source = dict(value or {})
+        content_type = str(source.get("type") or "discovery").strip().lower()
+        if content_type != "discovery":
+            raise ProjectValidationError("Tourism Discovery type must be discovery.")
+        known = {"id", "type", "location", "category", "hook", "headline", "body", "image", "cta_label", "ctaLabel", "cta_url", "ctaUrl", "source_url", "sourceUrl", "enabled"}
+        return cls(
+            id=str(source.get("id") or ""),
+            location=str(source.get("location") or ""),
+            category=str(source.get("category") or ""),
+            hook=str(source.get("hook") or ""),
+            headline=str(source.get("headline") or ""),
+            body=str(source.get("body") or ""),
+            image=str(source.get("image") or ""),
+            cta_label=str(source.get("cta_label") or source.get("ctaLabel") or "DISCOVER"),
+            cta_url=source.get("cta_url", source.get("ctaUrl")),
+            source_url=source.get("source_url", source.get("sourceUrl")),
+            enabled=bool(source.get("enabled", True)),
+            extra_fields=_extra_fields(source, known),
+        )
+
+
+@dataclass(slots=True)
 class TourismConfig:
     more_info_url: str | None = None
     stay_url: str | None = None
     primary_cta: PrimaryCta | None = None
+    destination_title: str = ""
+    location: str = ""
+    official_tourism_url: str | None = None
+    discoveries: list[TourismDiscovery] = field(default_factory=list)
     extra_fields: dict[str, Any] = field(default_factory=dict, repr=False)
 
     def __post_init__(self) -> None:
         self.more_info_url = _optional_http_url(self.more_info_url, "More Info URL")
         self.stay_url = _optional_http_url(self.stay_url, "Stay URL")
+        self.destination_title = re.sub(r"\s+", " ", str(self.destination_title or "")).strip()
+        self.location = re.sub(r"\s+", " ", str(self.location or "")).strip()
+        self.official_tourism_url = _optional_http_url(
+            self.official_tourism_url or self.more_info_url,
+            "Official Tourism Website URL",
+        )
+        if len(self.destination_title) > 120:
+            raise ProjectValidationError("Tourism Destination Title cannot exceed 120 characters.")
+        if len(self.location) > 120:
+            raise ProjectValidationError("Tourism Location cannot exceed 120 characters.")
+        if len(self.discoveries) > 50:
+            raise ProjectValidationError("Tourism supports no more than 50 Discovery Cards.")
+        ids = [item.id for item in self.discoveries]
+        if len(ids) != len(set(ids)):
+            raise ProjectValidationError("Tourism Discovery Card IDs must be unique.")
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -353,6 +453,10 @@ class TourismConfig:
             "more_info_url": self.more_info_url,
             "stay_url": self.stay_url,
             "primary_cta": self.primary_cta.to_dict() if self.primary_cta else None,
+            "destinationTitle": self.destination_title,
+            "location": self.location,
+            "officialTourismUrl": self.official_tourism_url,
+            "discoveries": [item.to_dict() for item in self.discoveries],
         }
 
     @classmethod
@@ -360,6 +464,9 @@ class TourismConfig:
         source = dict(value or {})
         more_info_url = source.get("more_info_url", source.get("moreInfoUrl"))
         stay_url = source.get("stay_url", source.get("stayUrl"))
+        discoveries = source.get("discoveries") or []
+        if not isinstance(discoveries, list):
+            raise ProjectValidationError("Tourism discoveries must be an array.")
         cta = source.get("primary_cta", source.get("primaryCta"))
         if cta is not None and not isinstance(cta, dict):
             raise ProjectValidationError("Tourism primary_cta must be an object or null.")
@@ -374,7 +481,11 @@ class TourismConfig:
             more_info_url=more_info_url,
             stay_url=stay_url,
             primary_cta=compatible_cta,
-            extra_fields=_extra_fields(source, {"more_info_url", "moreInfoUrl", "stay_url", "stayUrl", "primary_cta", "primaryCta"}),
+            destination_title=str(source.get("destination_title") or source.get("destinationTitle") or ""),
+            location=str(source.get("location") or ""),
+            official_tourism_url=source.get("official_tourism_url", source.get("officialTourismUrl")),
+            discoveries=[TourismDiscovery.from_dict(item) for item in discoveries if isinstance(item, dict)],
+            extra_fields=_extra_fields(source, {"more_info_url", "moreInfoUrl", "stay_url", "stayUrl", "primary_cta", "primaryCta", "destination_title", "destinationTitle", "location", "official_tourism_url", "officialTourismUrl", "discoveries"}),
         )
 
 

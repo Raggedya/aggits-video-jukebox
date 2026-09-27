@@ -43,6 +43,34 @@ def included_project_videos(project: Project):
     return [video for video in project.videos if video.video_id not in excluded]
 
 
+def _package_tourism_discovery_images(project: Project, assets: Path, project_root: Path) -> dict[str, str]:
+    """Copy operator-supplied Tourism artwork into this project's isolated output."""
+    if project.project_type is not ProjectType.TOURISM or not project.tourism_config:
+        return {}
+    output = assets / "tourism-discoveries"
+    packaged: dict[str, str] = {}
+    for item in project.tourism_config.discoveries:
+        raw = str(item.image or "").strip()
+        if not raw:
+            continue
+        source = Path(raw)
+        if not source.is_absolute():
+            source = project_root / source
+        if not source.is_file() or source.suffix.casefold() not in {".png", ".jpg", ".jpeg", ".webp"}:
+            continue
+        try:
+            with Image.open(source) as probe:
+                probe.verify()
+        except (OSError, ValueError):
+            continue
+        output.mkdir(parents=True, exist_ok=True)
+        safe_id = re.sub(r"[^a-zA-Z0-9_-]+", "-", item.id).strip("-") or hashlib.sha256(item.id.encode()).hexdigest()[:12]
+        destination = output / f"{safe_id}{source.suffix.casefold()}"
+        shutil.copy2(source, destination)
+        packaged[item.id] = f"assets/tourism-discoveries/{destination.name}"
+    return packaged
+
+
 def _banjo_ticker_text(value: str) -> str:
     parts = [re.sub(r"\s+", " ", part).strip() for part in re.split(r"[\r\n]+", str(value or ""))]
     return " • ".join(part for part in parts if part)
@@ -260,6 +288,10 @@ def build_project_site(project: Project, destination: Path) -> Path:
     primary_cta = project_primary_cta(project)
     music_cta = project.music_config.primary_cta if project.music_config else None
     tourism_config = project.tourism_config if project.project_type is ProjectType.TOURISM else None
+    # A saved Discovery Deck is the explicit opt-in boundary for the new mixed
+    # Tourism experience.  Merely opening and re-saving a legacy Tourism
+    # project must not change its public controls or runtime behaviour.
+    tourism_mixed_mode = bool(tourism_config and tourism_config.discoveries)
     banjo_config = project.banjo_config if project.project_type is ProjectType.BANJO else None
     channel_product = project.project_type in {
         ProjectType.CHANNEL_MASTER, ProjectType.WHITE_LABEL, ProjectType.LOVE_MY_LOCALS,
@@ -272,6 +304,7 @@ def build_project_site(project: Project, destination: Path) -> Path:
     if assets.exists():
         shutil.rmtree(assets)
     shutil.copytree(resource_path("static"), assets)
+    tourism_discovery_images = _package_tourism_discovery_images(project, assets, destination.parent)
     white_label_logo_public_url = ""
     white_label_logo_style = ""
     if project.project_type is ProjectType.WHITE_LABEL:
@@ -342,7 +375,7 @@ def build_project_site(project: Project, destination: Path) -> Path:
     story_sections = _story_sections(project.ticker_text, project.title, project.project_type)
     banjo_ticker = _banjo_ticker_text(project.ticker_text) if project.project_type is ProjectType.BANJO else ""
     channel_master_ticker = _banjo_ticker_text(project.ticker_text) if channel_product else ""
-    primary_action_label = "EXPLORE" if project.project_type is ProjectType.LOVE_MY_LOCALS else primary_cta.display_label if primary_cta else (
+    primary_action_label = "OFFICIAL WEBSITE" if tourism_mixed_mode else "EXPLORE" if project.project_type is ProjectType.LOVE_MY_LOCALS else primary_cta.display_label if primary_cta else (
         "SHOW BANJO" if project.project_type is ProjectType.BANJO
         else "PRIMARY ACTION"
     )
@@ -606,6 +639,14 @@ def build_project_site(project: Project, destination: Path) -> Path:
             "destinationURL": love_my_locals_explore_url,
             "enabled": bool(love_my_locals_explore_url),
         }
+    elif tourism_mixed_mode and tourism_config:
+        official_url = tourism_config.official_tourism_url or tourism_config.more_info_url or ""
+        customer_config["primaryAction"] = {
+            "type": "official_website",
+            "displayLabel": "OFFICIAL WEBSITE",
+            "destinationURL": official_url,
+            "enabled": bool(official_url),
+        }
     payload = {
         "schemaVersion": 2,
         "projectType": project.project_type.value,
@@ -683,6 +724,37 @@ def build_project_site(project: Project, destination: Path) -> Path:
             "stayURL": stay_url,
             "stayEnabled": bool(stay_url),
         }
+        if tourism_mixed_mode:
+            payload["tourismConfig"].update({
+                "mixedDiscoveryEnabled": True,
+                "destinationTitle": tourism_config.destination_title or project.title,
+                "location": tourism_config.location,
+                "officialTourismURL": tourism_config.official_tourism_url or more_info_url or "",
+                "discoveryAppearanceTarget": 0.25,
+                "discoveries": [
+                {
+                    **item.to_dict(),
+                    "contentType": "discovery",
+                    "videoId": f"discovery:{item.id}",
+                    "shortTitle": _reel_short_title(item.headline),
+                    "title": item.headline,
+                    "displayTitle": item.headline,
+                    "thumbnailUrl": tourism_discovery_images.get(item.id, ""),
+                    "image": tourism_discovery_images.get(item.id, ""),
+                    "description": item.body,
+                    "storyText": item.body,
+                    "metadata": f"{item.category} • LOCAL DISCOVERY • {item.location}",
+                    "channelTitle": item.location,
+                    "ctaLabel": item.cta_label,
+                }
+                for item in (tourism_config.discoveries if tourism_config else [])
+                if item.enabled
+                ],
+            })
+            payload["contentDeck"] = [
+                *[{**item, "contentType": "video", "type": "video"} for item in payload["videos"]],
+                *payload["tourismConfig"]["discoveries"],
+            ]
     if project.project_type is ProjectType.BANJO:
         sponsor = banjo_config.sponsor if banjo_config else None
         payload["banjoConfig"] = {

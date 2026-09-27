@@ -70,6 +70,14 @@
       <section class="video-stage" data-video-stage aria-label="Selected YouTube video" aria-hidden="true">
         <div class="video-stage-frame">
           <iframe data-youtube-player title="Official YouTube video player" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen referrerpolicy="origin-when-cross-origin"></iframe>
+          <article class="tourism-discovery-poster" data-tourism-discovery-poster hidden aria-live="polite">
+            <div class="tourism-discovery-poster__backdrop" data-tourism-discovery-backdrop aria-hidden="true"></div>
+            <div class="tourism-discovery-poster__copy">
+              <small data-tourism-discovery-hook></small>
+              <h2 data-tourism-discovery-headline></h2>
+              <p data-tourism-discovery-body></p>
+            </div>
+          </article>
           {{BANJO_SPONSOR_PLAYER_MARKUP}}
           <div class="video-stage-placeholder"><span>SPIN FOR SOMETHING GREAT</span><small>THE VIDEO STAGE OPENS AFTER THE REEL LANDS</small></div>
           <div class="video-shutter video-shutter--left" aria-hidden="true"></div><div class="video-shutter video-shutter--right" aria-hidden="true"></div>

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -10,7 +11,7 @@ from .banjo import BANJO_TITLE, validate_sponsor_logo, validate_sponsor_mp4
 from .config import MAX_BANJO_VIDEOS, MAX_CHANNEL_MASTER_VIDEOS, ticker_limit_for_project_type
 from .models import (
     BusinessConfig, ChannelMasterConfig, MusicConfig, PrimaryCta, PrimaryCtaType, Project, ProjectType,
-    TourismConfig, WhiteLabelConfig, project_primary_cta, utc_now,
+    TourismConfig, TourismDiscovery, WhiteLabelConfig, project_primary_cta, utc_now,
 )
 from .white_label import prepare_white_label_logo, validate_logo_adjustments
 from .youtube_api import YouTubeClient
@@ -136,6 +137,8 @@ class ProjectFormValues:
     logo_background_removal: str = "auto"
     logo_scale_percent: int = 100
     logo_vertical_position: int = 0
+    tourism_location: str = ""
+    tourism_discoveries: list[TourismDiscovery] = field(default_factory=list)
 
     def comparable(self) -> tuple[object, ...]:
         return (
@@ -167,6 +170,11 @@ class ProjectFormValues:
             self.logo_background_removal,
             int(self.logo_scale_percent),
             int(self.logo_vertical_position),
+            self.tourism_location,
+            tuple(
+                json.dumps(item.to_dict(), sort_keys=True, ensure_ascii=False)
+                for item in self.tourism_discoveries
+            ),
         )
 
 
@@ -403,6 +411,10 @@ def validate_project_form(values: ProjectFormValues, project_type: ProjectType |
                 more_info_url=legacy_more_info_url or None,
                 stay_url=legacy_stay_url or None,
                 primary_cta=primary_cta,
+                destination_title=title,
+                location=str(values.tourism_location or title).strip(),
+                official_tourism_url=destination_url or legacy_more_info_url or None,
+                discoveries=[TourismDiscovery.from_dict(item.to_dict()) for item in values.tourism_discoveries],
             )
         else:
             business_config = None
@@ -576,6 +588,11 @@ def project_to_form_values(project: Project) -> ProjectFormValues:
             if project.project_type is ProjectType.WHITE_LABEL and project.white_label_config
             else 0
         ),
+        tourism_location=project.tourism_config.location if project.tourism_config else "",
+        tourism_discoveries=[
+            TourismDiscovery.from_dict(item.to_dict())
+            for item in (project.tourism_config.discoveries if project.tourism_config else [])
+        ],
     )
 
 
