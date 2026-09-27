@@ -1,0 +1,33 @@
+CRISPY BITS DESKTOP v3.10.1
+================================
+
+LOCAL PICKS RESPONSIVENESS FIX
+
+- Adds a firm wall-clock deadline to every OpenStreetMap and Overpass request.
+- A slow provider can no longer keep the Local Picks operation waiting
+  indefinitely by sending a partial response.
+- The desktop tries the established fallback Overpass endpoints within a
+  bounded overall period and then reports a clear temporary-unavailable error.
+- Timed-out provider work cannot prevent the desktop application from closing.
+
+VISIBLE SEARCH STATE
+
+- The Local Picks panel now displays SEARCHING while discovery is active.
+- The operator is told that the search can take up to about one minute.
+- On failure, the panel reports that the search stopped and the Generate
+  control becomes available again.
+- Existing reviewed Local Picks remain unchanged if a new search fails.
+
+VERIFICATION
+
+- Live Bairnsdale OpenStreetMap discovery completed successfully after the
+  fix, returning 107 raw records, 68 eligible candidates and nine selections.
+- A simulated slow/trickling provider is covered by an automated hard-deadline
+  regression test.
+- Machine mechanics, YouTube discovery, publishing and other Crispy Bits
+  project types are unchanged.
+
+CODE SIGNING
+
+This release contains embedded Windows product and version metadata but is
+unsigned because no trusted code-signing certificate is configured.

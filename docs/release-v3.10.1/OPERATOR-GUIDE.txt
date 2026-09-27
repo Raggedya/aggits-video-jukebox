@@ -1,0 +1,35 @@
+CRISPY BITS DESKTOP v3.10.1 — LOCAL PICKS SEARCH GUIDE
+=======================================================
+
+GENERATE LOCAL PICKS
+
+Enter Location 1 and select GENERATE LOCAL PICKS. The Local Picks panel will
+show SEARCHING while the desktop contacts OpenStreetMap.
+
+Most searches should complete quickly. A busy public provider may require a
+fallback endpoint, so allow up to about one minute.
+
+IF THE PROVIDER IS UNAVAILABLE
+
+The search stops automatically and displays a clear error. Existing saved or
+reviewed Local Picks are preserved. Wait briefly and select GENERATE LOCAL
+PICKS again; no application restart is required.
+
+The desktop does not invent businesses or silently substitute fixture data.
+
+REVIEW
+
+When discovery succeeds, the Local Picks review window opens with up to nine
+suggestions. Review every record and use KEEP, REPLACE, REMOVE or REGENERATE
+ALL before saving.
+
+WEBSITE COVERAGE
+
+OpenStreetMap is community-maintained. If a verified website is unavailable,
+leave the Website URL blank. The public card will omit VIEW.
+
+VERSION NOTE
+
+Projects saved with v3.10.1 should continue to be edited with v3.10.1 or a
+later compatible release unless backward editing has specifically been
+verified.
