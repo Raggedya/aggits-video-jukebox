@@ -1,0 +1,52 @@
+CRISPY BITS DESKTOP v3.10.0 — LOVE MY LOCALS LOCAL PICKS GUIDE
+================================================================
+
+GENERATE
+
+Enter Location 1 and its normal geographic context, then select GENERATE
+LOCAL PICKS. The desktop resolves the place through OpenStreetMap and searches
+the surrounding area through Overpass. No business API key is required.
+
+REVIEW
+
+The review window shows up to nine suggested businesses. All suggestions must
+be reviewed before publication.
+
+- KEEP confirms that the current suggestion remains selected.
+- REPLACE chooses another unused suitable candidate, preferring the same
+  category where possible.
+- REMOVE excludes the suggestion.
+- REGENERATE ALL creates a fresh varied selection from available candidates.
+
+Business Name, Category, Description and Website URL are editable. Keep copy
+short and factual. If a website cannot be verified, leave it blank; the public
+card will then omit VIEW.
+
+SAVE
+
+Select SAVE LOCAL PICKS in the review window, then use the normal Love My
+Locals SAVE control. Local Picks belong to that project and survive close,
+reopen, preview and rebuild.
+
+PREVIEW AND PUBLISH
+
+Preview the complete machine before publishing. Approved Local Picks appear
+beneath SHARE, PLAY VIDEO, EXPLORE and RE-SPIN. The public machine contains
+only stored static records and does not contact OpenStreetMap or perform a
+live business search.
+
+Projects may be published without Local Picks. When no picks exist, the public
+section is omitted completely.
+
+DATA COVERAGE
+
+OpenStreetMap is community-maintained. Some businesses may be absent and many
+records do not include a website. Do not invent missing businesses, URLs or
+claims. Use REPLACE, REMOVE or the editable fields after independent operator
+review.
+
+VERSION NOTE
+
+Projects saved with v3.10.0 should continue to be edited with v3.10.0 or a
+later compatible release unless backward editing has specifically been
+verified.

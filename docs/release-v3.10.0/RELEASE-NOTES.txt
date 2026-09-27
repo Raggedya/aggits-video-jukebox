@@ -1,0 +1,44 @@
+CRISPY BITS DESKTOP v3.10.0
+================================
+
+LOVE MY LOCALS — LOCAL PICKS
+
+- Operators can generate up to nine suggested Local Picks for Location 1.
+- Discovery uses OpenStreetMap, Nominatim and Overpass through the desktop
+  application only. No Google Places account, paid provider or API key is
+  required.
+- Suggestions favour a varied mix of cafes, pubs, restaurants, bakeries,
+  shops, services, takeaway venues and interesting local businesses while
+  suppressing obvious national and international chains.
+- Every suggestion remains subject to operator review before it is saved or
+  published.
+
+REVIEW AND EDITING
+
+- The review window supports KEEP, REPLACE, REMOVE and REGENERATE ALL.
+- Business name, category, factual description and website URL can be edited.
+- OpenStreetMap source identity and generation time remain stored with each
+  record for provenance.
+- Existing Love My Locals projects without Local Picks continue to load and
+  publish unchanged.
+
+PUBLIC MACHINE
+
+- Approved Local Picks are stored with the project and rendered as static
+  content beneath the existing action controls.
+- Three cards are presented per page with restrained cabinet-style navigation.
+- VIEW is shown only for a valid reviewed website URL.
+- No live business lookup, provider key or paid API runs in a public machine.
+- Projects with no Local Picks render no Local Picks section or empty spacing.
+
+PRESERVED
+
+- Love My Locals YouTube discovery, final 50, reel, lever, landing, playback,
+  CTA, QR, social preview, publishing and delivery behaviour are unchanged.
+- Business, Music, Tourism, Banjo, Channel Master, White Label and Trivia are
+  unchanged.
+
+CODE SIGNING
+
+This release contains embedded Windows product and version metadata but is
+unsigned because no trusted code-signing certificate is configured.
