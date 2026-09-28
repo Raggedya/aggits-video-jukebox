@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import json
+import os
 import queue
 import re
 import shutil
 import sys
+import tempfile
 import threading
 import webbrowser
 from concurrent.futures import ThreadPoolExecutor
@@ -23,7 +25,7 @@ if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
 from aggits_video_factory.banjo import BANJO_DEFAULT_SLUG, BANJO_TITLE, materialize_banjo_config, sponsor_media_summary
-from aggits_video_factory.config import APP_NAME, APP_VERSION, MAX_CHANNEL_MASTER_REVIEW_VIDEOS, resource_path, ticker_limit_for_project_type, video_limit_for_project_type
+from aggits_video_factory.config import APP_NAME, APP_VERSION, MAX_CHANNEL_MASTER_REVIEW_VIDEOS, application_data_root, resource_path, ticker_limit_for_project_type, video_limit_for_project_type
 from aggits_video_factory.business_workflow import assemble_reviewed_project
 from aggits_video_factory.campaigns import (
     BulkChannelMasterBuilder,
@@ -51,7 +53,7 @@ from aggits_video_factory.delivery import (
     mark_delivery_result,
     request_delivery,
 )
-from aggits_video_factory.diagnostics import configure_logging, log_directory, open_log_folder
+from aggits_video_factory.diagnostics import close_logging, configure_logging, log_directory, open_log_folder
 from aggits_video_factory.desktop_forms import (
     CTA_CHOICES_BY_PROJECT,
     CTA_LABEL_TO_TYPE_BY_PROJECT,
@@ -66,8 +68,8 @@ from aggits_video_factory.desktop_forms import (
     validate_project_form,
     youtube_urls_for_project_review,
 )
-from aggits_video_factory.models import Project, ProjectType, utc_now
-from aggits_video_factory.models import CHANNEL_MASTER_PALETTES, ChannelMasterConfig, LocalPick, LoveMyLocalsConfig, PrimaryCtaType, TourismDiscovery
+from aggits_video_factory.models import Project, ProjectType, Video, utc_now
+from aggits_video_factory.models import CHANNEL_MASTER_PALETTES, ChannelMasterConfig, LocalPick, LoveMyLocalsConfig, PrimaryCta, PrimaryCtaType, TourismDiscovery
 from aggits_video_factory.local_picks import (
     LocalPicksDiscovery,
     LocalPicksError,
@@ -3341,8 +3343,113 @@ def smoke_test() -> None:
     print(f"{APP_NAME} v{APP_VERSION} resources OK")
 
 
+def functional_smoke_test() -> None:
+    """Exercise packaged Desktop forms and Channel Master preview persistence in isolation."""
+    previous_local_app_data = os.environ.get("LOCALAPPDATA")
+    with tempfile.TemporaryDirectory(prefix="crispy-bits-packaged-qa-") as temporary:
+        os.environ["LOCALAPPDATA"] = temporary
+        store = ProjectStore(application_data_root())
+        source = Path(temporary) / "channel-master-preview.png"
+        replacement = Path(temporary) / "channel-master-preview-replacement.webp"
+        Image.new("RGB", (1200, 630), (18, 41, 73)).save(source, format="PNG")
+        Image.new("RGB", (1200, 630), (22, 92, 68)).save(replacement, format="WEBP")
+        project_dir = store.project_dir("packaged-channel-master-qa")
+        reference = materialize_url_preview_image(str(source), project_dir)
+        project = Project(
+            slug="packaged-channel-master-qa",
+            title="PACKAGED CHANNEL MASTER QA",
+            ticker_text="PACKAGED QA",
+            channel_url="https://www.youtube.com/channel/UCqa",
+            channel_id="UCqa",
+            channel_title="QA Channel",
+            channel_thumbnail="",
+            project_type=ProjectType.CHANNEL_MASTER,
+            channel_master_config=ChannelMasterConfig(
+                palette="MIDNIGHT",
+                primary_cta=PrimaryCta(PrimaryCtaType.VISIT_WEBSITE, "https://example.com"),
+                url_preview_image=reference,
+            ),
+            videos=[Video(
+                video_id="qa000000001",
+                title="QA Video",
+                display_title="QA Video",
+                url="https://www.youtube.com/watch?v=qa000000001",
+                embed_url="https://www.youtube.com/embed/qa000000001",
+                thumbnail_url="",
+                published_at="2026-09-29T00:00:00Z",
+                duration_seconds=90,
+                channel_title="QA Channel",
+            )],
+        )
+        build_project_site(project, project_dir / "site")
+        store.save_project(project)
+        app = Factory()
+        app.withdraw()
+        try:
+            expected_tabs = {
+                "BUSINESS", "MUSIC", "TOURISM", "BANJO", "CHANNEL MASTER",
+                "WHITE LABEL", "LOVE MY LOCALS", "BULK UPLOAD",
+            }
+            actual_tabs = {app.notebook.tab(tab_id, "text") for tab_id in app.notebook.tabs()}
+            if actual_tabs != expected_tabs:
+                raise RuntimeError(f"Packaged Desktop tab smoke failed: {sorted(actual_tabs)}")
+            form = app.forms[ProjectType.CHANNEL_MASTER]
+            if not isinstance(form, ProjectForm) or "url_preview_image" not in form.field_widgets:
+                raise RuntimeError("Packaged Channel Master URL Preview Image control is missing.")
+            for width, height in ((1320, 820), (1120, 720)):
+                app.geometry(f"{width}x{height}")
+                app.update_idletasks()
+                if form.winfo_reqwidth() <= 0 or form.winfo_reqheight() <= 0:
+                    raise RuntimeError("Packaged Channel Master form layout smoke failed.")
+            restored = ProjectStore().load_project(project.slug)
+            form.load_project(restored)
+            if form.url_preview_image_var.get() != reference:
+                raise RuntimeError("Packaged Channel Master preview did not survive Save/Reload.")
+            form.url_preview_image_var.set(str(replacement))
+            form._update_url_preview_image_display()
+            if form.url_preview_filename_label.cget("text") != replacement.name:
+                raise RuntimeError("Packaged Channel Master replacement preview was not displayed.")
+            validated = validate_project_form(form.values(), ProjectType.CHANNEL_MASTER)
+            replacement_reference = materialize_url_preview_image(
+                validated.channel_master_config.url_preview_image,
+                project_dir,
+            )
+            restored.channel_master_config = validated.channel_master_config
+            restored.channel_master_config.url_preview_image = replacement_reference
+            store.save_project(restored)
+            reloaded = ProjectStore().load_project(project.slug)
+            if reloaded.channel_master_config.url_preview_image != replacement_reference:
+                raise RuntimeError("Packaged Channel Master replacement did not survive Save/Reload.")
+            form.load_project(reloaded)
+            form._remove_url_preview_image()
+            cleared = validate_project_form(form.values(), ProjectType.CHANNEL_MASTER)
+            cleared_reference = materialize_url_preview_image(
+                cleared.channel_master_config.url_preview_image,
+                project_dir,
+            )
+            reloaded.channel_master_config = cleared.channel_master_config
+            reloaded.channel_master_config.url_preview_image = cleared_reference
+            store.save_project(reloaded)
+            if ProjectStore().load_project(project.slug).channel_master_config.url_preview_image:
+                raise RuntimeError("Packaged Channel Master REMOVE did not persist.")
+        finally:
+            app.preview_server.stop()
+            if app._async_poll_id is not None:
+                app.after_cancel(app._async_poll_id)
+                app._async_poll_id = None
+            app.destroy()
+            close_logging(app.store.root)
+    if previous_local_app_data is None:
+        os.environ.pop("LOCALAPPDATA", None)
+    else:
+        os.environ["LOCALAPPDATA"] = previous_local_app_data
+    print(f"{APP_NAME} v{APP_VERSION} functional smoke OK")
+
+
 if __name__ == "__main__":
     if "--smoke-test" in sys.argv:
         smoke_test()
+    elif "--functional-smoke-test" in sys.argv:
+        functional_smoke_test()
     else:
         Factory().mainloop()

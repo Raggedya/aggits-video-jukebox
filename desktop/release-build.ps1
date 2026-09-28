@@ -89,6 +89,8 @@ if (-not (Test-Path -LiteralPath $builtExe -PathType Leaf)) { throw "Final execu
 
 $smoke = Start-Process -FilePath $builtExe -ArgumentList "--smoke-test" -WindowStyle Hidden -Wait -PassThru
 if ($smoke.ExitCode -ne 0) { throw "Packaged-resource smoke test failed with exit code $($smoke.ExitCode)." }
+$functionalSmoke = Start-Process -FilePath $builtExe -ArgumentList "--functional-smoke-test" -WindowStyle Hidden -Wait -PassThru
+if ($functionalSmoke.ExitCode -ne 0) { throw "Packaged functional smoke test failed with exit code $($functionalSmoke.ExitCode)." }
 
 $info = (Get-Item -LiteralPath $builtExe).VersionInfo
 if ($info.ProductName -ne "CRISPY BITS DESKTOP") { throw "Incorrect ProductName: $($info.ProductName)" }
@@ -104,6 +106,8 @@ Copy-Item -LiteralPath (Join-Path $releaseDocs "OPERATOR-GUIDE.txt") -Destinatio
 
 $releaseSmoke = Start-Process -FilePath $releaseExe -ArgumentList "--smoke-test" -WindowStyle Hidden -Wait -PassThru
 if ($releaseSmoke.ExitCode -ne 0) { throw "Copied release executable smoke test failed with exit code $($releaseSmoke.ExitCode)." }
+$releaseFunctionalSmoke = Start-Process -FilePath $releaseExe -ArgumentList "--functional-smoke-test" -WindowStyle Hidden -Wait -PassThru
+if ($releaseFunctionalSmoke.ExitCode -ne 0) { throw "Copied release executable functional smoke test failed with exit code $($releaseFunctionalSmoke.ExitCode)." }
 
 $manifest = Join-Path $releaseRoot "RELEASE-MANIFEST.txt"
 Invoke-Checked {
