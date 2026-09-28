@@ -501,6 +501,7 @@ class ChannelMasterConfig:
     resolved_accent: str = ""
     primary_cta: PrimaryCta | None = None
     contact_url: str | None = None
+    url_preview_image: str = ""
     extra_fields: dict[str, Any] = field(default_factory=dict, repr=False)
 
     def __post_init__(self) -> None:
@@ -532,6 +533,7 @@ class ChannelMasterConfig:
         self.resolved_secondary = secondary
         self.resolved_accent = accent
         self.contact_url = _optional_http_url(self.contact_url, "Contact URL")
+        self.url_preview_image = str(self.url_preview_image or "").strip().replace("\\", "/")
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -544,6 +546,7 @@ class ChannelMasterConfig:
             "resolved_accent": self.resolved_accent,
             "primary_cta": self.primary_cta.to_dict() if self.primary_cta else None,
             "contact_url": self.contact_url,
+            "url_preview_image": self.url_preview_image,
         }
 
     @classmethod
@@ -556,6 +559,7 @@ class ChannelMasterConfig:
             "palette", "custom_primary", "customPrimary", "custom_accent", "customAccent",
             "resolved_primary", "resolvedPrimary", "resolved_secondary", "resolvedSecondary",
             "resolved_accent", "resolvedAccent", "primary_cta", "primaryCta", "contact_url", "contactUrl",
+            "url_preview_image", "urlPreviewImage",
         }
         return cls(
             palette=str(source.get("palette") or "MIDNIGHT"),
@@ -566,6 +570,7 @@ class ChannelMasterConfig:
             resolved_accent=str(source.get("resolved_accent", source.get("resolvedAccent")) or ""),
             primary_cta=PrimaryCta.from_dict(cta) if isinstance(cta, dict) else None,
             contact_url=source.get("contact_url", source.get("contactUrl")),
+            url_preview_image=str(source.get("url_preview_image", source.get("urlPreviewImage")) or ""),
             extra_fields=_extra_fields(source, known),
         )
 

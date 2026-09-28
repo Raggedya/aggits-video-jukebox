@@ -38,6 +38,11 @@ from aggits_video_factory.campaigns import (
     ResearchUnavailableError,
 )
 from aggits_video_factory.campaign_delivery import CampaignWorkerTransport
+from aggits_video_factory.channel_master_preview import (
+    MAX_URL_PREVIEW_IMAGE_BYTES,
+    inspect_url_preview_image,
+    materialize_url_preview_image,
+)
 from aggits_video_factory.delivery import (
     DeliveryError,
     delivery_intent_matches,
@@ -157,6 +162,7 @@ class ProjectForm(tk.Frame):
         self.custom_primary_var = tk.StringVar(value="#172033")
         self.custom_accent_var = tk.StringVar(value="#6D80AF")
         self.contact_url_var = tk.StringVar()
+        self.url_preview_image_var = tk.StringVar()
         self.custom_logo_var = tk.StringVar()
         self.custom_logo_background_var = tk.StringVar(value="AUTO")
         self.custom_logo_scale_var = tk.IntVar(value=100)
@@ -164,6 +170,7 @@ class ProjectForm(tk.Frame):
         self.tourism_location_var = tk.StringVar()
         self.tourism_discoveries: list[TourismDiscovery] = []
         self._custom_logo_preview_image: ImageTk.PhotoImage | None = None
+        self._url_preview_thumbnail_image: ImageTk.PhotoImage | None = None
         self.field_widgets: dict[str, tk.Widget] = {}
         row = 1
         row = self._entry_row(row, "Destination Title" if self.project_type is ProjectType.TOURISM else "Title", self.title_var, "title")
@@ -547,8 +554,108 @@ class ProjectForm(tk.Frame):
             swatch.pack(side="left", padx=2)
         row += 1
         row = self._entry_row(row, "Contact URL", self.contact_url_var, "contact_url")
+        if self.project_type is ProjectType.CHANNEL_MASTER:
+            row = self._build_url_preview_image_field(row)
         self._update_palette_preview()
         return row
+
+    def _build_url_preview_image_field(self, row: int) -> int:
+        tk.Label(self, text="URL Preview Image", bg=PANEL, fg=CREAM, anchor="ne", font=("Segoe UI", 9)).grid(
+            row=row, column=0, sticky="ne", padx=(22, 12), pady=5,
+        )
+        shell = tk.Frame(self, bg=PANEL)
+        shell.grid(row=row, column=1, sticky="ew", padx=(0, 22), pady=5)
+        shell.columnconfigure(0, weight=1)
+        self.url_preview_thumbnail = tk.Canvas(
+            shell, width=120, height=63, bg="#0b0d11", bd=0,
+            highlightbackground=DEEP_BRASS, highlightthickness=1,
+        )
+        self.url_preview_thumbnail.grid(row=0, column=0, rowspan=3, sticky="w", padx=(0, 10))
+        self.url_preview_filename_label = tk.Label(
+            shell, text="NO IMAGE SELECTED", bg=PANEL, fg=CREAM,
+            anchor="w", justify="left", font=("Segoe UI Semibold", 8),
+        )
+        self.url_preview_filename_label.grid(row=0, column=1, columnspan=2, sticky="ew")
+        self.url_preview_details_label = tk.Label(
+            shell, text="", bg=PANEL, fg=MUTED, anchor="w", justify="left", font=("Segoe UI", 8),
+        )
+        self.url_preview_details_label.grid(row=1, column=1, columnspan=2, sticky="ew")
+        self.url_preview_select_button = tk.Button(
+            shell, text="SELECT IMAGE", command=self._choose_url_preview_image,
+            bg=PANEL_2, fg=CREAM, activebackground="#303641", activeforeground=PAPER,
+            relief="flat", bd=0, font=("Segoe UI Semibold", 8), padx=10, pady=7, cursor="hand2",
+        )
+        self.url_preview_select_button.grid(row=2, column=1, sticky="w", pady=(5, 0))
+        self.url_preview_remove_button = tk.Button(
+            shell, text="REMOVE", command=self._remove_url_preview_image,
+            bg=PANEL_2, fg=CREAM, activebackground="#303641", activeforeground=PAPER,
+            relief="flat", bd=0, font=("Segoe UI Semibold", 8), padx=10, pady=7, cursor="hand2",
+        )
+        self.url_preview_remove_button.grid(row=2, column=2, sticky="w", padx=(7, 0), pady=(5, 0))
+        tk.Label(
+            shell, text="RECOMMENDED: 1200 × 630 PX", bg=PANEL, fg=MUTED,
+            anchor="w", font=("Segoe UI Semibold", 8),
+        ).grid(row=3, column=0, columnspan=3, sticky="ew", pady=(6, 0))
+        self.field_widgets["url_preview_image"] = self.url_preview_select_button
+        self._update_url_preview_image_display()
+        return row + 1
+
+    def _choose_url_preview_image(self) -> None:
+        selected = filedialog.askopenfilename(
+            parent=self,
+            title="Select URL Preview Image",
+            filetypes=(
+                ("Supported images", "*.png *.jpg *.jpeg *.webp"),
+                ("PNG", "*.png"),
+                ("JPEG", "*.jpg *.jpeg"),
+                ("WebP", "*.webp"),
+            ),
+        )
+        if not selected:
+            return
+        try:
+            inspect_url_preview_image(Path(selected))
+        except ValueError as error:
+            messagebox.showerror("URL Preview Image", str(error), parent=self)
+            return
+        self.url_preview_image_var.set(selected)
+        self._update_url_preview_image_display()
+
+    def _remove_url_preview_image(self) -> None:
+        self.url_preview_image_var.set("")
+        self._update_url_preview_image_display()
+
+    def _update_url_preview_image_display(self) -> None:
+        if self.project_type is not ProjectType.CHANNEL_MASTER or not hasattr(self, "url_preview_thumbnail"):
+            return
+        self.url_preview_thumbnail.delete("all")
+        self._url_preview_thumbnail_image = None
+        raw = self.url_preview_image_var.get().strip()
+        if not raw:
+            self.url_preview_filename_label.configure(text="NO IMAGE SELECTED")
+            self.url_preview_details_label.configure(text=f"PNG, JPG, JPEG OR WEBP · MAX {MAX_URL_PREVIEW_IMAGE_BYTES // (1024 * 1024)} MB")
+            self.url_preview_remove_button.configure(state="disabled")
+            self.url_preview_thumbnail.create_text(60, 31, text="NO IMAGE", fill=MUTED, font=("Segoe UI Semibold", 8))
+            return
+        self.url_preview_remove_button.configure(state="normal")
+        self.url_preview_filename_label.configure(text=Path(raw).name)
+        source = Path(raw)
+        if not source.is_absolute() or not source.is_file():
+            self.url_preview_details_label.configure(text="STORED WITH PROJECT")
+            self.url_preview_thumbnail.create_text(60, 31, text="PROJECT\nIMAGE", fill=MUTED, font=("Segoe UI Semibold", 8), justify="center")
+            return
+        try:
+            info = inspect_url_preview_image(source)
+            with Image.open(source) as image:
+                preview = ImageOps.contain(image.convert("RGB"), (116, 59), method=Image.Resampling.LANCZOS)
+            self._url_preview_thumbnail_image = ImageTk.PhotoImage(preview)
+            self.url_preview_thumbnail.create_image(60, 31, image=self._url_preview_thumbnail_image, anchor="center")
+            self.url_preview_details_label.configure(
+                text=f"{info.width} × {info.height} · {info.file_size / 1024:.0f} KB",
+            )
+        except (OSError, ValueError):
+            self.url_preview_details_label.configure(text="IMAGE UNAVAILABLE — SELECT A REPLACEMENT")
+            self.url_preview_thumbnail.create_text(60, 31, text="UNAVAILABLE", fill=ERROR, font=("Segoe UI Semibold", 8))
 
     def _update_palette_preview(self) -> None:
         if self.project_type not in {ProjectType.CHANNEL_MASTER, ProjectType.WHITE_LABEL} or not hasattr(self, "palette_swatches"):
@@ -888,6 +995,7 @@ class ProjectForm(tk.Frame):
             logo_vertical_position=self.custom_logo_vertical_var.get(),
             tourism_location=self.tourism_location_var.get(),
             tourism_discoveries=[TourismDiscovery.from_dict(item.to_dict()) for item in self.tourism_discoveries],
+            url_preview_image=(self.url_preview_image_var.get() if self.project_type is ProjectType.CHANNEL_MASTER else ""),
         )
 
     def set_values(self, values: ProjectFormValues) -> None:
@@ -924,6 +1032,7 @@ class ProjectForm(tk.Frame):
         self.custom_primary_var.set(values.custom_primary)
         self.custom_accent_var.set(values.custom_accent)
         self.contact_url_var.set(values.contact_url)
+        self.url_preview_image_var.set(values.url_preview_image)
         self.custom_logo_var.set(values.custom_logo_path)
         self.custom_logo_background_var.set(values.logo_background_removal.upper())
         self.custom_logo_scale_var.set(values.logo_scale_percent)
@@ -937,6 +1046,7 @@ class ProjectForm(tk.Frame):
         self._toggle_manual(force=bool([url for url in values.manual_video_urls if url]))
         self._update_custom_visibility()
         self._update_palette_preview()
+        self._update_url_preview_image_display()
         self._update_white_label_logo_preview()
         self.clear_validation()
 
@@ -998,6 +1108,7 @@ class ProjectForm(tk.Frame):
             logo_vertical_position=int(self._baseline[27]),
             tourism_location=str(self._baseline[28]),
             tourism_discoveries=[TourismDiscovery.from_dict(json.loads(value)) for value in self._baseline[29]],
+            url_preview_image=str(self._baseline[30]),
         )
         self.set_values(values)
         self.mark_clean()
@@ -2912,6 +3023,11 @@ class Factory(tk.Tk):
                 banjo_config=banjo_config,
                 white_label_config=white_label_config,
             )
+            if project_type is ProjectType.CHANNEL_MASTER and project.channel_master_config:
+                project.channel_master_config.url_preview_image = materialize_url_preview_image(
+                    project.channel_master_config.url_preview_image,
+                    project_dir,
+                )
             if project_type is ProjectType.TOURISM and project.tourism_config:
                 discovery_assets = project_dir / "assets"
                 discovery_assets.mkdir(parents=True, exist_ok=True)

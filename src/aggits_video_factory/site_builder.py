@@ -14,6 +14,7 @@ from qrcode.constants import ERROR_CORRECT_H
 
 from .config import BANJO_SUBMISSION_ENDPOINT, BRAND_NAME, PUBLIC_BASE_URL, resource_path
 from .banjo import BANJO_TITLE, validate_sponsor_logo, validate_sponsor_mp4, verify_banjo_character
+from .channel_master_preview import package_url_preview_image, remove_packaged_url_preview_images
 from .models import Project, ProjectType, project_primary_cta
 from .social_preview import (
     BANJO_SOCIAL_PREVIEW_SIZE,
@@ -346,7 +347,21 @@ def build_project_site(project: Project, destination: Path) -> Path:
     )
     if not str(public_social_title or "").strip():
         raise ValueError("Love My Locals publishing requires a Public Title or Location 1.")
-    social_filename = social_preview_filename(public_social_title, project.project_type)
+    custom_social_image = None
+    if (
+        project.project_type is ProjectType.CHANNEL_MASTER
+        and channel_master_config
+        and channel_master_config.url_preview_image
+    ):
+        custom_social_image = package_url_preview_image(
+            channel_master_config.url_preview_image,
+            destination.parent,
+            destination,
+        )
+        social_filename = custom_social_image.asset_filename
+    else:
+        remove_packaged_url_preview_images(destination)
+        social_filename = social_preview_filename(public_social_title, project.project_type)
     social_url = f"{canonical.rstrip('/')}/{social_filename}"
     included_videos = included_project_videos(project)
     if not included_videos:
@@ -360,7 +375,11 @@ def build_project_site(project: Project, destination: Path) -> Path:
         f"Hit it. Discover {social_title}." if channel_product
         else f"Hit it. Discover {social_title} with Crispy Bits."
     )
-    if project.project_type is ProjectType.BANJO:
+    if custom_social_image:
+        social_image_type = custom_social_image.media_type
+        social_image_width, social_image_height = custom_social_image.width, custom_social_image.height
+        social_image_alt = f"{social_title} URL preview"
+    elif project.project_type is ProjectType.BANJO:
         social_image_type = "image/png"
         social_image_width, social_image_height = BANJO_SOCIAL_PREVIEW_SIZE
         social_image_alt = "Fresh Video Update — Banjo's World of Cars"
@@ -848,5 +867,10 @@ def build_project_site(project: Project, destination: Path) -> Path:
         }
     (destination / "machine.json").write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     create_qr_card(project, destination / "qr-card.png")
-    replace_social_preview(public_social_title, destination, project.project_type)
+    if custom_social_image:
+        for stale in destination.glob("social-card-*"):
+            if stale.is_file():
+                stale.unlink()
+    else:
+        replace_social_preview(public_social_title, destination, project.project_type)
     return destination / "index.html"

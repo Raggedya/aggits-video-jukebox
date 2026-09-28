@@ -8,6 +8,7 @@ from typing import Iterable
 from uuid import uuid4
 
 from .banjo import BANJO_TITLE, validate_sponsor_logo, validate_sponsor_mp4
+from .channel_master_preview import inspect_url_preview_image
 from .config import MAX_BANJO_VIDEOS, MAX_CHANNEL_MASTER_VIDEOS, ticker_limit_for_project_type
 from .models import (
     BusinessConfig, ChannelMasterConfig, MusicConfig, PrimaryCta, PrimaryCtaType, Project, ProjectType,
@@ -139,6 +140,7 @@ class ProjectFormValues:
     logo_vertical_position: int = 0
     tourism_location: str = ""
     tourism_discoveries: list[TourismDiscovery] = field(default_factory=list)
+    url_preview_image: str = ""
 
     def comparable(self) -> tuple[object, ...]:
         return (
@@ -175,6 +177,7 @@ class ProjectFormValues:
                 json.dumps(item.to_dict(), sort_keys=True, ensure_ascii=False)
                 for item in self.tourism_discoveries
             ),
+            self.url_preview_image,
         )
 
 
@@ -420,12 +423,21 @@ def validate_project_form(values: ProjectFormValues, project_type: ProjectType |
             business_config = None
             music_config = None
             tourism_config = None
+            preview_reference = str(values.url_preview_image or "").strip()
+            if project_type is ProjectType.CHANNEL_MASTER and preview_reference:
+                normalised_preview = preview_reference.replace("\\", "/")
+                if not normalised_preview.startswith("assets/channel-master-url-preview-"):
+                    try:
+                        inspect_url_preview_image(Path(preview_reference))
+                    except ValueError as error:
+                        raise FormValidationError("url_preview_image", str(error)) from error
             channel_master_config = ChannelMasterConfig(
                 palette=values.palette,
                 custom_primary=values.custom_primary,
                 custom_accent=values.custom_accent,
                 primary_cta=primary_cta,
                 contact_url=values.contact_url,
+                url_preview_image=(preview_reference if project_type is ProjectType.CHANNEL_MASTER else ""),
             )
             if project_type is ProjectType.WHITE_LABEL:
                 logo_path = str(values.custom_logo_path or "").strip()
@@ -593,6 +605,11 @@ def project_to_form_values(project: Project) -> ProjectFormValues:
             TourismDiscovery.from_dict(item.to_dict())
             for item in (project.tourism_config.discoveries if project.tourism_config else [])
         ],
+        url_preview_image=(
+            channel_master.url_preview_image
+            if project.project_type is ProjectType.CHANNEL_MASTER and channel_master
+            else ""
+        ),
     )
 
 
