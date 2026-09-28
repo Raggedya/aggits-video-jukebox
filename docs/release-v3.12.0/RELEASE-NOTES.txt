@@ -1,0 +1,34 @@
+CRISPY BITS DESKTOP v3.12.0
+================================
+
+CHANNEL MASTER URL PREVIEW IMAGE
+
+- Adds one optional project-specific URL PREVIEW IMAGE to Channel Master.
+- Supports validated PNG, JPG/JPEG and WebP images up to 5 MB.
+- Imports the selected image into project-controlled assets, so the original
+  Windows file can be moved or deleted after the project is saved.
+- Publishes standards-based Open Graph and Twitter/X large-image metadata using
+  the operator-selected image without displaying it inside the machine.
+- Uses content-hashed asset filenames so replacing an image changes the public
+  image URL while the machine URL and QR destination remain stable.
+
+DESKTOP AUTHORING
+
+- Adds SELECT IMAGE and REMOVE controls, filename, image dimensions, file size,
+  thumbnail preview and 1200 x 630 recommendation to Channel Master only.
+- Existing Channel Master projects remain compatible and require no migration.
+- Projects without a custom URL preview image continue to use the established
+  generated social preview.
+
+VERIFICATION
+
+- PNG, JPG/JPEG, WebP, invalid-image, fake-extension, 5 MB limit, save/reload,
+  replacement, removal, multi-project isolation and local-path leakage checks
+  are covered by automated tests.
+- Business, Music, Tourism, Banjo, White Label and Love My Locals remain
+  unchanged.
+
+CODE SIGNING
+
+This release contains embedded Windows product and version metadata but is
+unsigned because no trusted code-signing certificate is configured.

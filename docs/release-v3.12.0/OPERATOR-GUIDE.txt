@@ -1,0 +1,47 @@
+CRISPY BITS DESKTOP v3.12.0 — CHANNEL MASTER URL PREVIEW IMAGE
+================================================================
+
+SELECT A PREVIEW IMAGE
+
+Create or open a CHANNEL MASTER project. In CHANNEL MASTER APPEARANCE + CONTACT,
+find URL PREVIEW IMAGE and select SELECT IMAGE.
+
+Supported formats:
+
+- PNG
+- JPG / JPEG
+- WebP
+
+Maximum size: 5 MB.
+
+The recommended social-sharing format is 1200 x 630 pixels. Other valid image
+dimensions are accepted without stretching or recompression.
+
+SAVE AND PUBLISH
+
+The selected file is copied into project-controlled assets when the project is
+saved. The original Windows file is no longer required. Previewing or building
+does not place this image inside the visible Channel Master machine.
+
+Publish or Update + Republish when ready. Compatible social and messaging
+platforms can then read the image from the machine's Open Graph and Twitter/X
+metadata. External platforms may retain their own metadata cache, so a newly
+published image may not appear immediately everywhere.
+
+REPLACE OR REMOVE
+
+Select another image to replace the current one, or choose REMOVE to return to
+the standard generated preview. Save the project, then deliberately republish
+if it is already live. Changing this image does not change the project UUID,
+slug, public machine URL or QR destination.
+
+PROJECT ISOLATION
+
+Each Channel Master project stores its own preview image. This control is not
+added to Business, Music, Tourism, Banjo, White Label or Love My Locals.
+
+VERSION NOTE
+
+Existing Channel Master projects open normally with no preview image selected.
+Projects saved with v3.12.0 should be edited with v3.12.0 or a later compatible
+release unless backward editing has specifically been tested.
