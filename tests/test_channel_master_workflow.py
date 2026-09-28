@@ -462,6 +462,7 @@ class ChannelMasterWorkflowTests(unittest.TestCase):
                 "title", "channel_url", "additional_urls", "story_text", "cta_type",
                 "destination_url", "custom_label", "palette", "custom_primary",
                 "custom_accent", "contact_url", "url_preview_image", "manual_video_urls",
+                "intro_mp4",
             ):
                 self.assertIn(field, form.field_widgets)
             self.assertNotIn("banjo_choices", form.field_widgets)

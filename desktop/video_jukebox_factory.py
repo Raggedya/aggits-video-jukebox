@@ -25,7 +25,7 @@ if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
 from aggits_video_factory.banjo import BANJO_DEFAULT_SLUG, BANJO_TITLE, materialize_banjo_config, sponsor_media_summary
-from aggits_video_factory.config import APP_NAME, APP_VERSION, MAX_CHANNEL_MASTER_REVIEW_VIDEOS, application_data_root, resource_path, ticker_limit_for_project_type, video_limit_for_project_type
+from aggits_video_factory.config import APP_NAME, APP_VERSION, MAX_CHANNEL_MASTER_INTRO_MP4_BYTES, MAX_CHANNEL_MASTER_REVIEW_VIDEOS, application_data_root, resource_path, ticker_limit_for_project_type, video_limit_for_project_type
 from aggits_video_factory.business_workflow import assemble_reviewed_project
 from aggits_video_factory.campaigns import (
     BulkChannelMasterBuilder,
@@ -45,6 +45,7 @@ from aggits_video_factory.channel_master_preview import (
     inspect_url_preview_image,
     materialize_url_preview_image,
 )
+from aggits_video_factory.channel_master_intro import inspect_intro_mp4, materialize_intro_mp4
 from aggits_video_factory.delivery import (
     DeliveryError,
     delivery_intent_matches,
@@ -165,6 +166,7 @@ class ProjectForm(tk.Frame):
         self.custom_accent_var = tk.StringVar(value="#6D80AF")
         self.contact_url_var = tk.StringVar()
         self.url_preview_image_var = tk.StringVar()
+        self.intro_mp4_var = tk.StringVar()
         self.custom_logo_var = tk.StringVar()
         self.custom_logo_background_var = tk.StringVar(value="AUTO")
         self.custom_logo_scale_var = tk.IntVar(value=100)
@@ -558,6 +560,7 @@ class ProjectForm(tk.Frame):
         row = self._entry_row(row, "Contact URL", self.contact_url_var, "contact_url")
         if self.project_type is ProjectType.CHANNEL_MASTER:
             row = self._build_url_preview_image_field(row)
+            row = self._build_intro_mp4_field(row)
         self._update_palette_preview()
         return row
 
@@ -658,6 +661,83 @@ class ProjectForm(tk.Frame):
         except (OSError, ValueError):
             self.url_preview_details_label.configure(text="IMAGE UNAVAILABLE — SELECT A REPLACEMENT")
             self.url_preview_thumbnail.create_text(60, 31, text="UNAVAILABLE", fill=ERROR, font=("Segoe UI Semibold", 8))
+
+    def _build_intro_mp4_field(self, row: int) -> int:
+        tk.Label(self, text="Intro MP4", bg=PANEL, fg=CREAM, anchor="ne", font=("Segoe UI", 9)).grid(
+            row=row, column=0, sticky="ne", padx=(22, 12), pady=5,
+        )
+        shell = tk.Frame(self, bg=PANEL)
+        shell.grid(row=row, column=1, sticky="ew", padx=(0, 22), pady=5)
+        shell.columnconfigure(0, weight=1)
+        self.intro_mp4_filename_label = tk.Label(
+            shell, text="NO MP4 SELECTED", bg=PANEL, fg=CREAM,
+            anchor="w", justify="left", font=("Segoe UI Semibold", 8),
+        )
+        self.intro_mp4_filename_label.grid(row=0, column=0, columnspan=2, sticky="ew")
+        self.intro_mp4_details_label = tk.Label(
+            shell, text="", bg=PANEL, fg=MUTED, anchor="w", justify="left", font=("Segoe UI", 8),
+        )
+        self.intro_mp4_details_label.grid(row=1, column=0, columnspan=2, sticky="ew")
+        self.intro_mp4_select_button = tk.Button(
+            shell, text="SELECT MP4", command=self._choose_intro_mp4,
+            bg=PANEL_2, fg=CREAM, activebackground="#303641", activeforeground=PAPER,
+            relief="flat", bd=0, font=("Segoe UI Semibold", 8), padx=10, pady=7, cursor="hand2",
+        )
+        self.intro_mp4_select_button.grid(row=2, column=0, sticky="w", pady=(5, 0))
+        self.intro_mp4_remove_button = tk.Button(
+            shell, text="REMOVE", command=self._remove_intro_mp4,
+            bg=PANEL_2, fg=CREAM, activebackground="#303641", activeforeground=PAPER,
+            relief="flat", bd=0, font=("Segoe UI Semibold", 8), padx=10, pady=7, cursor="hand2",
+        )
+        self.intro_mp4_remove_button.grid(row=2, column=1, sticky="w", padx=(7, 0), pady=(5, 0))
+        tk.Label(
+            shell, text="OPTIONAL OPENING VIDEO — VIEWER IS PROMPTED TO PLAY", bg=PANEL, fg=MUTED,
+            anchor="w", font=("Segoe UI Semibold", 8),
+        ).grid(row=3, column=0, columnspan=2, sticky="ew", pady=(6, 0))
+        self.field_widgets["intro_mp4"] = self.intro_mp4_select_button
+        self._update_intro_mp4_display()
+        return row + 1
+
+    def _choose_intro_mp4(self) -> None:
+        selected = filedialog.askopenfilename(
+            parent=self, title="Select Optional Intro MP4", filetypes=(("MP4 video", "*.mp4"),),
+        )
+        if not selected:
+            return
+        try:
+            inspect_intro_mp4(Path(selected))
+        except ValueError as error:
+            messagebox.showerror("Intro MP4", str(error), parent=self)
+            return
+        self.intro_mp4_var.set(selected)
+        self._update_intro_mp4_display()
+
+    def _remove_intro_mp4(self) -> None:
+        self.intro_mp4_var.set("")
+        self._update_intro_mp4_display()
+
+    def _update_intro_mp4_display(self) -> None:
+        if self.project_type is not ProjectType.CHANNEL_MASTER or not hasattr(self, "intro_mp4_filename_label"):
+            return
+        raw = self.intro_mp4_var.get().strip()
+        if not raw:
+            self.intro_mp4_filename_label.configure(text="NO MP4 SELECTED")
+            self.intro_mp4_details_label.configure(
+                text=f"MP4 ONLY · MAX {MAX_CHANNEL_MASTER_INTRO_MP4_BYTES // (1024 * 1024)} MB",
+            )
+            self.intro_mp4_remove_button.configure(state="disabled")
+            return
+        self.intro_mp4_remove_button.configure(state="normal")
+        self.intro_mp4_filename_label.configure(text=Path(raw).name)
+        source = Path(raw)
+        if not source.is_absolute() or not source.is_file():
+            self.intro_mp4_details_label.configure(text="STORED WITH PROJECT")
+            return
+        try:
+            info = inspect_intro_mp4(source)
+            self.intro_mp4_details_label.configure(text=f"{info.file_size / (1024 * 1024):.2f} MB")
+        except (OSError, ValueError):
+            self.intro_mp4_details_label.configure(text="MP4 UNAVAILABLE — SELECT A REPLACEMENT")
 
     def _update_palette_preview(self) -> None:
         if self.project_type not in {ProjectType.CHANNEL_MASTER, ProjectType.WHITE_LABEL} or not hasattr(self, "palette_swatches"):
@@ -998,6 +1078,7 @@ class ProjectForm(tk.Frame):
             tourism_location=self.tourism_location_var.get(),
             tourism_discoveries=[TourismDiscovery.from_dict(item.to_dict()) for item in self.tourism_discoveries],
             url_preview_image=(self.url_preview_image_var.get() if self.project_type is ProjectType.CHANNEL_MASTER else ""),
+            intro_mp4=(self.intro_mp4_var.get() if self.project_type is ProjectType.CHANNEL_MASTER else ""),
         )
 
     def set_values(self, values: ProjectFormValues) -> None:
@@ -1035,6 +1116,7 @@ class ProjectForm(tk.Frame):
         self.custom_accent_var.set(values.custom_accent)
         self.contact_url_var.set(values.contact_url)
         self.url_preview_image_var.set(values.url_preview_image)
+        self.intro_mp4_var.set(values.intro_mp4)
         self.custom_logo_var.set(values.custom_logo_path)
         self.custom_logo_background_var.set(values.logo_background_removal.upper())
         self.custom_logo_scale_var.set(values.logo_scale_percent)
@@ -1049,6 +1131,7 @@ class ProjectForm(tk.Frame):
         self._update_custom_visibility()
         self._update_palette_preview()
         self._update_url_preview_image_display()
+        self._update_intro_mp4_display()
         self._update_white_label_logo_preview()
         self.clear_validation()
 
@@ -1111,6 +1194,7 @@ class ProjectForm(tk.Frame):
             tourism_location=str(self._baseline[28]),
             tourism_discoveries=[TourismDiscovery.from_dict(json.loads(value)) for value in self._baseline[29]],
             url_preview_image=str(self._baseline[30]),
+            intro_mp4=str(self._baseline[31]),
         )
         self.set_values(values)
         self.mark_clean()
@@ -3030,6 +3114,10 @@ class Factory(tk.Tk):
                     project.channel_master_config.url_preview_image,
                     project_dir,
                 )
+                project.channel_master_config.intro_mp4 = materialize_intro_mp4(
+                    project.channel_master_config.intro_mp4,
+                    project_dir,
+                )
             if project_type is ProjectType.TOURISM and project.tourism_config:
                 discovery_assets = project_dir / "assets"
                 discovery_assets.mkdir(parents=True, exist_ok=True)
@@ -3351,10 +3439,16 @@ def functional_smoke_test() -> None:
         store = ProjectStore(application_data_root())
         source = Path(temporary) / "channel-master-preview.png"
         replacement = Path(temporary) / "channel-master-preview-replacement.webp"
+        intro_source = Path(temporary) / "channel-master-intro.mp4"
         Image.new("RGB", (1200, 630), (18, 41, 73)).save(source, format="PNG")
         Image.new("RGB", (1200, 630), (22, 92, 68)).save(replacement, format="WEBP")
+        mp4_atom = lambda kind, payload=b"": (8 + len(payload)).to_bytes(4, "big") + kind + payload
+        intro_source.write_bytes(
+            mp4_atom(b"ftyp", b"isom\x00\x00\x02\x00isommp42") + mp4_atom(b"moov") + mp4_atom(b"mdat", b"qa")
+        )
         project_dir = store.project_dir("packaged-channel-master-qa")
         reference = materialize_url_preview_image(str(source), project_dir)
+        intro_reference = materialize_intro_mp4(str(intro_source), project_dir)
         project = Project(
             slug="packaged-channel-master-qa",
             title="PACKAGED CHANNEL MASTER QA",
@@ -3368,6 +3462,7 @@ def functional_smoke_test() -> None:
                 palette="MIDNIGHT",
                 primary_cta=PrimaryCta(PrimaryCtaType.VISIT_WEBSITE, "https://example.com"),
                 url_preview_image=reference,
+                intro_mp4=intro_reference,
             ),
             videos=[Video(
                 video_id="qa000000001",
@@ -3394,8 +3489,8 @@ def functional_smoke_test() -> None:
             if actual_tabs != expected_tabs:
                 raise RuntimeError(f"Packaged Desktop tab smoke failed: {sorted(actual_tabs)}")
             form = app.forms[ProjectType.CHANNEL_MASTER]
-            if not isinstance(form, ProjectForm) or "url_preview_image" not in form.field_widgets:
-                raise RuntimeError("Packaged Channel Master URL Preview Image control is missing.")
+            if not isinstance(form, ProjectForm) or not {"url_preview_image", "intro_mp4"}.issubset(form.field_widgets):
+                raise RuntimeError("Packaged Channel Master media controls are missing.")
             for width, height in ((1320, 820), (1120, 720)):
                 app.geometry(f"{width}x{height}")
                 app.update_idletasks()
@@ -3405,6 +3500,8 @@ def functional_smoke_test() -> None:
             form.load_project(restored)
             if form.url_preview_image_var.get() != reference:
                 raise RuntimeError("Packaged Channel Master preview did not survive Save/Reload.")
+            if form.intro_mp4_var.get() != intro_reference:
+                raise RuntimeError("Packaged Channel Master Intro MP4 did not survive Save/Reload.")
             form.url_preview_image_var.set(str(replacement))
             form._update_url_preview_image_display()
             if form.url_preview_filename_label.cget("text") != replacement.name:
@@ -3432,6 +3529,19 @@ def functional_smoke_test() -> None:
             store.save_project(reloaded)
             if ProjectStore().load_project(project.slug).channel_master_config.url_preview_image:
                 raise RuntimeError("Packaged Channel Master REMOVE did not persist.")
+            form.load_project(ProjectStore().load_project(project.slug))
+            form._remove_intro_mp4()
+            cleared_intro = validate_project_form(form.values(), ProjectType.CHANNEL_MASTER)
+            cleared_intro_reference = materialize_intro_mp4(
+                cleared_intro.channel_master_config.intro_mp4,
+                project_dir,
+            )
+            reloaded = ProjectStore().load_project(project.slug)
+            reloaded.channel_master_config = cleared_intro.channel_master_config
+            reloaded.channel_master_config.intro_mp4 = cleared_intro_reference
+            store.save_project(reloaded)
+            if ProjectStore().load_project(project.slug).channel_master_config.intro_mp4:
+                raise RuntimeError("Packaged Channel Master Intro MP4 REMOVE did not persist.")
         finally:
             app.preview_server.stop()
             if app._async_poll_id is not None:

@@ -9,6 +9,7 @@ from uuid import uuid4
 
 from .banjo import BANJO_TITLE, validate_sponsor_logo, validate_sponsor_mp4
 from .channel_master_preview import inspect_url_preview_image
+from .channel_master_intro import inspect_intro_mp4
 from .config import MAX_BANJO_VIDEOS, MAX_CHANNEL_MASTER_VIDEOS, ticker_limit_for_project_type
 from .models import (
     BusinessConfig, ChannelMasterConfig, MusicConfig, PrimaryCta, PrimaryCtaType, Project, ProjectType,
@@ -141,6 +142,7 @@ class ProjectFormValues:
     tourism_location: str = ""
     tourism_discoveries: list[TourismDiscovery] = field(default_factory=list)
     url_preview_image: str = ""
+    intro_mp4: str = ""
 
     def comparable(self) -> tuple[object, ...]:
         return (
@@ -178,6 +180,7 @@ class ProjectFormValues:
                 for item in self.tourism_discoveries
             ),
             self.url_preview_image,
+            self.intro_mp4,
         )
 
 
@@ -431,6 +434,14 @@ def validate_project_form(values: ProjectFormValues, project_type: ProjectType |
                         inspect_url_preview_image(Path(preview_reference))
                     except ValueError as error:
                         raise FormValidationError("url_preview_image", str(error)) from error
+            intro_reference = str(values.intro_mp4 or "").strip()
+            if project_type is ProjectType.CHANNEL_MASTER and intro_reference:
+                normalised_intro = intro_reference.replace("\\", "/")
+                if not normalised_intro.startswith("assets/channel-master-intro-"):
+                    try:
+                        inspect_intro_mp4(Path(intro_reference))
+                    except ValueError as error:
+                        raise FormValidationError("intro_mp4", str(error)) from error
             channel_master_config = ChannelMasterConfig(
                 palette=values.palette,
                 custom_primary=values.custom_primary,
@@ -438,6 +449,7 @@ def validate_project_form(values: ProjectFormValues, project_type: ProjectType |
                 primary_cta=primary_cta,
                 contact_url=values.contact_url,
                 url_preview_image=(preview_reference if project_type is ProjectType.CHANNEL_MASTER else ""),
+                intro_mp4=(intro_reference if project_type is ProjectType.CHANNEL_MASTER else ""),
             )
             if project_type is ProjectType.WHITE_LABEL:
                 logo_path = str(values.custom_logo_path or "").strip()
@@ -607,6 +619,11 @@ def project_to_form_values(project: Project) -> ProjectFormValues:
         ],
         url_preview_image=(
             channel_master.url_preview_image
+            if project.project_type is ProjectType.CHANNEL_MASTER and channel_master
+            else ""
+        ),
+        intro_mp4=(
+            channel_master.intro_mp4
             if project.project_type is ProjectType.CHANNEL_MASTER and channel_master
             else ""
         ),

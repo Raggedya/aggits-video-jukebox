@@ -15,6 +15,7 @@ from qrcode.constants import ERROR_CORRECT_H
 from .config import BANJO_SUBMISSION_ENDPOINT, BRAND_NAME, PUBLIC_BASE_URL, resource_path
 from .banjo import BANJO_TITLE, validate_sponsor_logo, validate_sponsor_mp4, verify_banjo_character
 from .channel_master_preview import package_url_preview_image, remove_packaged_url_preview_images
+from .channel_master_intro import package_intro_mp4
 from .models import Project, ProjectType, project_primary_cta
 from .social_preview import (
     BANJO_SOCIAL_PREVIEW_SIZE,
@@ -339,6 +340,19 @@ def build_project_site(project: Project, destination: Path) -> Path:
             shutil.copy2(logo_source, sponsor_output / logo_name)
             sponsor_logo_public_url = f"assets/banjo-sponsor/{logo_name}"
 
+    intro_mp4_public_url = ""
+    intro_mp4_size = 0
+    if (
+        project.project_type is ProjectType.CHANNEL_MASTER
+        and channel_master_config
+        and channel_master_config.intro_mp4
+    ):
+        intro_mp4_public_url, intro_mp4_size = package_intro_mp4(
+            channel_master_config.intro_mp4,
+            destination.parent,
+            destination,
+        )
+
     canonical = project.published_url if str(project.published_url or "").startswith("https://") else f"{PUBLIC_BASE_URL}/{project.slug}/"
     public_social_title = (
         project.love_my_locals_config.public_title
@@ -525,6 +539,13 @@ def build_project_site(project: Project, destination: Path) -> Path:
         "{{BANJO_SPONSOR_PLAYER_MARKUP}}": (
             '<video data-sponsor-player preload="metadata" controls playsinline hidden aria-label="Sponsor video"></video>'
             if project.project_type is ProjectType.BANJO else ""
+        ),
+        "{{CHANNEL_MASTER_INTRO_PLAYER_MARKUP}}": (
+            '<video data-channel-master-intro-player preload="metadata" controls playsinline hidden '
+            'aria-label="Optional opening video"></video>'
+            '<button type="button" class="channel-master-intro-dismiss" '
+            'data-channel-master-intro-dismiss hidden aria-label="Close optional opening video">&times;</button>'
+            if intro_mp4_public_url else ""
         ),
         "{{BANJO_CHOICE_MARKUP}}": (
             '<section class="banjo-choice-overlay" data-banjo-choice-overlay aria-hidden="true" role="status">'
@@ -832,6 +853,13 @@ def build_project_site(project: Project, destination: Path) -> Path:
                 "enabled": bool(channel_master_config.contact_url),
             },
         }
+        if project.project_type is ProjectType.CHANNEL_MASTER:
+            payload["channelMasterConfig"]["introMP4"] = {
+                "assetURL": intro_mp4_public_url,
+                "sizeBytes": intro_mp4_size,
+                "enabled": bool(intro_mp4_public_url),
+                "promptDelayMilliseconds": 1250,
+            }
     if project.project_type is ProjectType.WHITE_LABEL and project.white_label_config:
         payload["whiteLabelConfig"] = {
             "logoAssetUrl": white_label_logo_public_url,

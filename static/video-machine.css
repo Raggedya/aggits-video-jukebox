@@ -64,6 +64,11 @@ button:focus-visible,a:focus-visible{outline:3px solid #fff0b3;outline-offset:3p
 .video-stage{position:relative;z-index:4;max-height:0;margin:0 clamp(8px,1.8vw,14px);overflow:hidden;opacity:0;transform:translateY(-10px) scaleY(.95);transform-origin:50% 0;transition:max-height .72s cubic-bezier(.22,.72,.22,1),opacity .25s ease,transform .72s cubic-bezier(.22,.72,.22,1),margin .72s}
 .video-stage-frame{position:relative;width:100%;aspect-ratio:16/9;overflow:hidden;border:2px solid #100a05;border-radius:15px;background:#000;box-shadow:inset 0 0 0 2px rgba(244,207,128,.34),0 0 0 3px #875b2b,0 9px 18px #000}
 .video-stage iframe{position:absolute;inset:0;width:100%;height:100%;border:0;background:#000;opacity:0;transition:opacity .26s ease .55s}
+.video-stage video[data-channel-master-intro-player]{position:absolute;inset:0;z-index:4;width:100%;height:100%;border:0;background:#000;object-fit:contain}
+.channel-master-intro-dismiss{position:absolute;right:10px;top:10px;z-index:8;width:38px;height:38px;border:1px solid #d8a95c;border-radius:50%;color:#f9e7bb;background:rgba(4,7,10,.88);box-shadow:0 2px 8px #000;font:28px/1 Georgia,serif;cursor:pointer}
+.channel-master-intro-dismiss:focus-visible{outline:3px solid #00c7cc;outline-offset:2px}
+.music-machine[data-intro-open="true"] .video-stage iframe{visibility:hidden}
+.music-machine[data-intro-open="true"] .video-stage-placeholder{display:none}
 .video-stage-placeholder{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:8px;padding:20px;color:#efd291;font:900 clamp(14px,3.8vw,24px)/1 var(--font-display);letter-spacing:.06em;text-align:center;text-shadow:0 2px 2px #000}
 .video-stage-placeholder small{color:#a98955;font:700 clamp(7px,1.7vw,10px)/1.2 var(--font-copy);letter-spacing:.12em}
 .video-shutter{position:absolute;top:0;bottom:0;width:51%;z-index:5;background:linear-gradient(90deg,#071a17,#0e443b 44%,#061612);box-shadow:inset 0 0 18px #000,0 0 0 2px #b27f3c;transition:transform .66s cubic-bezier(.72,.02,.22,1)}

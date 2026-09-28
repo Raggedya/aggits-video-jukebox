@@ -30,6 +30,8 @@ if (machine) {
   const tourismDiscoveryHeadline = machine.querySelector('[data-tourism-discovery-headline]');
   const tourismDiscoveryBody = machine.querySelector('[data-tourism-discovery-body]');
   const sponsorPlayer = machine.querySelector('[data-sponsor-player]');
+  const channelMasterIntroPlayer = machine.querySelector('[data-channel-master-intro-player]');
+  const channelMasterIntroDismiss = machine.querySelector('[data-channel-master-intro-dismiss]');
   const banjoChoiceOverlay = machine.querySelector('[data-banjo-choice-overlay]');
   const banjoChoiceTitle = machine.querySelector('[data-banjo-choice-title]');
   const banjoSubmissionModal = machine.querySelector('[data-banjo-submission-modal]');
@@ -101,6 +103,9 @@ if (machine) {
   let banjoSessionKey = '';
   let banjoSession = {normalDiscoveries: 0, nextCreativeIndex: 0, lastWasSponsor: false};
   let sponsorPlaybackMilestones = new Set();
+  let channelMasterIntro = null;
+  let channelMasterIntroTimer = 0;
+  let channelMasterIntroState = 'absent';
   let shopPlaqueTimer = 0;
   let shopPlaqueEnabled = false;
   let storyTickerStarted = false;
@@ -763,12 +768,21 @@ if (machine) {
       sponsorPlayer.load();
       sponsorPlayer.hidden = true;
     }
+    if (channelMasterIntroPlayer) {
+      channelMasterIntroPlayer.pause();
+      channelMasterIntroPlayer.removeAttribute('src');
+      channelMasterIntroPlayer.load();
+      channelMasterIntroPlayer.hidden = true;
+    }
+    if (channelMasterIntroDismiss) channelMasterIntroDismiss.hidden = true;
+    machine.dataset.introOpen = 'false';
     meterMode = 'idle';
     await sleep(reducedMotion.matches ? 260 : 850);
   }
 
   async function spin() {
     if (spinning || catalogue.length === 0) return;
+    cancelChannelMasterIntro();
     if (activeProjectType === 'banjo' && current?.contentType === 'sponsor_mp4') emitBanjoEvent('sponsor_respin', {creativeId: current.creativeId});
     cancelPendingReveal();
     spinning = true;
@@ -855,6 +869,7 @@ if (machine) {
 
   function animateLeverAndSpin() {
     if (spinning) return;
+    cancelChannelMasterIntro();
     ensureMachineSamples();
     lever.style.transition = 'transform .34s cubic-bezier(.2,.7,.25,1)';
     pullVisual(1);
@@ -863,6 +878,7 @@ if (machine) {
 
   function onLeverDown(event) {
     if (spinning) return;
+    cancelChannelMasterIntro();
     ensureMachineSamples();
     leverPointer = event.pointerId;
     leverStartY = event.clientY;
@@ -909,6 +925,76 @@ if (machine) {
     try {
       player.contentWindow?.postMessage(JSON.stringify({event: 'command', func: 'playVideo', args: []}), 'https://www.youtube.com');
     } catch {}
+  }
+
+  function cancelChannelMasterIntro() {
+    window.clearTimeout(channelMasterIntroTimer);
+    channelMasterIntroTimer = 0;
+    if (channelMasterIntroState !== 'absent') channelMasterIntroState = 'dismissed';
+  }
+
+  async function dismissChannelMasterIntro() {
+    if (!['pending', 'open', 'playing'].includes(channelMasterIntroState)) return;
+    cancelChannelMasterIntro();
+    await closeVideo();
+    const playText = playButton.querySelector('b');
+    if (playText) playText.textContent = 'PLAY VIDEO';
+    playButton.disabled = !current;
+    setState(current ? 'READY_TO_PLAY' : 'IDLE', current
+      ? `${titleOnly(current)} selected. Press Play Video to open it.`
+      : 'Pull the lever or press Re-Spin to select a video.');
+  }
+
+  async function openChannelMasterIntro() {
+    channelMasterIntroTimer = 0;
+    if (
+      activeProjectType !== 'channel_master' || channelMasterIntroState !== 'pending'
+      || current || spinning || !channelMasterIntroPlayer || !channelMasterIntro?.assetURL
+    ) {
+      cancelChannelMasterIntro();
+      return;
+    }
+    ensureMachineSamples();
+    channelMasterIntroState = 'open';
+    channelMasterIntroPlayer.src = channelMasterIntro.assetURL;
+    channelMasterIntroPlayer.hidden = false;
+    channelMasterIntroPlayer.load();
+    if (channelMasterIntroDismiss) channelMasterIntroDismiss.hidden = false;
+    player.src = 'about:blank';
+    if (tourismDiscoveryPoster) tourismDiscoveryPoster.hidden = true;
+    if (sponsorPlayer) sponsorPlayer.hidden = true;
+    stage.setAttribute('aria-hidden', 'false');
+    machine.dataset.introOpen = 'true';
+    playSample(shutterGearAudio, {volume: .62, rate: .9});
+    machine.dataset.videoOpen = 'true';
+    const playText = playButton.querySelector('b');
+    if (playText) playText.textContent = 'PLAY VIDEO';
+    playButton.disabled = false;
+    playButton.setAttribute('aria-label', 'Play optional opening video');
+    setState('IDLE', 'Optional opening video is ready. Press Play Video or pull the lever to continue.');
+  }
+
+  function playChannelMasterIntro() {
+    if (channelMasterIntroState !== 'open' || !channelMasterIntroPlayer) return false;
+    channelMasterIntroState = 'playing';
+    channelMasterIntroPlayer.muted = false;
+    void channelMasterIntroPlayer.play().catch(() => {
+      channelMasterIntroState = 'open';
+      status.textContent = 'Press Play Video to start the optional opening video.';
+    });
+    setState('PLAYING', 'Playing optional opening video.');
+    return true;
+  }
+
+  function scheduleChannelMasterIntro() {
+    if (
+      activeProjectType !== 'channel_master' || !channelMasterIntroPlayer
+      || !channelMasterIntro?.enabled || !channelMasterIntro.assetURL
+    ) return;
+    channelMasterIntroState = 'pending';
+    const requestedDelay = Number(channelMasterIntro.promptDelayMilliseconds);
+    const delay = Number.isFinite(requestedDelay) ? Math.max(1000, Math.min(1500, requestedDelay)) : 1250;
+    channelMasterIntroTimer = window.setTimeout(() => { void openChannelMasterIntro(); }, delay);
   }
 
   async function openVideo(playRequested = false) {
@@ -1245,8 +1331,16 @@ if (machine) {
     });
     respinButton.addEventListener('click', spin);
     playButton.addEventListener('click', () => {
+      if (playChannelMasterIntro()) return;
       if (activeProjectType === 'banjo' && current?.isBanjosChoice) emitBanjoEvent('banjos_choice_video_play', {videoId: current.videoId});
       void openVideo(true);
+    });
+    channelMasterIntroDismiss?.addEventListener('click', () => { void dismissChannelMasterIntro(); });
+    channelMasterIntroPlayer?.addEventListener('ended', () => { void dismissChannelMasterIntro(); });
+    channelMasterIntroPlayer?.addEventListener('error', () => {
+      if (channelMasterIntroState === 'open' || channelMasterIntroState === 'playing') {
+        status.textContent = 'Optional opening video is unavailable. Pull the lever to continue.';
+      }
     });
     shareButton.addEventListener('click', () => {
       if (activeProjectType === 'banjo') emitBanjoEvent('share', {contentKind: machine.dataset.contentKind || ''});
@@ -1343,6 +1437,11 @@ if (machine) {
         closeBanjoSubmission();
         return;
       }
+      if (event.key === 'Escape' && ['open', 'playing'].includes(channelMasterIntroState)) {
+        event.preventDefault();
+        void dismissChannelMasterIntro();
+        return;
+      }
       if (event.key === 'Tab' && banjoSubmissionModal && !banjoSubmissionModal.hidden) {
         const focusable = [...banjoSubmissionModal.querySelectorAll('button:not([disabled]),input:not([disabled]):not([tabindex="-1"])')]
           .filter(node => !node.closest('[hidden]'));
@@ -1376,6 +1475,7 @@ if (machine) {
       machine.dataset.projectType = activeProjectType;
       configureLocalPicks();
       banjoConfig = activeProjectType === 'banjo' ? (config.banjoConfig || {}) : null;
+      channelMasterIntro = activeProjectType === 'channel_master' ? (config.channelMasterConfig?.introMP4 || null) : null;
       if (activeProjectType === 'banjo') {
         banjoSubmissionEndpoint = String(banjoConfig?.submission?.endpoint || '').trim();
         banjoSessionKey = `crispyBitsBanjoSponsor:${String(config.slug || 'banjo')}`;
@@ -1467,6 +1567,7 @@ if (machine) {
       renderRows({videoId: '__pull_to_discover__', shortTitle: initialReelInstruction});
       setState('IDLE', 'Pull the lever or press Re-Spin to select a video.');
       respinButton.disabled = false;
+      scheduleChannelMasterIntro();
     } catch (error) {
       rows[1].textContent = 'VIDEOS UNAVAILABLE';
       setState('ERROR', 'This video catalogue could not be loaded.');
@@ -1481,6 +1582,7 @@ if (machine) {
   window.addEventListener('pagehide', stopShopPlaqueCycle);
   window.addEventListener('pagehide', () => window.clearTimeout(banjoHeaderTickerTimer));
   window.addEventListener('pagehide', () => window.clearTimeout(channelMasterHeaderTickerTimer));
+  window.addEventListener('pagehide', cancelChannelMasterIntro);
 
   window.CrispyBitsMachine = Object.freeze({
     spin,
