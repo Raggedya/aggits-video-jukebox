@@ -1,0 +1,47 @@
+CRISPY BITS DESKTOP v3.13.0 — CHANNEL MASTER OPTIONAL INTRO MP4
+================================================================
+
+SELECT AN INTRO MP4
+
+Create or open a CHANNEL MASTER project. In CHANNEL MASTER APPEARANCE + CONTACT,
+find INTRO MP4 and select SELECT MP4.
+
+Supported format: MP4.
+Maximum size: 24 MB.
+
+The file must be a readable MP4 container. Renaming another file to .mp4 will
+not make it valid. Crispy Bits does not transcode or edit the selected video.
+
+SAVE AND PUBLISH
+
+The MP4 is copied into project-controlled assets when the project is saved. The
+original Windows file is no longer required. Existing projects may continue
+without an Intro MP4.
+
+Publish or Update + Republish when ready. The Intro MP4 is separate from the
+YouTube catalogue and does not consume one of the 50 YouTube positions.
+
+VIEWER EXPERIENCE
+
+The normal Channel Master loads first. If the viewer has not started discovery,
+the established video chamber opens after approximately 1.25 seconds and shows
+PLAY VIDEO. The MP4 itself does not autoplay. The viewer chooses whether to play
+it, dismiss it, or pull the lever. At natural completion the chamber closes and
+normal discovery continues.
+
+REPLACE OR REMOVE
+
+Select another MP4 to replace the current one, or choose REMOVE. Save the
+project, then deliberately republish if it is already live. Changing the intro
+does not change the project UUID, slug, public URL or QR destination.
+
+PROJECT ISOLATION
+
+Each Channel Master project stores its own Intro MP4. The control is not added
+to Business, Music, Tourism, Banjo, White Label or Love My Locals.
+
+VERSION NOTE
+
+Existing Channel Master projects open normally with no Intro MP4 selected.
+Projects saved with v3.13.0 should be edited with v3.13.0 or a later compatible
+release unless backward editing has specifically been tested.

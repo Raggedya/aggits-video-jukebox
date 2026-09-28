@@ -1,0 +1,41 @@
+CRISPY BITS DESKTOP v3.13.0
+================================
+
+CHANNEL MASTER OPTIONAL INTRO MP4
+
+- Adds one optional project-specific INTRO MP4 to Channel Master.
+- Supports genuine MP4 containers up to 24 MB.
+- Imports the selected MP4 into project-controlled, content-hashed assets, so
+  the original Windows file can be moved or deleted after the project is saved.
+- Publishes the MP4 alongside the machine without adding it to the YouTube reel
+  or consuming one of the 50 YouTube positions.
+
+VIEWER EXPERIENCE
+
+- The normal machine renders first with the stationary reel and PULL THE LEVER.
+- After approximately 1.25 seconds, the existing video chamber opens when the
+  viewer has not begun discovery.
+- The existing chamber shutter presentation and sound are reused.
+- The MP4 never autoplays; PLAY VIDEO requires an intentional viewer action.
+- Natural completion closes the chamber and returns to normal discovery.
+- Lever/spin interaction cancels a pending intro, and manual dismissal prevents
+  the intro from reopening during that page session.
+
+DESKTOP AUTHORING
+
+- Adds SELECT MP4 and REMOVE controls, filename, file size and concise helper
+  guidance to Channel Master only.
+- Existing Channel Master projects remain compatible and require no migration.
+- No Intro MP4 means no timer, no chamber prompt and no behavior change.
+
+PROTECTION
+
+- Project UUID, slug, public URL, QR, URL Preview Image, YouTube catalogue,
+  ticker, palette, CTA, Contact Us, reel and lever mechanics remain unchanged.
+- Business, Music, Tourism, Banjo, White Label and Love My Locals remain
+  unchanged.
+
+CODE SIGNING
+
+This release contains embedded Windows product and version metadata but is
+unsigned because no trusted code-signing certificate is configured.
