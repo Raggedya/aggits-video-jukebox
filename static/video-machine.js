@@ -71,6 +71,9 @@ if (machine) {
   const SHOP_PLAQUE_PROMPT_DURATION = 3500;
   const BANJO_TICKER_DELAY = 10000;
   const CHANNEL_MASTER_TICKER_DELAY = 10000;
+  const CHANNEL_MASTER_TITLE_VISIBLE_DURATION = 5000;
+  const CHANNEL_MASTER_TICKER_VISIBLE_DURATION = 10000;
+  const CHANNEL_MASTER_IDENTITY_CYCLE_DURATION = CHANNEL_MASTER_TITLE_VISIBLE_DURATION + CHANNEL_MASTER_TICKER_VISIBLE_DURATION;
   const CHANNEL_MASTER_PRODUCT_TYPES = ['channel_master', 'white_label'];
   const CHANNEL_PRODUCT_TYPES = [...CHANNEL_MASTER_PRODUCT_TYPES, 'love_my_locals'];
 
@@ -100,6 +103,7 @@ if (machine) {
   let banjoHeaderTickerTimer = 0;
   let channelMasterHeaderTickerStarted = false;
   let channelMasterHeaderTickerTimer = 0;
+  let channelMasterIdentityCycleStartedAt = 0;
   let banjoSessionKey = '';
   let banjoSession = {normalDiscoveries: 0, nextCreativeIndex: 0, lastWasSponsor: false};
   let sponsorPlaybackMilestones = new Set();
@@ -792,8 +796,7 @@ if (machine) {
     meterMode = 'spin';
     playButton.disabled = true;
     shareButton.disabled = true;
-    primaryActionButton.disabled = true;
-    primaryActionButton.setAttribute('aria-disabled', 'true');
+    updatePrimaryActionAvailability(false);
     respinButton.disabled = true;
     machine.dataset.hasWinner = 'false';
     playSample(reelStopAudio, {volume: .58, rate: .9});
@@ -845,9 +848,7 @@ if (machine) {
     meterMode = 'idle';
     playButton.disabled = false;
     shareButton.disabled = false;
-    if (activeProjectType === 'banjo') primaryActionButton.disabled = !banjoSubmissionEndpoint;
-    else primaryActionButton.disabled = !primaryActionDestination;
-    primaryActionButton.setAttribute('aria-disabled', String(primaryActionButton.disabled));
+    updatePrimaryActionAvailability(true);
     respinButton.disabled = false;
     spinning = false;
     showBanjoChoiceAward(winner);
@@ -1223,6 +1224,18 @@ if (machine) {
     window.open(primaryActionDestination, '_blank', 'noopener,noreferrer');
   }
 
+  function updatePrimaryActionAvailability(hasDiscovery = Boolean(current)) {
+    if (activeProjectType === 'banjo') {
+      primaryActionButton.disabled = !banjoSubmissionEndpoint;
+    } else if (activeProjectType === 'channel_master') {
+      // Channel Master CTAs belong to the project, not the selected video.
+      primaryActionButton.disabled = !primaryActionDestination;
+    } else {
+      primaryActionButton.disabled = !hasDiscovery || !primaryActionDestination;
+    }
+    primaryActionButton.setAttribute('aria-disabled', String(primaryActionButton.disabled));
+  }
+
   function openPlaqueAction() {
     if (plaqueDestination) {
       window.open(plaqueDestination, '_blank', 'noopener,noreferrer');
@@ -1285,14 +1298,35 @@ if (machine) {
     }, BANJO_TICKER_DELAY);
   }
 
+  function syncChannelMasterIdentityCycle() {
+    if (activeProjectType !== 'channel_master' || !channelMasterHeaderTickerStarted) return;
+    const elapsed = Math.max(0, performance.now() - channelMasterIdentityCycleStartedAt);
+    const phase = elapsed % CHANNEL_MASTER_IDENTITY_CYCLE_DURATION;
+    const titleVisible = phase < CHANNEL_MASTER_TITLE_VISIBLE_DURATION;
+    shopPlaque.dataset.shopPlaqueState = titleVisible ? 'title' : 'channel-master-ticker';
+    const remaining = titleVisible
+      ? CHANNEL_MASTER_TITLE_VISIBLE_DURATION - phase
+      : CHANNEL_MASTER_IDENTITY_CYCLE_DURATION - phase;
+    window.clearTimeout(channelMasterHeaderTickerTimer);
+    channelMasterHeaderTickerTimer = window.setTimeout(syncChannelMasterIdentityCycle, Math.max(16, remaining));
+  }
+
   function startChannelMasterHeaderTicker() {
     if (!['channel_master', 'white_label', 'love_my_locals'].includes(activeProjectType) || channelMasterHeaderTickerStarted || !channelMasterHeaderTicker || !channelMasterHeaderTickerCopy?.textContent?.trim()) return;
     channelMasterHeaderTickerStarted = true;
+    const travel = Math.max(360, shopPlaque.clientWidth + channelMasterHeaderTickerCopy.scrollWidth);
+    channelMasterHeaderTicker.style.setProperty('--channel-master-ticker-duration', `${Math.max(14, travel / 42).toFixed(2)}s`);
+    if (activeProjectType === 'channel_master') {
+      // Mount the ticker animation once at page load. Opacity alone controls which
+      // layer is visible, so the ticker keeps advancing while the title is shown.
+      channelMasterHeaderTicker.hidden = false;
+      channelMasterIdentityCycleStartedAt = performance.now();
+      syncChannelMasterIdentityCycle();
+      return;
+    }
     channelMasterHeaderTickerTimer = window.setTimeout(() => {
       shopPlaque.dataset.shopPlaqueState = 'channel-master-ticker';
       channelMasterHeaderTicker.hidden = false;
-      const travel = Math.max(360, shopPlaque.clientWidth + channelMasterHeaderTickerCopy.scrollWidth);
-      channelMasterHeaderTicker.style.setProperty('--channel-master-ticker-duration', `${Math.max(14, travel / 42).toFixed(2)}s`);
     }, CHANNEL_MASTER_TICKER_DELAY);
   }
 
@@ -1348,6 +1382,7 @@ if (machine) {
       void share();
     });
     primaryActionButton.addEventListener('click', () => {
+      if (activeProjectType === 'channel_master' && channelMasterIntroState === 'pending') cancelChannelMasterIntro();
       if (activeProjectType === 'tourism') emitTourismEvent('tourism_official_site_click', {destinationUrl: primaryActionDestination});
       openPrimaryAction();
     });
@@ -1509,8 +1544,7 @@ if (machine) {
       if (shopPlaquePrompt) sizeClass(shopPlaquePrompt, primaryActionLabel);
       const primaryActionText = primaryActionButton.querySelector('b');
       if (primaryActionText && primaryActionLabel) primaryActionText.textContent = activeProjectType === 'banjo' ? 'SHOW BANJO' : primaryActionLabel;
-      primaryActionButton.disabled = activeProjectType === 'banjo' ? !banjoSubmissionEndpoint : true;
-      primaryActionButton.setAttribute('aria-disabled', String(primaryActionButton.disabled));
+      updatePrimaryActionAvailability(false);
       primaryActionButton.setAttribute(
         'aria-label',
         activeProjectType === 'banjo'
