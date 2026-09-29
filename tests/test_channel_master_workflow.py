@@ -339,9 +339,7 @@ class ChannelMasterWorkflowTests(unittest.TestCase):
         self.assertNotIn("<button", footer)
         self.assertIn('data-channel-master-title-plaque aria-hidden="true">CHANNEL MASTER FIXTURE</div>', page)
         self.assertIn("CONTACT US", page)
-        self.assertEqual(page.count('data-action="sound"'), 1)
-        self.assertIn('utility-controls--sound-only', page)
-        for rejected in ('data-action="home"', 'data-shop-plaque-prompt',
+        for rejected in ('data-action="home"', 'data-action="sound"', 'utility-controls--sound-only', 'data-shop-plaque-prompt',
                          'class="customer-story"', 'class="brand-signature"', "BANJO'S", "banjo-header-character"):
             self.assertNotIn(rejected, page)
         self.assertNotIn("POWERED BY", page)

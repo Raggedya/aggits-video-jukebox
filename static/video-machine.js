@@ -1611,6 +1611,7 @@ if (machine) {
       machineIdentity = String(config.title || config.channelTitle || '').trim();
       machineDescription = String(config.customerConfig?.customerStory || config.tickerText || '').trim();
       activeProjectType = String(config.projectType || 'business').trim().toLowerCase();
+      if (activeProjectType === 'channel_master' && !soundButton) soundEnabled = true;
       machine.dataset.projectType = activeProjectType;
       configureLocalPicks();
       banjoConfig = activeProjectType === 'banjo' ? (config.banjoConfig || {}) : null;

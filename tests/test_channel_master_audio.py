@@ -53,16 +53,19 @@ def _project(project_type: ProjectType) -> Project:
 
 
 class ChannelMasterAudioTests(unittest.TestCase):
-    def test_channel_master_has_one_explicit_sound_control_without_home_control(self):
+    def test_channel_master_has_no_visible_sound_or_home_control(self):
         with tempfile.TemporaryDirectory() as temporary:
             output = Path(temporary) / "site"
             build_project_site(_project(ProjectType.CHANNEL_MASTER), output)
             page = (output / "index.html").read_text(encoding="utf-8")
-            self.assertEqual(page.count('data-action="sound"'), 1)
-            self.assertIn('utility-controls--sound-only', page)
-            self.assertIn('data-sound-label>SOUND ON', page)
+            self.assertNotIn('data-action="sound"', page)
+            self.assertNotIn('utility-controls--sound-only', page)
+            self.assertNotIn('data-sound-label>SOUND ON', page)
             self.assertNotIn('data-action="home"', page)
-            self.assertIn('.utility-controls--sound-only{justify-content:flex-end}', CSS)
+            self.assertNotIn('.utility-controls--sound-only', CSS)
+
+    def test_channel_master_automatic_sound_is_not_trapped_by_an_old_session_toggle(self):
+        self.assertIn("if (activeProjectType === 'channel_master' && !soundButton) soundEnabled = true;", SCRIPT)
 
     def test_audio_is_unlocked_during_initial_pointer_or_keyboard_interaction(self):
         self.assertIn("function unlockMachineAudio()", SCRIPT)
