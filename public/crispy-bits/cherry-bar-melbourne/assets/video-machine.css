@@ -326,6 +326,7 @@ button:focus-visible,a:focus-visible{outline:3px solid #fff0b3;outline-offset:3p
   *,*::before,*::after{scroll-behavior:auto!important}
   .customer-identity-copy>strong{transition-duration:.01ms!important;transform:none!important;filter:none!important}
   .music-machine[data-project-type="banjo"] .banjo-header-ticker span{width:100%;min-width:0;padding:0 12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;animation:none!important;transform:none!important;will-change:auto}
+  .music-machine[data-project-type="channel_master"] .channel-master-header-ticker{transition-duration:.01ms!important}
   .music-machine[data-project-type="channel_master"] .channel-master-header-ticker span{width:100%;min-width:0;padding:0 12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;animation:none!important;transform:none!important;will-change:auto}
   .music-machine[data-project-type="white_label"] .channel-master-header-ticker span{width:100%;min-width:0;padding:0 12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;animation:none!important;transform:none!important;will-change:auto}
   .music-machine[data-project-type="love_my_locals"] .channel-master-header-ticker span{width:100%;min-width:0;padding:0 12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;animation:none!important;transform:none!important;will-change:auto}
