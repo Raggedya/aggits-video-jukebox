@@ -1,0 +1,33 @@
+CRISPY BITS DESKTOP v3.14.2
+================================
+
+CHANNEL MASTER MOBILE SOUND CORRECTION
+
+- Unlocks the machine audio samples during the viewer's first genuine pointer
+  or keyboard interaction so mobile browsers permit later reel, lever and
+  video-chamber sound effects.
+- Preserves that audio permission while the optional intro chamber completes
+  its closing animation before the reel starts.
+- Restores a compact Channel Master SOUND ON / SOUND OFF control without adding
+  a Home control or changing the four primary action buttons.
+- Reports rejected machine-audio playback through browser diagnostics and a
+  crispy-bits:audio-error event instead of discarding failures silently.
+- Retries the YouTube play request when the official iframe finishes loading,
+  removing avoidable startup delay while keeping YouTube audio and video under
+  the official embedded player.
+
+UNCHANGED
+
+- The requested end-of-video auto-close change was cancelled and is not part of
+  this release.
+- Channel Master title/ticker cycle, ticker speed, reel, lever, landing,
+  optional Intro MP4, Primary CTA, Contact Us, URL Preview Image, project
+  identity, public URL and QR remain unchanged.
+- Business, Music, Tourism, Banjo, White Label and Love My Locals remain
+  unchanged.
+- No project-schema migration and no Worker deployment are required.
+
+CODE SIGNING
+
+This release contains embedded Windows product and version metadata but is
+unsigned because no trusted code-signing certificate is configured.

@@ -1,0 +1,28 @@
+CRISPY BITS DESKTOP v3.14.2 — CHANNEL MASTER SOUND
+===================================================
+
+SOUND CONTROL
+
+Published Channel Master machines now show a compact SOUND ON / SOUND OFF
+control in the upper-right corner. Sound defaults to on unless the viewer has
+turned it off in the same browser session.
+
+MOBILE AUDIO
+
+The first tap, lever pull, Re-Spin or keyboard activation prepares the machine
+audio for mobile-browser playback. Reel and chamber effects can then continue
+after the optional intro closes without losing the browser's sound permission.
+
+VIDEO START
+
+Play Video still uses YouTube's official embedded player. The machine now
+retries its play request when the iframe is ready, reducing avoidable startup
+delay. The application does not separate or resynchronise YouTube audio and
+video.
+
+VERSION NOTE
+
+Existing projects remain compatible. No project-schema migration is required.
+Existing live machines are not automatically republished; deliberately rebuild
+and republish a Channel Master project when its live machine should receive the
+corrected runtime. The cancelled end-of-video auto-close request is not included.
