@@ -1,0 +1,27 @@
+CRISPY BITS DESKTOP v3.14.3
+================================
+
+CHANNEL MASTER SOUND CONTROL CLEANUP
+
+- Removes the visible SOUND ON button from the top-right of Channel Master
+  machines.
+- Retains the v3.14.2 automatic mobile audio unlock for reel, lever and
+  video-chamber effects.
+- Ensures Channel Master automatic sound cannot remain disabled by an older
+  session-level toggle from another machine.
+
+UNCHANGED
+
+- The four primary controls remain Share, Play Video, Primary CTA and Re-Spin.
+- Channel Master title/ticker cycle, ticker speed, reel, lever, landing,
+  optional Intro MP4, Primary CTA, Contact Us, URL Preview Image, project
+  identity, public URL and QR remain unchanged.
+- The cancelled end-of-video auto-close request is not included.
+- Business, Music, Tourism, Banjo, White Label and Love My Locals remain
+  unchanged.
+- No project-schema migration and no Worker deployment are required.
+
+CODE SIGNING
+
+This release contains embedded Windows product and version metadata but is
+unsigned because no trusted code-signing certificate is configured.

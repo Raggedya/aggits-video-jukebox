@@ -1,0 +1,20 @@
+CRISPY BITS DESKTOP v3.14.3 — CHANNEL MASTER SOUND
+===================================================
+
+AUTOMATIC SOUND
+
+Channel Master machine sound remains automatic. The first tap, lever pull,
+Re-Spin or keyboard activation prepares the machine audio for mobile-browser
+playback. Reel and chamber effects can continue after the optional intro closes.
+
+VISIBLE CONTROL
+
+The top-right SOUND ON / SOUND OFF control has been removed from Channel Master.
+No empty space or replacement control is added.
+
+VERSION NOTE
+
+Existing projects remain compatible. No project-schema migration is required.
+Existing live machines are not automatically republished; deliberately rebuild
+and republish a Channel Master project when its live machine should receive this
+cleaner runtime.
