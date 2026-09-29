@@ -121,6 +121,9 @@ if (machine) {
   let reelRatchetAudio = null;
   let reelStopAudio = null;
   let shutterGearAudio = null;
+  let machineAudioUnlockState = 'locked';
+  let machineAudioUnlockPromise = null;
+  let pendingYouTubePlay = false;
   let motorFadeTimer = 0;
   let meterMode = 'idle';
   let meterFrame = 0;
@@ -634,6 +637,7 @@ if (machine) {
   function machineAudio(name) {
     const audio = new Audio(`assets/audio/machine/${name}`);
     audio.preload = 'auto';
+    audio.dataset.machineSample = name;
     return audio;
   }
 
@@ -644,15 +648,88 @@ if (machine) {
     shutterGearAudio ??= machineAudio('reel-stop-gear-mixkit-2858.mp3');
   }
 
+  function reportAudioFailure(context, error) {
+    const reason = error?.message || String(error || 'Playback was rejected.');
+    console.warn(`[Crispy Bits audio] ${context}: ${reason}`);
+    window.dispatchEvent(new CustomEvent('crispy-bits:audio-error', {
+      detail: {context, reason},
+    }));
+  }
+
+  function primeMachineSample(audio) {
+    const original = {
+      muted: audio.muted,
+      volume: audio.volume,
+      loop: audio.loop,
+      playbackRate: audio.playbackRate,
+    };
+    const restore = () => {
+      try { audio.pause(); } catch {}
+      try { audio.currentTime = 0; } catch {}
+      try { audio.muted = original.muted; } catch {}
+      try { audio.volume = original.volume; } catch {}
+      try { audio.loop = original.loop; } catch {}
+      try { audio.playbackRate = original.playbackRate; } catch {}
+    };
+    try {
+      audio.muted = true;
+      audio.volume = 0;
+      audio.loop = false;
+      audio.currentTime = 0;
+      const attempt = audio.play();
+      if (!attempt || typeof attempt.then !== 'function') {
+        restore();
+        return Promise.resolve(true);
+      }
+      return attempt.then(() => {
+        restore();
+        return true;
+      }).catch(error => {
+        restore();
+        reportAudioFailure(`unlock ${audio.dataset.machineSample || 'machine sample'}`, error);
+        return false;
+      });
+    } catch (error) {
+      restore();
+      reportAudioFailure(`unlock ${audio.dataset.machineSample || 'machine sample'}`, error);
+      return Promise.resolve(false);
+    }
+  }
+
+  function unlockMachineAudio() {
+    if (!soundEnabled) return Promise.resolve(false);
+    if (machineAudioUnlockState === 'unlocked') return Promise.resolve(true);
+    if (machineAudioUnlockPromise) return machineAudioUnlockPromise;
+    ensureMachineSamples();
+    machineAudioUnlockState = 'unlocking';
+    machineAudioUnlockPromise = Promise.all([
+      reelMotorAudio, reelRatchetAudio, reelStopAudio, shutterGearAudio,
+    ].map(primeMachineSample)).then(results => {
+      const unlocked = results.every(Boolean);
+      machineAudioUnlockState = unlocked ? 'unlocked' : 'locked';
+      machineAudioUnlockPromise = null;
+      return unlocked;
+    });
+    return machineAudioUnlockPromise;
+  }
+
   function playSample(audio, {volume = .55, rate = 1} = {}) {
-    if (!soundEnabled || !audio) return;
+    if (!soundEnabled || !audio) return Promise.resolve(false);
     try {
       audio.pause();
       audio.currentTime = 0;
       audio.volume = volume;
       audio.playbackRate = rate;
-      void audio.play().catch(() => {});
-    } catch {}
+      const attempt = audio.play();
+      if (!attempt || typeof attempt.then !== 'function') return Promise.resolve(true);
+      return attempt.then(() => true).catch(error => {
+        reportAudioFailure(audio.dataset.machineSample || 'machine sample', error);
+        return false;
+      });
+    } catch (error) {
+      reportAudioFailure(audio.dataset.machineSample || 'machine sample', error);
+      return Promise.resolve(false);
+    }
   }
 
   function stopSample(audio) {
@@ -670,7 +747,7 @@ if (machine) {
     reelMotorAudio.currentTime = .15;
     reelMotorAudio.volume = .44;
     reelMotorAudio.playbackRate = 1;
-    void reelMotorAudio.play().catch(() => {});
+    void reelMotorAudio.play().catch(error => reportAudioFailure('reel motor', error));
   }
 
   function stopReelSound(immediate = false) {
@@ -762,6 +839,7 @@ if (machine) {
 
   async function closeVideo() {
     if (machine.dataset.videoOpen !== 'true') return;
+    pendingYouTubePlay = false;
     machine.dataset.videoOpen = 'false';
     stage.setAttribute('aria-hidden', 'true');
     player.src = 'about:blank';
@@ -792,6 +870,7 @@ if (machine) {
     spinning = true;
     ensureMachineSamples();
     await closeVideo();
+    if (machineAudioUnlockPromise) await machineAudioUnlockPromise;
     setState('SPINNING', 'The reel is selecting a video.');
     meterMode = 'spin';
     playButton.disabled = true;
@@ -919,13 +998,20 @@ if (machine) {
     url.searchParams.set('autoplay', '0');
     url.searchParams.set('playsinline', '1');
     url.searchParams.set('rel', '0');
+    if (/^https?:$/.test(location.protocol)) url.searchParams.set('origin', location.origin);
     return url.toString();
   }
 
-  function requestPlayerPlay() {
+  function sendPlayerMessage(message) {
     try {
-      player.contentWindow?.postMessage(JSON.stringify({event: 'command', func: 'playVideo', args: []}), 'https://www.youtube.com');
-    } catch {}
+      player.contentWindow?.postMessage(JSON.stringify(message), 'https://www.youtube.com');
+    } catch (error) {
+      console.warn(`[Crispy Bits YouTube] Player command failed: ${error?.message || error}`);
+    }
+  }
+
+  function requestPlayerPlay() {
+    sendPlayerMessage({event: 'command', func: 'playVideo', args: []});
   }
 
   function cancelChannelMasterIntro() {
@@ -1056,6 +1142,7 @@ if (machine) {
       sponsorPlayer.load();
     } else {
       if (tourismDiscoveryPoster) tourismDiscoveryPoster.hidden = true;
+      pendingYouTubePlay = playRequested;
       player.src = playerUrl(current);
       if (sponsorPlayer) sponsorPlayer.hidden = true;
     }
@@ -1357,6 +1444,20 @@ if (machine) {
   }
 
   function bind() {
+    machine.addEventListener('pointerdown', () => { void unlockMachineAudio(); }, {capture: true});
+    machine.addEventListener('keydown', event => {
+      if (event.key === 'Enter' || event.key === ' ') void unlockMachineAudio();
+    }, {capture: true});
+    player.addEventListener('load', () => {
+      if (!player.getAttribute('src') || player.getAttribute('src') === 'about:blank') return;
+      if (pendingYouTubePlay) {
+        requestPlayerPlay();
+        window.setTimeout(() => {
+          requestPlayerPlay();
+          pendingYouTubePlay = false;
+        }, 240);
+      }
+    });
     lever.addEventListener('pointerdown', onLeverDown);
     lever.addEventListener('pointermove', onLeverMove);
     lever.addEventListener('pointerup', onLeverUp);
@@ -1410,8 +1511,7 @@ if (machine) {
       updateSoundControl();
       if (sponsorPlayer) sponsorPlayer.muted = !soundEnabled;
       if (soundEnabled) {
-        ensureMachineSamples();
-        playSample(reelStopAudio, {volume: .48, rate: 1});
+        void unlockMachineAudio().then(() => playSample(reelStopAudio, {volume: .48, rate: 1}));
       } else {
         stopReelSound(true);
         stopSample(reelRatchetAudio);
