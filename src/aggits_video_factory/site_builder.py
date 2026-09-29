@@ -537,13 +537,18 @@ def build_project_site(project: Project, destination: Path) -> Path:
             )
         ),
         "{{UTILITY_CONTROLS_MARKUP}}": (
-            "" if project.project_type in {
-                ProjectType.BANJO, ProjectType.CHANNEL_MASTER, ProjectType.WHITE_LABEL, ProjectType.LOVE_MY_LOCALS,
-            } else
-            '<nav class="utility-controls" aria-label="Machine controls">'
-            '<button type="button" data-action="home"><span aria-hidden="true">⌂</span><b>HOME</b></button>'
+            '<nav class="utility-controls utility-controls--sound-only" aria-label="Sound control">'
             '<button type="button" data-action="sound" aria-pressed="true"><span data-sound-icon aria-hidden="true">♪</span><b data-sound-label>SOUND ON</b></button>'
             '</nav>'
+            if project.project_type is ProjectType.CHANNEL_MASTER else (
+                "" if project.project_type in {
+                    ProjectType.BANJO, ProjectType.WHITE_LABEL, ProjectType.LOVE_MY_LOCALS,
+                } else
+                '<nav class="utility-controls" aria-label="Machine controls">'
+                '<button type="button" data-action="home"><span aria-hidden="true">⌂</span><b>HOME</b></button>'
+                '<button type="button" data-action="sound" aria-pressed="true"><span data-sound-icon aria-hidden="true">♪</span><b data-sound-label>SOUND ON</b></button>'
+                '</nav>'
+            )
         ),
         "{{BANJO_CHARACTER_MARKUP}}": (
             '<span class="banjo-header-character" aria-hidden="true"><img src="assets/banjo/banjo-approved-header.png" alt="" draggable="false"></span>'
