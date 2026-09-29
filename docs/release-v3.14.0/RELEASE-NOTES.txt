@@ -1,0 +1,37 @@
+CRISPY BITS DESKTOP v3.14.0
+================================
+
+CHANNEL MASTER INITIAL CONTROLS AND RECURRING IDENTITY
+
+- A configured Channel Master Primary CTA is now available immediately when
+  the machine opens; it no longer waits for the first video discovery.
+- Re-Spin remains available immediately and invokes the same canonical spin
+  path as the lever.
+- Play Video remains unavailable until a valid video has been discovered.
+- Channel Master now alternates the title for 5 seconds and the editorial
+  ticker for 10 seconds throughout the page session.
+- The ticker is mounted once and continues moving underneath the title, so it
+  never pauses, resets or jumps back when it becomes visible again.
+- The existing restrained crossfade and reduced-motion treatment are retained.
+- An empty ticker leaves the Channel Master title visible continuously.
+
+INTRO MP4 COMPATIBILITY
+
+- Using the Primary CTA while the optional Intro MP4 is still pending cancels
+  the pending intro before opening the configured destination.
+- Intro playback, dismissal and normal machine interactions do not restart the
+  title/ticker cycle.
+
+UNCHANGED
+
+- Channel Master URL Preview Image, YouTube workflow, 50-video maximum,
+  palette, Contact Us, Share, reel, lever, project identity, public URL and QR
+  remain unchanged.
+- Business, Music, Tourism, Banjo, White Label and Love My Locals remain
+  unchanged.
+- No project-schema migration and no Worker deployment are required.
+
+CODE SIGNING
+
+This release contains embedded Windows product and version metadata but is
+unsigned because no trusted code-signing certificate is configured.

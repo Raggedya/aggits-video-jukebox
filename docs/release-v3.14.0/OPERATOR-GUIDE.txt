@@ -1,0 +1,32 @@
+CRISPY BITS DESKTOP v3.14.0 — CHANNEL MASTER CONTROLS
+======================================================
+
+INITIAL CONTROLS
+
+When a Channel Master project has a valid Primary CTA destination, its CTA is
+available as soon as the public machine opens. Re-Spin is also ready from page
+load and uses the same discovery mechanism as pulling the lever. Play Video is
+enabled only after the machine lands on a valid video.
+
+TITLE AND TICKER
+
+The configured Channel Master title is shown for 5 seconds, followed by the
+ticker for 10 seconds. That cycle repeats for the whole page session. The ticker
+keeps moving while the title is visible, so every return reveals its naturally
+advanced position rather than restarting the message.
+
+If no ticker text is configured, the title remains visible continuously.
+
+INTRO MP4
+
+The optional Channel Master Intro MP4 remains unchanged. Pulling the lever,
+pressing Re-Spin or using the Primary CTA before the intro opens cancels the
+pending intro and carries out the requested action. Intro activity does not
+restart the title/ticker cycle.
+
+VERSION NOTE
+
+Existing projects remain compatible. No project-schema migration is required.
+Existing live customer machines are not automatically republished by installing
+this Desktop release; deliberately republish a project when you want its public
+build to include the updated runtime.
