@@ -202,6 +202,24 @@ class Publisher:
             if target.exists():
                 shutil.rmtree(target)
             shutil.copytree(source, target)
+            # A Windows browser can temporarily keep an obsolete local-preview
+            # intro MP4 locked. It may remain in the private preview directory,
+            # but only the project's authoritative content-hashed intro is
+            # permitted into the public publication tree.
+            packaged_intros = target / "assets" / "channel-master-intro"
+            expected_intro = ""
+            if (
+                project.project_type is ProjectType.CHANNEL_MASTER
+                and project.channel_master_config
+                and project.channel_master_config.intro_mp4
+            ):
+                expected_intro = Path(project.channel_master_config.intro_mp4).name
+            if packaged_intros.is_dir():
+                for candidate in packaged_intros.glob("*.mp4"):
+                    if candidate.name != expected_intro:
+                        candidate.unlink(missing_ok=True)
+                if not any(packaged_intros.iterdir()):
+                    packaged_intros.rmdir()
 
             library = [item for item in _load_library(workspace) if str(item.get("slug")) != project.slug]
             social_title = (

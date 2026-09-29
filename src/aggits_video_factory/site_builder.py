@@ -304,8 +304,21 @@ def build_project_site(project: Project, destination: Path) -> Path:
     destination.mkdir(parents=True, exist_ok=True)
     assets = destination / "assets"
     if assets.exists():
-        shutil.rmtree(assets)
-    shutil.copytree(resource_path("static"), assets)
+        try:
+            shutil.rmtree(assets)
+        except PermissionError as error:
+            locked_path = Path(str(error.filename or ""))
+            is_streaming_intro = (
+                locked_path.suffix.casefold() == ".mp4"
+                and "channel-master-intro" in {part.casefold() for part in locked_path.parts}
+            )
+            if not is_streaming_intro:
+                raise
+            # Windows does not allow an MP4 to be deleted while the local
+            # preview is streaming it. Rehydrate the static tree in place;
+            # package_intro_mp4 will retain only the authoritative reference
+            # where the operating system permits cleanup.
+    shutil.copytree(resource_path("static"), assets, dirs_exist_ok=True)
     tourism_discovery_images = _package_tourism_discovery_images(project, assets, destination.parent)
     white_label_logo_public_url = ""
     white_label_logo_style = ""

@@ -4,6 +4,7 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from aggits_video_factory.business_workflow import assemble_reviewed_project
 from aggits_video_factory.channel_master_intro import (
@@ -172,6 +173,32 @@ class ChannelMasterIntroPersistenceTests(unittest.TestCase):
 
 
 class ChannelMasterIntroPublishingTests(unittest.TestCase):
+    def test_rebuild_survives_windows_preview_lock_and_keeps_authoritative_intro(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "private" / "opening.mp4"
+            _make_mp4(source)
+            project_dir = root / "project"
+            reference = materialize_intro_mp4(str(source), project_dir)
+            project = _project(reference)
+            site = project_dir / "site"
+            build_project_site(project, site)
+            packaged = site / "assets" / "channel-master-intro" / Path(reference).name
+
+            original_rmtree = __import__("shutil").rmtree
+
+            def locked_once(path, *args, **kwargs):
+                if Path(path) == site / "assets":
+                    raise PermissionError(32, "file is being used", str(packaged))
+                return original_rmtree(path, *args, **kwargs)
+
+            with patch("aggits_video_factory.site_builder.shutil.rmtree", side_effect=locked_once):
+                build_project_site(project, site)
+
+            payload = json.loads((site / "machine.json").read_text(encoding="utf-8"))
+            self.assertEqual(payload["channelMasterConfig"]["introMP4"]["assetURL"], f"assets/channel-master-intro/{Path(reference).name}")
+            self.assertTrue(packaged.is_file())
+
     def test_build_packages_public_mp4_payload_and_same_chamber_markup(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

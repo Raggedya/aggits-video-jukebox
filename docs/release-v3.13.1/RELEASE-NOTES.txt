@@ -1,0 +1,28 @@
+CRISPY BITS DESKTOP v3.13.1
+================================
+
+CHANNEL MASTER INTRO MP4 PREVIEW-LOCK FIX
+
+- Fixes Windows error 32 when a local Channel Master preview is still
+  streaming its Intro MP4 while the project is rebuilt or saved.
+- Rehydrates the generated static assets without trying to delete the active
+  browser stream.
+- Keeps content-hashed Intro MP4 replacement safe and non-destructive.
+- Ensures only the project's authoritative Intro MP4 can enter a public
+  publication, even if Windows temporarily retains an obsolete private preview
+  file until the browser releases it.
+
+UNCHANGED
+
+- Intro MP4 remains optional, Channel Master-only and limited to 24 MB.
+- The MP4 does not autoplay and remains separate from the 50-video YouTube
+  catalogue.
+- Project identity, public URL, QR, ticker, palette, CTA, Contact Us, URL
+  Preview Image, reel and lever mechanics remain unchanged.
+- Business, Music, Tourism, Banjo, White Label and Love My Locals remain
+  unchanged.
+
+CODE SIGNING
+
+This release contains embedded Windows product and version metadata but is
+unsigned because no trusted code-signing certificate is configured.

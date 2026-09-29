@@ -89,7 +89,13 @@ def _remove_intro_assets(project_directory: Path, *, keep: Path | None = None) -
     keep_resolved = keep.resolve() if keep else None
     for candidate in assets.glob(f"{INTRO_ASSET_PREFIX}*.mp4"):
         if keep_resolved is None or candidate.resolve() != keep_resolved:
-            candidate.unlink(missing_ok=True)
+            try:
+                candidate.unlink(missing_ok=True)
+            except PermissionError:
+                # A local preview may still be streaming the previous MP4 on
+                # Windows. The project reference is authoritative, so a
+                # locked, unreferenced asset can be cleaned up on a later run.
+                continue
 
 
 def materialize_intro_mp4(reference: str, project_directory: Path) -> str:
@@ -122,8 +128,24 @@ def package_intro_mp4(reference: str, project_directory: Path, site_directory: P
     info = inspect_intro_mp4(source)
     output = Path(site_directory) / "assets" / "channel-master-intro"
     output.mkdir(parents=True, exist_ok=True)
-    for stale in output.glob("*.mp4"):
-        stale.unlink(missing_ok=True)
     destination = output / source.name
-    shutil.copy2(source, destination)
+    if not destination.is_file() or destination.stat().st_size != info.file_size:
+        temporary = destination.with_suffix(".mp4.tmp")
+        shutil.copy2(source, temporary)
+        try:
+            temporary.replace(destination)
+        except PermissionError as error:
+            temporary.unlink(missing_ok=True)
+            raise ChannelMasterIntroError(
+                "INTRO MP4 IS CURRENTLY IN USE. CLOSE THE LOCAL PREVIEW AND TRY AGAIN."
+            ) from error
+    for stale in output.glob("*.mp4"):
+        if stale.resolve() == destination.resolve():
+            continue
+        try:
+            stale.unlink(missing_ok=True)
+        except PermissionError:
+            # Never fail a rebuild merely because the browser is finishing a
+            # request for an obsolete, content-hashed preview asset.
+            continue
     return f"assets/channel-master-intro/{source.name}", info.file_size

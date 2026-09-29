@@ -1,0 +1,37 @@
+CRISPY BITS DESKTOP v3.13.1 — CHANNEL MASTER INTRO MP4
+======================================================
+
+INTRO MP4
+
+Create or open a CHANNEL MASTER project and use INTRO MP4 → SELECT MP4.
+
+Supported format: MP4.
+Maximum size: 24 MB.
+
+The video is copied into project-controlled assets when the project is saved.
+It remains separate from the YouTube catalogue and does not consume one of the
+50 YouTube positions.
+
+LOCAL PREVIEW
+
+The local preview may remain open while you edit and rebuild the project.
+Version 3.13.1 safely handles the Windows file lock created while the browser is
+streaming the Intro MP4. You no longer need to close the preview before saving
+or replacing the intro.
+
+VIEWER EXPERIENCE
+
+The normal machine appears first. After approximately 1.25 seconds the existing
+video chamber may open and show PLAY VIDEO. The MP4 does not autoplay. The
+viewer may play it, dismiss it or pull the lever. Natural completion closes the
+chamber and returns to normal discovery.
+
+REPLACE OR REMOVE
+
+Select another MP4 to replace the current one, or choose REMOVE. Save, then
+deliberately republish an existing live project. The UUID, slug, public URL and
+QR destination remain stable.
+
+VERSION NOTE
+
+Existing projects remain compatible. No project-schema migration is required.
