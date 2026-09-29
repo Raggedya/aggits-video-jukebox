@@ -63,11 +63,20 @@ class ChannelMasterTitleTickerCycleTests(unittest.TestCase):
         start = _function("startChannelMasterHeaderTicker")
         channel_branch = start.split("if (activeProjectType === 'channel_master')", 1)[1].split("return;", 1)[0]
         self.assertLess(channel_branch.index("channelMasterHeaderTicker.hidden = false;"), channel_branch.index("syncChannelMasterIdentityCycle();"))
+        self.assertLess(channel_branch.index("channelMasterHeaderTicker.hidden = false;"), channel_branch.index("channelMasterHeaderTickerCopy.scrollWidth"))
+        self.assertLess(channel_branch.index("channelMasterHeaderTickerCopy.scrollWidth"), channel_branch.index("--channel-master-ticker-duration"))
         self.assertEqual(channel_branch.count("channelMasterHeaderTicker.hidden = false;"), 1)
         self.assertNotIn("innerHTML", start)
         self.assertNotIn("createElement", start)
         self.assertNotIn("remove", start)
         self.assertNotIn("animation", _function("syncChannelMasterIdentityCycle"))
+
+    def test_original_distance_based_ticker_speed_is_measured_after_mount(self):
+        start = _function("startChannelMasterHeaderTicker")
+        self.assertEqual(start.count("travel / 42"), 2)
+        self.assertEqual(start.count("Math.max(14, travel / 42)"), 2)
+        legacy_branch = start.split("channelMasterHeaderTickerTimer = window.setTimeout", 1)[1]
+        self.assertLess(legacy_branch.index("channelMasterHeaderTicker.hidden = false;"), legacy_branch.index("channelMasterHeaderTickerCopy.scrollWidth"))
 
     def test_hidden_ticker_keeps_running_and_only_opacity_selects_visible_layer(self):
         ticker_rule = STYLES.split('.music-machine[data-project-type="channel_master"] .channel-master-header-ticker{', 1)[1].split("}", 1)[0]
