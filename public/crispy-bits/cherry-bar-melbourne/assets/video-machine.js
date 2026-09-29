@@ -1314,12 +1314,14 @@ if (machine) {
   function startChannelMasterHeaderTicker() {
     if (!['channel_master', 'white_label', 'love_my_locals'].includes(activeProjectType) || channelMasterHeaderTickerStarted || !channelMasterHeaderTicker || !channelMasterHeaderTickerCopy?.textContent?.trim()) return;
     channelMasterHeaderTickerStarted = true;
-    const travel = Math.max(360, shopPlaque.clientWidth + channelMasterHeaderTickerCopy.scrollWidth);
-    channelMasterHeaderTicker.style.setProperty('--channel-master-ticker-duration', `${Math.max(14, travel / 42).toFixed(2)}s`);
     if (activeProjectType === 'channel_master') {
       // Mount the ticker animation once at page load. Opacity alone controls which
       // layer is visible, so the ticker keeps advancing while the title is shown.
       channelMasterHeaderTicker.hidden = false;
+      // Measure only after mounting. A hidden ticker reports a zero text width,
+      // collapsing long editorial copy to the unreadably fast minimum duration.
+      const travel = Math.max(360, shopPlaque.clientWidth + channelMasterHeaderTickerCopy.scrollWidth);
+      channelMasterHeaderTicker.style.setProperty('--channel-master-ticker-duration', `${Math.max(14, travel / 42).toFixed(2)}s`);
       channelMasterIdentityCycleStartedAt = performance.now();
       syncChannelMasterIdentityCycle();
       return;
@@ -1327,6 +1329,8 @@ if (machine) {
     channelMasterHeaderTickerTimer = window.setTimeout(() => {
       shopPlaque.dataset.shopPlaqueState = 'channel-master-ticker';
       channelMasterHeaderTicker.hidden = false;
+      const travel = Math.max(360, shopPlaque.clientWidth + channelMasterHeaderTickerCopy.scrollWidth);
+      channelMasterHeaderTicker.style.setProperty('--channel-master-ticker-duration', `${Math.max(14, travel / 42).toFixed(2)}s`);
     }, CHANNEL_MASTER_TICKER_DELAY);
   }
 
