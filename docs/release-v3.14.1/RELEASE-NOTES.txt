@@ -1,0 +1,26 @@
+CRISPY BITS DESKTOP v3.14.1
+================================
+
+CHANNEL MASTER TICKER SPEED CORRECTION
+
+- Restores the original readable Channel Master ticker speed calculation.
+- Measures the complete ticker text only after its permanent ticker layer has
+  been mounted, preventing long editorial text from falling back to the fast
+  minimum duration.
+- Preserves the recurring title/ticker presentation introduced in v3.14.0:
+  title for 5 seconds, ticker for 10 seconds, then repeat.
+- The ticker remains continuously mounted and moving while the title is shown.
+
+UNCHANGED
+
+- Channel Master reel, lever, landing, YouTube, Intro MP4, Primary CTA,
+  Contact Us, URL Preview Image, project identity, public URL and QR remain
+  unchanged.
+- Business, Music, Tourism, Banjo, White Label and Love My Locals remain
+  unchanged.
+- No project-schema migration and no Worker deployment are required.
+
+CODE SIGNING
+
+This release contains embedded Windows product and version metadata but is
+unsigned because no trusted code-signing certificate is configured.

@@ -1,0 +1,21 @@
+CRISPY BITS DESKTOP v3.14.1 — CHANNEL MASTER TICKER
+====================================================
+
+TICKER SPEED
+
+Version 3.14.1 restores the original readable distance-based ticker speed. The
+complete ticker text width is measured before its animation duration is set, so
+long editorial messages no longer fly past at the minimum duration.
+
+TITLE CYCLE
+
+The Channel Master title remains visible for 5 seconds, followed by 10 seconds
+of visible ticker. This repeats for the page session. The ticker keeps advancing
+while hidden behind the title and does not restart when it reappears.
+
+VERSION NOTE
+
+Existing projects remain compatible. No project-schema migration is required.
+Existing live machines are not automatically republished; deliberately rebuild
+and republish a Channel Master project when its live machine should receive the
+corrected runtime.
