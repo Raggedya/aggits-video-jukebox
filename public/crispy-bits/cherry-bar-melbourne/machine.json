@@ -23,7 +23,7 @@
     "primaryAction": {
       "type": "tickets",
       "displayLabel": "GET TICKETS",
-      "destinationURL": "https://www.eventbrite.com.au/e/vida-fox-debut-ep-boneyard-lagoon-live-at-cherry-bar-sat-oct-17-tickets-1999461255439?aff=ebdsoporgprofile",
+      "destinationURL": "https://www.eventbrite.com.au/e/vida-fox-debut-ep-boneyard-lagoon-live-at-cherry-bar-sat-oct-17-tickets-1999461255439",
       "enabled": true
     }
   },
@@ -180,7 +180,7 @@
     "primaryAction": {
       "type": "tickets",
       "displayLabel": "GET TICKETS",
-      "destinationURL": "https://www.eventbrite.com.au/e/vida-fox-debut-ep-boneyard-lagoon-live-at-cherry-bar-sat-oct-17-tickets-1999461255439?aff=ebdsoporgprofile",
+      "destinationURL": "https://www.eventbrite.com.au/e/vida-fox-debut-ep-boneyard-lagoon-live-at-cherry-bar-sat-oct-17-tickets-1999461255439",
       "enabled": true
     },
     "contact": {
