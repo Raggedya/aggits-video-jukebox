@@ -183,6 +183,17 @@
     "socialImage": "social-card-v2-965784cdb627.jpg"
   },
   {
+    "slug": "kingpin-events-social-club",
+    "title": "KINGPIN EVENTS & SOCIAL CLUB",
+    "projectType": "channel_master",
+    "channelId": "",
+    "channelTitle": "Custom video selection",
+    "videoCount": 8,
+    "publishedAt": "2026-10-01T01:36:20Z",
+    "url": "https://raggedya.github.io/aggits-video-jukebox/crispy-bits/kingpin-events-social-club/",
+    "socialImage": "channel-master-url-preview-53b956115c400f61.png"
+  },
+  {
     "slug": "lovely-accident",
     "title": "LOVELY ACCIDENT",
     "projectType": "music",
