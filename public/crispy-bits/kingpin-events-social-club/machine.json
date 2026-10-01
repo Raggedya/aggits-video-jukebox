@@ -234,8 +234,8 @@
       "enabled": false
     },
     "introMP4": {
-      "assetURL": "assets/channel-master-intro/channel-master-intro-0fc3faa07b6c8c8d.mp4",
-      "sizeBytes": 20288502,
+      "assetURL": "assets/channel-master-intro/channel-master-intro-e7bd37f36c35694c.mp4",
+      "sizeBytes": 20731606,
       "enabled": true,
       "promptDelayMilliseconds": 1250
     }
