@@ -21,9 +21,9 @@
     "subscribeURL": "https://www.youtube.com/channel/UCcn8gZPaVCIbQknjvjuC08w?sub_confirmation=1",
     "primaryCTA": "VIEW ON YOUTUBE",
     "primaryAction": {
-      "type": "visit_website",
-      "displayLabel": "VISIT WEBSITE",
-      "destinationURL": "https://www.youtube.com/@EmsWorldAu/videos",
+      "type": "book_now",
+      "displayLabel": "BOOK NOW",
+      "destinationURL": "https://www.emsworld.au/contactme?fbclid=IwVERDUAUtbmFleHRuA2FlbQIxMABwZG9mBWZkaWQWUPksa76qkrR1KKO3jMRGmNYMfUJXqnNydGMGYXBwX2lkCjY2Mjg1NjgzNzkAAR4S0LSzY-8-RZG7qWlsPc_KRX5mHDEK3KeRJJpJQ2nFVvX9UnmJKMP2H49a1Q_aem_A-oG3pxEiIi0YA35IDeUYg",
       "enabled": true
     }
   },
@@ -661,9 +661,9 @@
       "resolvedAccent": "#00E9E9"
     },
     "primaryAction": {
-      "type": "visit_website",
-      "displayLabel": "VISIT WEBSITE",
-      "destinationURL": "https://www.youtube.com/@EmsWorldAu/videos",
+      "type": "book_now",
+      "displayLabel": "BOOK NOW",
+      "destinationURL": "https://www.emsworld.au/contactme?fbclid=IwVERDUAUtbmFleHRuA2FlbQIxMABwZG9mBWZkaWQWUPksa76qkrR1KKO3jMRGmNYMfUJXqnNydGMGYXBwX2lkCjY2Mjg1NjgzNzkAAR4S0LSzY-8-RZG7qWlsPc_KRX5mHDEK3KeRJJpJQ2nFVvX9UnmJKMP2H49a1Q_aem_A-oG3pxEiIi0YA35IDeUYg",
       "enabled": true
     },
     "contact": {
