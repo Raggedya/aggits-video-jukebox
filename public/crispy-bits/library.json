@@ -291,6 +291,17 @@
     "socialImage": "social-card-v2-aafd7075d3b3.jpg"
   },
   {
+    "slug": "sky-music",
+    "title": "SKY MUSIC",
+    "projectType": "channel_master",
+    "channelId": "UCdTLFv_i63HyHgWDLwGQVhA",
+    "channelTitle": "Sky Music",
+    "videoCount": 50,
+    "publishedAt": "2026-10-07T00:11:31Z",
+    "url": "https://raggedya.github.io/aggits-video-jukebox/crispy-bits/sky-music/",
+    "socialImage": "social-card-v2-545a31656467.jpg"
+  },
+  {
     "slug": "smyrna",
     "title": "SMYRNA",
     "projectType": "love_my_locals",
