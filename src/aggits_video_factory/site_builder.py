@@ -657,6 +657,9 @@ def build_project_site(project: Project, destination: Path) -> Path:
         template = template.replace(
             "Loading the Crispy Bits video discovery machine.", "Loading the video discovery machine.",
         )
+    if (assets / "machine-statistics.js").is_file():
+        stats_hash = hashlib.sha256((assets / "machine-statistics.js").read_bytes()).hexdigest()[:12]
+        template = template.replace('</body>', f'<script defer src="assets/machine-statistics.js?v={stats_hash}"></script></body>')
     (destination / "index.html").write_text(template, encoding="utf-8")
 
     shop_url = project.business_config.shop_url if project.business_config else None
