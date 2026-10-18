@@ -25,6 +25,18 @@ class PreviewServer:
             def log_message(self, format: str, *args: object) -> None:
                 return
 
+            def send_head(self):
+                # Old tabs/bookmarks may still use the numeric loopback URL.
+                # Redirect before loading YouTube so its origin/referrer agree.
+                host = self.headers.get("Host", "").split(":", 1)[0]
+                if host == "127.0.0.1":
+                    self.send_response(302)
+                    self.send_header("Location", f"http://localhost:{self.server.server_port}{self.path}")
+                    self.send_header("Content-Length", "0")
+                    self.end_headers()
+                    return None
+                return super().send_head()
+
             def end_headers(self) -> None:
                 self.send_header("Cache-Control", "no-store")
                 super().end_headers()
@@ -35,7 +47,9 @@ class PreviewServer:
         self.server = http.server.ThreadingHTTPServer(("127.0.0.1", port), Handler)
         self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
         self.thread.start()
-        return f"http://127.0.0.1:{port}/"
+        # YouTube rejects some embed contexts using a numeric loopback origin.
+        # Keep binding loopback only; expose the browser-friendly hostname.
+        return f"http://localhost:{port}/"
 
     def stop(self) -> None:
         if self.server:

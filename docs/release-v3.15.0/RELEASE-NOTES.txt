@@ -1,0 +1,19 @@
+CRISPY BITS DESKTOP v3.15.0
+=========================
+
+Optional project-specific CTA 2 URL and button text in reel editors.
+CTA 2 remains on the right inside the information panel at every width.
+No mobile stacking. Existing four-button row is unchanged.
+When CTA 2 is configured, primary and secondary CTA borders alternate gently:
+5 seconds primary, 2.5 seconds quiet, 5 seconds secondary, 2.5 seconds quiet.
+Reduced motion disables the animation. Blank CTA 2 leaves the original layout.
+
+Includes the approved Football work: up to 18 independent clubs, imported
+logos, colour pickers and snapshot eyedropper, membership links, club selection,
+lever/reel playback, Back/reset, and embed failure recovery.
+Includes the existing image-thread Save fix and per-machine spin counters.
+
+No destructive schema migration. Existing project identity and QR remain stable.
+Customer projects are not republished by installing this version.
+No Worker change or deployment is required for this release.
+The EXE is unsigned; Windows may show its normal unknown-publisher warning.

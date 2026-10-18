@@ -10,6 +10,7 @@ from urllib.parse import urlparse
 from uuid import UUID, uuid4
 
 from .config import ticker_limit_for_project_type, video_limit_for_project_type
+from .secondary_cta import normalize_cta2
 from .migrations import CURRENT_PROJECT_SCHEMA_VERSION, migrate_project_dict
 
 
@@ -21,7 +22,11 @@ class ProjectValidationError(ValueError):
     pass
 
 
+from .football import FootballConfig, persisted_config
+
+
 class ProjectType(str, Enum):
+    FOOTBALL = "football"
     BUSINESS = "business"
     MUSIC = "music"
     TOURISM = "tourism"
@@ -851,6 +856,11 @@ class BanjoConfig:
 
 def project_primary_cta(project: "Project") -> PrimaryCta | None:
     """Return the one active CTA, adapting legacy URLs without mutating them."""
+    if project.project_type is ProjectType.FOOTBALL and project.football_config:
+        config = project.football_config
+        if not config.cta_url:
+            return None
+        return PrimaryCta(PrimaryCtaType.CUSTOM, config.cta_url, custom_label=config.cta_label)
     if project.project_type is ProjectType.BUSINESS:
         config = project.business_config
         if not config:
@@ -875,6 +885,8 @@ def project_primary_cta(project: "Project") -> PrimaryCta | None:
 
 
 def allowed_primary_cta_types(project_type: ProjectType | str) -> frozenset[PrimaryCtaType]:
+    if ProjectType(project_type) is ProjectType.FOOTBALL:
+        return frozenset({PrimaryCtaType.CUSTOM})
     kind = ProjectType(project_type)
     if kind is ProjectType.BUSINESS:
         return BUSINESS_CTA_TYPES
@@ -1277,7 +1289,9 @@ class Project:
     channel_master_config: ChannelMasterConfig | None = None
     white_label_config: WhiteLabelConfig | None = None
     love_my_locals_config: LoveMyLocalsConfig | None = None
+    football_config: FootballConfig | None = None
     source_channel_url: str = ""
+    cta_2: dict[str, str] | None = None
     manual_video_urls: list[str] = field(default_factory=list)
     excluded_video_ids: list[str] = field(default_factory=list)
     videos: list[Video] = field(default_factory=list)
@@ -1317,6 +1331,10 @@ class Project:
             self.project_type = ProjectType(self.project_type)
         except ValueError as error:
             raise ProjectValidationError(f"Unsupported project type: {self.project_type!r}.") from error
+        try:
+            self.cta_2 = normalize_cta2(self.cta_2)
+        except ValueError as error:
+            raise ProjectValidationError(str(error)) from error
         self.ticker_text = str(self.ticker_text or "").strip()
         ticker_limit = ticker_limit_for_project_type(self.project_type)
         if len(self.ticker_text) > ticker_limit:
@@ -1331,7 +1349,14 @@ class Project:
         self.additional_urls = [
             _optional_http_url(url, "Additional URL") or "" for url in self.additional_urls if str(url or "").strip()
         ]
-        if self.project_type is ProjectType.BUSINESS:
+        if self.project_type is not ProjectType.FOOTBALL and self.football_config is not None:
+            raise ProjectValidationError("Football configuration belongs only to Football projects.")
+        if self.project_type is ProjectType.FOOTBALL:
+            if any(config is not None for config in (self.business_config, self.music_config, self.tourism_config,
+                    self.banjo_config, self.channel_master_config, self.white_label_config, self.love_my_locals_config)):
+                raise ProjectValidationError("Football configuration must remain separate.")
+            self.football_config = self.football_config or FootballConfig()
+        elif self.project_type is ProjectType.BUSINESS:
             if self.music_config is not None or self.tourism_config is not None or self.banjo_config is not None or self.channel_master_config is not None or self.white_label_config is not None or self.love_my_locals_config is not None:
                 raise ProjectValidationError("A Business project cannot have another project type's configuration.")
             self.business_config = self.business_config or BusinessConfig()
@@ -1415,7 +1440,9 @@ class Project:
             "channel_master_config": self.channel_master_config.to_dict() if self.channel_master_config else None,
             "white_label_config": self.white_label_config.to_dict() if self.white_label_config else None,
             "love_my_locals_config": self.love_my_locals_config.to_dict() if self.love_my_locals_config else None,
+            **({"football_config": persisted_config(self)} if self.football_config else {}),
             "source_channel_url": self.source_channel_url,
+            "cta_2": self.cta_2,
             "manual_video_urls": list(self.manual_video_urls),
             "excluded_video_ids": list(self.excluded_video_ids),
             "videos": [video.to_dict() for video in self.videos],
@@ -1437,10 +1464,11 @@ class Project:
         value = migration.data
         known = {
             "schemaVersion", "slug", "title", "ticker_text", "tickerText", "channel_url", "channelUrl",
+            "football_config",
             "channel_id", "channelId", "channel_title", "channelTitle", "channel_thumbnail", "channelThumbnail",
             "id", "project_id", "projectId", "project_type", "projectType", "additional_urls", "additionalUrls",
             "business_config", "businessConfig", "music_config", "musicConfig", "tourism_config", "tourismConfig", "banjo_config", "banjoConfig", "channel_master_config", "channelMasterConfig", "white_label_config", "whiteLabelConfig", "love_my_locals_config", "loveMyLocalsConfig",
-            "source_channel_url", "sourceChannelUrl",
+            "source_channel_url", "sourceChannelUrl", "cta_2",
             "manual_video_urls", "manualVideoUrls", "excluded_video_ids", "excludedVideoIds", "videos", "status",
             "created_at", "createdAt", "updated_at", "updatedAt", "published_at", "publishedAt", "published_url",
             "publishedUrl", "delivery_status", "deliveryStatus", "publication_revision", "publicationRevision",
@@ -1486,7 +1514,9 @@ class Project:
             channel_master_config=ChannelMasterConfig.from_dict(channel_master_value) if channel_master_value is not None else None,
             white_label_config=WhiteLabelConfig.from_dict(white_label_value) if white_label_value is not None else None,
             love_my_locals_config=LoveMyLocalsConfig.from_dict(love_my_locals_value) if love_my_locals_value is not None else None,
+            football_config=FootballConfig.from_dict(value["football_config"]) if value.get("football_config") is not None else None,
             source_channel_url=str(value.get("source_channel_url") or value.get("sourceChannelUrl") or value.get("channel_url") or value.get("channelUrl") or ""),
+            cta_2=value.get("cta_2"),
             manual_video_urls=[str(item) for item in (value.get("manual_video_urls", value.get("manualVideoUrls", [])) or []) if str(item).strip()],
             excluded_video_ids=[str(item) for item in (value.get("excluded_video_ids", value.get("excludedVideoIds", [])) or []) if str(item).strip()],
             videos=[Video.from_dict(item) for item in value.get("videos", []) if isinstance(item, dict)],

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import gc
 import json
 import os
 import queue
@@ -9,6 +10,8 @@ import sys
 import tempfile
 import threading
 import webbrowser
+from copy import deepcopy
+from uuid import uuid4
 from concurrent.futures import ThreadPoolExecutor
 from io import BytesIO
 from pathlib import Path
@@ -119,6 +122,11 @@ ERROR = "#ef9292"
 DESKTOP_TITLE = APP_NAME
 
 
+from aggits_video_factory.football import (FootballConfig, import_logo, inspect_logo,
+    club_records, select_club_project, import_club_logos, logo_source)
+from aggits_video_factory.screen_colour import pick_screen_colour
+
+
 class ProjectForm(tk.Frame):
     def __init__(self, parent: tk.Misc, project_type: ProjectType, submit, new_project) -> None:
         super().__init__(parent, bg=PANEL)
@@ -176,15 +184,37 @@ class ProjectForm(tk.Frame):
         self._custom_logo_preview_image: ImageTk.PhotoImage | None = None
         self._url_preview_thumbnail_image: ImageTk.PhotoImage | None = None
         self.field_widgets: dict[str, tk.Widget] = {}
+        self.football_vars = {name: tk.StringVar(value=str(value)) for name, value in FootballConfig().to_dict().items() if name != "clubs"}
+        self.football_records = []
+        self.football_originals = {}
+        self.football_swatches = {}
+        self.football_project_dir = None
+        self._football_logo_image = None
         row = 1
-        row = self._entry_row(row, "Destination Title" if self.project_type is ProjectType.TOURISM else "Title", self.title_var, "title")
+        if self.project_type is ProjectType.FOOTBALL:
+            roster = tk.Frame(self, bg=PANEL)
+            roster.grid(row=row, column=0, columnspan=2, sticky="ew", padx=22, pady=8)
+            self.football_list = tk.Listbox(roster, height=4, exportselection=False, bg=INK, fg=CREAM)
+            self.football_list.pack(side="left", fill="both", expand=True)
+            scrollbar = ttk.Scrollbar(roster, command=self.football_list.yview)
+            scrollbar.pack(side="left", fill="y")
+            self.football_list.configure(yscrollcommand=scrollbar.set)
+            actions = tk.Frame(roster, bg=PANEL)
+            actions.pack(side="left", padx=8)
+            tk.Button(actions, text="ADD CLUB", command=self._football_add).pack(fill="x")
+            tk.Button(actions, text="REMOVE CLUB", command=self._football_remove).pack(fill="x", pady=4)
+            self.football_count = tk.Label(actions, bg=PANEL, fg=CREAM)
+            self.football_count.pack()
+            self.football_list.bind("<<ListboxSelect>>", self._football_select)
+            row += 1
+        row = self._entry_row(row, "Club name" if self.project_type is ProjectType.FOOTBALL else "Destination Title" if self.project_type is ProjectType.TOURISM else "Title", self.title_var, "title")
         if self.project_type is ProjectType.BANJO:
             self.field_widgets["title"].configure(state="readonly", readonlybackground="#101217")
         channel_label = "YouTube Channel URL (Optional)" if self.project_type in {ProjectType.MUSIC, ProjectType.BANJO, ProjectType.CHANNEL_MASTER, ProjectType.WHITE_LABEL} else "YouTube Channel URL"
         row = self._entry_row(row, channel_label, self.channel_var, "channel_url")
         self.ticker_limit = ticker_limit_for_project_type(self.project_type)
         if self.project_type is not ProjectType.BANJO:
-            for index, variable in enumerate(self.additional_vars, start=1):
+            for index, variable in enumerate([] if self.project_type is ProjectType.FOOTBALL else self.additional_vars, start=1):
                 label = f"Additional URL {index}" if self.project_type in {ProjectType.CHANNEL_MASTER, ProjectType.WHITE_LABEL} else f"Additional Web Page {index}"
                 row = self._entry_row(row, label, variable, "additional_urls")
 
@@ -210,7 +240,7 @@ class ProjectForm(tk.Frame):
             row = self._entry_row(row, custom_label, self.custom_label_var, "custom_label")
 
             bio_label = (
-                "Ticker Text" if self.project_type in {ProjectType.CHANNEL_MASTER, ProjectType.WHITE_LABEL}
+                "Ticker Text" if self.project_type in {ProjectType.CHANNEL_MASTER, ProjectType.WHITE_LABEL, ProjectType.FOOTBALL}
                 else "Bio / About" if self.project_type is ProjectType.TOURISM
                 else "Bio / Story Information"
             )
@@ -231,6 +261,40 @@ class ProjectForm(tk.Frame):
                 row = self._build_channel_master_fields(row)
             if self.project_type is ProjectType.WHITE_LABEL:
                 row = self._build_white_label_fields(row)
+            if self.project_type is ProjectType.FOOTBALL:
+                self.football_logo_preview = tk.Label(self, text="NO CLUB LOGO", bg=INK, fg=CREAM)
+                self.football_logo_preview.grid(row=row, column=1, sticky="w", padx=4, pady=6)
+                self.football_vars["logo_asset"].trace_add("write", lambda *_: self._football_refresh_logo())
+                row += 1
+                for key, label in (("club_id", "Stable Club ID"), ("base_colour", "Base colour (#RRGGBB)"),
+                                   ("primary_colour", "Primary colour (#RRGGBB)"), ("highlight_colour", "Highlight colour (#RRGGBB)")):
+                    row = self._entry_row(row, label, self.football_vars[key], key)
+                    if key.endswith("_colour"):
+                        colour_controls = tk.Frame(self, bg=PANEL)
+                        colour_controls.grid(row=row, column=1, sticky="w", padx=4, pady=(0, 4))
+                        swatch = tk.Button(colour_controls, text="CHOOSE COLOUR", command=lambda key=key: self._football_pick_colour(key))
+                        swatch.pack(side="left")
+                        tk.Button(colour_controls, text="PICK FROM SCREEN", command=lambda key=key: self._football_screen_colour(key)).pack(side="left", padx=6)
+                        self.football_swatches[key] = swatch
+                        self.football_vars[key].trace_add("write", lambda *_, key=key: self._football_update_swatch(key))
+                        self._football_update_swatch(key)
+                        row += 1
+                row = self._entry_row(row, "Membership URL (optional)", self.football_vars["membership_url"], "membership_url")
+                row = self._entry_row(row, "Club logo (optional)", self.football_vars["logo_asset"], "football_logo")
+                self.field_widgets["football_logo"].configure(state="readonly")
+                def choose_club_logo():
+                    path = filedialog.askopenfilename(parent=self, filetypes=[("Club logo", "*.png *.jpg *.jpeg *.webp")])
+                    if path:
+                        try:
+                            inspect_logo(Path(path))
+                            self.football_vars["logo_asset"].set(path)
+                        except (ValueError, OSError) as error:
+                            messagebox.showerror(DESKTOP_TITLE, str(error), parent=self)
+                logo_buttons = tk.Frame(self, bg=PANEL)
+                logo_buttons.grid(row=row, column=1, sticky="w", pady=5)
+                tk.Button(logo_buttons, text="SELECT LOGO", command=choose_club_logo).pack(side="left")
+                tk.Button(logo_buttons, text="REMOVE", command=lambda: self.football_vars["logo_asset"].set("")).pack(side="left", padx=8)
+                row += 1
         else:
             self.custom_row = -1
             tk.Label(self, text="Banjo Ticker Text", bg=PANEL, fg=CREAM, anchor="ne", font=("Segoe UI", 9)).grid(row=row, column=0, sticky="ne", padx=(22, 12), pady=(8, 5))
@@ -285,6 +349,8 @@ class ProjectForm(tk.Frame):
         if self.project_type is ProjectType.BANJO:
             row = self._build_banjo_fields(row)
 
+        from aggits_video_factory.secondary_cta import add_editor_fields
+        row = add_editor_fields(self, row, PANEL, CREAM)
         self.validation_label = tk.Label(self, text="", bg=PANEL, fg=ERROR, anchor="w", justify="left", font=("Segoe UI Semibold", 8))
         self.validation_label.grid(row=row, column=0, columnspan=2, sticky="ew", padx=22, pady=(3, 1))
         row += 1
@@ -1044,7 +1110,13 @@ class ProjectForm(tk.Frame):
             self.custom_label_var.set("")
 
     def values(self) -> ProjectFormValues:
+        football = FootballConfig()
+        for key, variable in self.football_vars.items():
+            setattr(football, key, variable.get())
+        football.clubs = deepcopy(self.football_records)
         return ProjectFormValues(
+            cta2_url=self.cta2_url_var.get(), cta2_label=self.cta2_label_var.get(),
+            football_config=football if self.project_type is ProjectType.FOOTBALL else None,
             title=self.title_var.get(),
             channel_url=self.channel_var.get(),
             additional_urls=[variable.get() for variable in self.additional_vars],
@@ -1082,6 +1154,11 @@ class ProjectForm(tk.Frame):
         )
 
     def set_values(self, values: ProjectFormValues) -> None:
+        self.cta2_url_var.set(values.cta2_url)
+        self.cta2_label_var.set(values.cta2_label)
+        for key, value in (values.football_config or FootballConfig()).to_dict().items():
+            if key != "clubs":
+                self.football_vars[key].set(value)
         self.title_var.set(values.title)
         self.channel_var.set(values.channel_url)
         for variable, value in zip(self.additional_vars, [*values.additional_urls, "", "", ""][:3]):
@@ -1137,8 +1214,12 @@ class ProjectForm(tk.Frame):
 
     def clear_new(self) -> None:
         self.editing_project_id = None
+        if self.project_type is ProjectType.FOOTBALL:
+            self.football_records = []
+            self.football_originals = {}
+            self.football_project_dir = None
         values = ProjectFormValues(
-            title=BANJO_TITLE if self.project_type is ProjectType.BANJO else "",
+            title=BANJO_TITLE if self.project_type is ProjectType.BANJO else "North Melbourne" if self.project_type is ProjectType.FOOTBALL else "",
             story_text="" if self.project_type in {ProjectType.BANJO, ProjectType.CHANNEL_MASTER, ProjectType.WHITE_LABEL} else ProjectFormValues().story_text,
             cta_label=DEFAULT_CTA_LABEL_BY_PROJECT[self.project_type],
         )
@@ -1156,27 +1237,55 @@ class ProjectForm(tk.Frame):
             self.stage_note.configure(text="Channel Master functionality · customer logo required · up to 50 YouTube videos.")
         elif self.project_type is ProjectType.TOURISM:
             self.stage_note.configure(text="One mixed deck: YouTube videos + manually curated destination discoveries. No research API.")
+        elif self.project_type is ProjectType.FOOTBALL:
+            self.custom_label_var.set("Visit club")
+            self.submit_button.configure(text="ANALYSE + REVIEW VIDEOS")
+            self.story_text.delete("1.0", "end")
+            self.field_widgets["club_id"].configure(state="readonly")
+            self.stage_note.configure(text="LOCAL PROTOTYPE · import a real logo and review club videos.")
+            self._football_capture()
+            self._football_refresh()
         else:
             self.stage_note.configure(text="Analyse and review videos, then build locally.")
         self.mark_clean()
 
     def load_project(self, project: Project) -> None:
         self.editing_project_id = project.id
+        if self.project_type is ProjectType.FOOTBALL:
+            store = getattr(self.winfo_toplevel(), "store", None)
+            self.football_project_dir = store.project_dir(project.slug) if store else None
         self.set_values(project_to_form_values(project))
+        if self.project_type is ProjectType.FOOTBALL:
+            self.football_records = club_records(project)
+            self.football_originals = {r["settings"]["club_id"]: deepcopy(r) for r in self.football_records}
+            self._football_refresh()
+            self.field_widgets["club_id"].configure(state="readonly")
         self.mode_label.configure(text=f"EDIT {project.project_type.value.replace('_', ' ').upper()} PROJECT")
         self.submit_button.configure(text="SAVE CHANGES")
+        if self.project_type is ProjectType.FOOTBALL:
+            self.submit_button.configure(text="ANALYSE + REVIEW VIDEOS")
         self.stage_note.configure(text="Reviewed changes remain private until Update + Republish.")
         self.mark_clean()
 
     def mark_clean(self) -> None:
+        if self.project_type is ProjectType.FOOTBALL:
+            self._football_capture()
+            self._football_baseline = (deepcopy(self.football_records), deepcopy(self.values()))
         self._baseline = self.values().comparable()
 
     def is_dirty(self) -> bool:
         return self.values().comparable() != self._baseline
 
     def restore_baseline(self) -> None:
+        if self.project_type is ProjectType.FOOTBALL:
+            self.football_records, values = deepcopy(self._football_baseline)
+            self.set_values(values)
+            self._football_refresh()
+            self.mark_clean()
+            return
         values = ProjectFormValues(
             title=str(self._baseline[0]), channel_url=str(self._baseline[1]), additional_urls=list(self._baseline[2]),
+            cta2_url=str(self._baseline[-2]), cta2_label=str(self._baseline[-1]),
             story_text=str(self._baseline[3]), manual_video_urls=list(self._baseline[4]), shop_url=str(self._baseline[5]),
             cta_label=str(self._baseline[6]), destination_url=str(self._baseline[7]), custom_label=str(self._baseline[8]),
             more_info_url=str(self._baseline[9]), stay_url=str(self._baseline[10]),
@@ -1209,6 +1318,149 @@ class ProjectForm(tk.Frame):
 
     def clear_validation(self) -> None:
         self.validation_label.configure(text="")
+
+    def _football_update_swatch(self, key):
+        value = self.football_vars[key].get()
+        if re.fullmatch(r"#[0-9a-fA-F]{6}", value):
+            rgb = [int(value[i:i+2], 16) for i in (1, 3, 5)]
+            self.football_swatches[key].configure(bg=value, activebackground=value,
+                fg="#000000" if sum(rgb) > 380 else "#ffffff")
+
+    def _football_refresh_logo(self):
+        reference = self.football_vars["logo_asset"].get()
+        self._football_logo_image = None
+        self.football_logo_preview.configure(image="", text="NO CLUB LOGO")
+        if not reference:
+            return
+        try:
+            source = Path(reference)
+            if not source.is_absolute():
+                if self.football_project_dir is None:
+                    raise ValueError("Project asset location unavailable")
+                source = logo_source(reference, self.football_project_dir)
+            inspect_logo(source)
+            with Image.open(source) as original:
+                thumbnail = original.convert("RGBA")
+                thumbnail.thumbnail((160, 80), Image.Resampling.LANCZOS)
+            self._football_logo_image = ImageTk.PhotoImage(thumbnail, master=self)
+            self.football_logo_preview.configure(image=self._football_logo_image, text="")
+        except (OSError, ValueError, tk.TclError):
+            self.football_logo_preview.configure(image="", text="LOGO PREVIEW UNAVAILABLE")
+
+    def _football_screen_colour(self, key):
+        club_id = self.football_vars["club_id"].get()
+        try:
+            chosen = pick_screen_colour(self)
+        except Exception:
+            messagebox.showerror(DESKTOP_TITLE, "Screen colour capture is unavailable. Your colour is unchanged. Please use Choose Colour.", parent=self)
+            return
+        if chosen and self.football_vars["club_id"].get() == club_id:
+            self.football_vars[key].set(chosen)
+            self._football_capture()
+
+    def _football_pick_colour(self, key):
+        value = self.football_vars[key].get()
+        _, chosen = colorchooser.askcolor(color=value if re.fullmatch(r"#[0-9a-fA-F]{6}", value) else "#081426", parent=self, title="Choose club colour")
+        if chosen:
+            self.football_vars[key].set(chosen.upper())
+            self._football_capture()
+
+    def _football_capture(self):
+        values = self.values()
+        config = values.football_config
+        record = next((deepcopy(r) for r in self.football_records if r["settings"]["club_id"] == config.club_id), {"videos": [], "excluded_video_ids": []})
+        record.update(title=values.title, ticker_text=values.story_text,
+            source_channel_url=values.channel_url, manual_video_urls=list(values.manual_video_urls))
+        record["settings"] = {k: v for k, v in config.to_dict().items() if k != "clubs"}
+        record["settings"].update(cta_label=values.custom_label.strip() or "Visit club", cta_url=values.destination_url.strip())
+        for index, item in enumerate(self.football_records):
+            if item["settings"]["club_id"] == config.club_id:
+                self.football_records[index] = record
+                break
+        else:
+            self.football_records.append(record)
+        return record
+
+    def _football_refresh(self):
+        self.football_list.delete(0, "end")
+        for index, record in enumerate(self.football_records):
+            self.football_list.insert("end", record["title"] or "Unnamed club")
+            if record["settings"]["club_id"] == self.football_vars["club_id"].get():
+                self.football_list.selection_set(index)
+                self.football_list.see(index)
+        self.football_count.configure(text=f"{len(self.football_records)} / 18 clubs")
+
+    def _football_ready_to_switch(self):
+        try:
+            validate_project_form(self.values(), ProjectType.FOOTBALL)
+            original = self.football_originals.get(self.football_vars["club_id"].get())
+            values = self.values()
+            if original and original.get("videos") and (values.channel_url != original.get("source_channel_url", "") or values.manual_video_urls != original.get("manual_video_urls", [])):
+                raise ValueError("Review the changed video sources before switching clubs.")
+            self._football_capture()
+            return True
+        except ValueError as error:
+            messagebox.showerror(DESKTOP_TITLE, str(error), parent=self)
+            self._football_refresh()
+            return False
+
+    def _football_show(self, record):
+        self.set_values(ProjectFormValues(title=record["title"], story_text=record.get("ticker_text", ""),
+            cta2_url=self.cta2_url_var.get(), cta2_label=self.cta2_label_var.get(),
+            channel_url=record.get("source_channel_url", ""), manual_video_urls=record.get("manual_video_urls", []),
+            custom_label=record["settings"].get("cta_label", "Visit club"), destination_url=record["settings"].get("cta_url", ""),
+            cta_label=DEFAULT_CTA_LABEL_BY_PROJECT[ProjectType.FOOTBALL],
+            football_config=FootballConfig.from_dict({**record["settings"], "clubs": self.football_records})))
+        self._football_refresh()
+
+    def _football_select(self, _event=None):
+        selected = self.football_list.curselection()
+        if not selected:
+            return
+        record = self.football_records[selected[0]]
+        if record["settings"]["club_id"] == self.football_vars["club_id"].get():
+            return
+        if self._football_ready_to_switch():
+            self._football_show(record)
+
+    def _football_add(self):
+        if len(self.football_records) >= 18:
+            messagebox.showinfo(DESKTOP_TITLE, "Maximum 18 clubs. Remove a club before adding another.", parent=self)
+            return
+        if not self._football_ready_to_switch():
+            return
+        settings = FootballConfig(club_id=f"club-{uuid4().hex[:12]}").to_dict()
+        settings.pop("clubs")
+        record = {"title": "New club", "ticker_text": "", "source_channel_url": "", "manual_video_urls": [],
+            "videos": [], "excluded_video_ids": [], "settings": settings}
+        self.football_records.append(record)
+        self._football_show(record)
+
+    def _football_remove(self):
+        if len(self.football_records) <= 1:
+            messagebox.showinfo(DESKTOP_TITLE, "Keep at least one club in this project.", parent=self)
+            return
+        if not messagebox.askyesno(DESKTOP_TITLE, "Remove the selected club? Other clubs and their assets will be preserved.", parent=self):
+            return
+        club_id = self.football_vars["club_id"].get()
+        self.football_records = [r for r in self.football_records if r["settings"]["club_id"] != club_id]
+        self._football_show(self.football_records[0])
+
+    def football_existing(self, project):
+        """Return this club's reviewed catalogue, not the last saved selected club's."""
+        if project is None:
+            return None
+        club_id = self.football_vars["club_id"].get()
+        record = self.football_originals.get(club_id)
+        if record is None:
+            record = next(deepcopy(r) for r in self.football_records if r["settings"]["club_id"] == club_id)
+        base = deepcopy(project)
+        base.football_config.clubs = deepcopy(self.football_records)
+        # select_club_project expects its legacy editing view to match its roster.
+        base.football_config.club_id = club_id
+        selected = select_club_project(base, record)
+        selected.football_config.clubs = deepcopy(self.football_records)
+        return selected
 
 
 class LoveMyLocalsForm(tk.Frame):
@@ -1347,6 +1599,8 @@ class LoveMyLocalsForm(tk.Frame):
         )
         self.local_picks_button.grid(row=0, column=1, sticky="e", padx=(8, 10), pady=8)
         row += 1
+        from aggits_video_factory.secondary_cta import add_editor_fields
+        row = add_editor_fields(self, row, PANEL, CREAM)
         self.validation_label = tk.Label(self, text="", bg=PANEL, fg=ERROR, anchor="w", justify="left", wraplength=460, font=("Segoe UI Semibold", 8))
         self.validation_label.grid(row=row, column=1, sticky="ew", padx=(0, 22), pady=(3, 4))
         row += 1
@@ -1399,6 +1653,7 @@ class LoveMyLocalsForm(tk.Frame):
             self.cta_var.get(), PrimaryCtaType.VISIT_WEBSITE,
         )
         return LoveMyLocalsFormValues(
+            cta2_url=self.cta2_url_var.get(), cta2_label=self.cta2_label_var.get(),
             locations=[item.get() for item in self.location_vars],
             public_title=self.public_title_var.get(),
             geography=self.geography_var.get(),
@@ -1412,6 +1667,8 @@ class LoveMyLocalsForm(tk.Frame):
         )
 
     def set_values(self, values: LoveMyLocalsFormValues) -> None:
+        self.cta2_url_var.set(values.cta2_url)
+        self.cta2_label_var.set(values.cta2_label)
         self._public_title_explicit = False
         for variable, value in zip(self.location_vars, [*values.locations, "", ""][:3]):
             variable.set(value)
@@ -1464,6 +1721,7 @@ class LoveMyLocalsForm(tk.Frame):
             return
         self.editing_project_id = project.id
         self.set_values(LoveMyLocalsFormValues(
+            cta2_url=(project.cta_2 or {}).get('url', ''), cta2_label=(project.cta_2 or {}).get('label', ''),
             locations=list(config.locations), public_title=config.public_title,
             geography=config.resolved_geography, include_shorts=config.include_shorts, ticker_text=project.ticker_text,
             default_cta_type=config.default_cta_type, default_cta_url=config.default_cta_url or "",
@@ -1489,6 +1747,7 @@ class LoveMyLocalsForm(tk.Frame):
         if not self._baseline:
             return
         self.set_values(LoveMyLocalsFormValues(
+            cta2_url=str(self._baseline[-2]), cta2_label=str(self._baseline[-1]),
             locations=list(self._baseline[0]), geography=str(self._baseline[1]), include_shorts=bool(self._baseline[2]),
             ticker_text=str(self._baseline[3]), default_cta_type=str(self._baseline[4]),
             default_cta_url=str(self._baseline[5]), tourism_mode=str(self._baseline[6]),
@@ -1905,6 +2164,11 @@ class BulkUploadPanel(tk.Frame):
 class Factory(tk.Tk):
     def __init__(self) -> None:
         super().__init__()
+        # Cyclic GC can otherwise finalize ImageTk objects in Thread.start's
+        # bootstrap, deadlocking Tk's waiting main thread. Collect on Tk only.
+        self._automatic_gc_was_enabled = gc.isenabled()
+        gc.disable()
+        self._gc_poll_id = self.after(1000, self._collect_ui_cycles)
         self.title(DESKTOP_TITLE)
         self.geometry("1320x820")
         self.minsize(1120, 720)
@@ -1930,6 +2194,22 @@ class Factory(tk.Tk):
         self._refresh_library()
         self._async_poll_id = self.after(50, self._drain_async_results)
         self.protocol("WM_DELETE_WINDOW", self._close)
+
+    def _collect_ui_cycles(self) -> None:
+        self._gc_poll_id = None
+        gc.collect()
+        self._gc_poll_id = self.after(1000, self._collect_ui_cycles)
+
+    def destroy(self) -> None:
+        if getattr(self, "_gc_poll_id", None) is not None:
+            self.after_cancel(self._gc_poll_id)
+            self._gc_poll_id = None
+        try:
+            super().destroy()
+            gc.collect()
+        finally:
+            if getattr(self, "_automatic_gc_was_enabled", False):
+                gc.enable()
 
     def _configure_styles(self) -> None:
         style = ttk.Style(self)
@@ -1960,6 +2240,7 @@ class Factory(tk.Tk):
         self.tab_types: list[ProjectType] = [
             ProjectType.BUSINESS, ProjectType.MUSIC, ProjectType.TOURISM,
             ProjectType.BANJO, ProjectType.CHANNEL_MASTER, ProjectType.WHITE_LABEL, ProjectType.LOVE_MY_LOCALS,
+            ProjectType.FOOTBALL,
         ]
         for project_type in self.tab_types:
             page = tk.Frame(self.notebook, bg=INK)
@@ -1991,6 +2272,8 @@ class Factory(tk.Tk):
                     new_project=lambda kind=project_type: self._new_project(kind),
                 )
             form_window = form_canvas.create_window((0, 0), window=form, anchor="nw")
+            if project_type is ProjectType.FOOTBALL:
+                tk.Button(form, text="SAVE LOCAL CLUB / PREVIEW DATA", command=self._save_football).grid(row=999, column=0, columnspan=2, pady=10)
             form.bind("<Configure>", lambda _event, canvas=form_canvas: canvas.configure(scrollregion=canvas.bbox("all")))
             form_canvas.bind("<Configure>", lambda event, canvas=form_canvas, window=form_window: canvas.itemconfigure(window, width=event.width))
             form_canvas.bind("<Enter>", lambda _event, canvas=form_canvas: canvas.bind_all("<MouseWheel>", lambda event: canvas.yview_scroll(int(-event.delta / 120), "units")))
@@ -2087,6 +2370,9 @@ class Factory(tk.Tk):
                     pass
             panel.buttons["email"].configure(state="normal" if allowed and project.status == "published" and not delivered_to_current else "disabled")
             panel.buttons["verify"].configure(state="normal" if allowed and pending else "disabled")
+            if project_type is ProjectType.FOOTBALL:
+                for action in ("publish", "unpublish", "open", "email", "verify"):
+                    panel.buttons[action].configure(state="disabled")
             if project:
                 included_count = len([video for video in project.videos if video.video_id not in set(project.excluded_video_ids)])
                 status_label = {
@@ -2140,6 +2426,8 @@ class Factory(tk.Tk):
         form = self.forms[project.project_type]
         if form.is_dirty() and not self._resolve_unsaved(form, "edit YouTube videos"):
             return
+        if project.project_type is ProjectType.FOOTBALL:
+            project = form.football_existing(self.projects.get(project.id, project))
         if not project.videos:
             messagebox.showerror(DESKTOP_TITLE, "This saved project has no persisted videos to edit.")
             return
@@ -2148,6 +2436,7 @@ class Factory(tk.Tk):
             self._review_love_my_locals({
                 "config": LoveMyLocalsConfig.from_dict(config.to_dict()),
                 "values": LoveMyLocalsFormValues(
+                    cta2_url=(project.cta_2 or {}).get('url', ''), cta2_label=(project.cta_2 or {}).get('label', ''),
                     locations=list(config.locations), public_title=config.public_title,
                     geography=config.resolved_geography, include_shorts=config.include_shorts, ticker_text=project.ticker_text,
                     default_cta_type=config.default_cta_type, default_cta_url=config.default_cta_url or "",
@@ -2372,6 +2661,8 @@ class Factory(tk.Tk):
         if choice is None:
             return False
         if choice:
+            if form.project_type is ProjectType.FOOTBALL:
+                return self._save_football()
             if isinstance(form, LoveMyLocalsForm) and form.editing_project_id:
                 return self._save_love_my_locals()
             return self._submit_project(form.project_type)
@@ -2838,12 +3129,45 @@ class Factory(tk.Tk):
 
         self._run_async("BUILDING LOVE MY LOCALS…", worker, self._create_complete)
 
+    def _save_football(self) -> bool:
+        """Save presentation without API calls; a changed source must be reviewed."""
+        if self.busy:
+            return False
+        form = self.forms[ProjectType.FOOTBALL]
+        try:
+            form._football_capture()
+            values = validate_project_form(form.values(), ProjectType.FOOTBALL)
+            existing = form.football_existing(self.projects.get(form.editing_project_id))
+            if existing and existing.videos and (values.channel_url != existing.source_channel_url or values.manual_video_urls != existing.manual_video_urls):
+                raise ValueError("Use Analyse + Review Videos after changing the video sources.")
+            slug = existing.slug if existing else self.store.allocate_slug(values.title)
+            from aggits_video_factory.youtube_api import ChannelCatalogue
+            catalogue = ChannelCatalogue(
+                channel_id=existing.channel_id if existing else "", channel_title=existing.channel_title if existing else "",
+                channel_url=existing.channel_url if existing else values.channel_url,
+                channel_thumbnail=existing.channel_thumbnail if existing else "", videos=existing.videos if existing else [],
+            )
+            project = assemble_reviewed_project(project_type=ProjectType.FOOTBALL, values=values, catalogue=catalogue,
+                selected_videos=[v for v in catalogue.videos if not existing or v.video_id not in existing.excluded_video_ids],
+                reviewed_videos=catalogue.videos, source_results=[], slug=slug, existing=existing)
+            directory = self.store.project_dir(slug)
+            import_club_logos(project, directory)
+            build_project_site(project, directory / "site")
+            self.store.save_project(project)
+            self._create_complete(project)
+            return True
+        except (ValueError, OSError) as error:
+            messagebox.showerror(DESKTOP_TITLE, str(error), parent=self)
+            return False
+
     def _create_jukebox(self, project_type: ProjectType) -> bool:
         if project_type is ProjectType.LOVE_MY_LOCALS:
             return self._create_love_my_locals()
         form = self.forms[project_type]
         form.clear_validation()
         try:
+            if project_type is ProjectType.FOOTBALL:
+                form._football_capture()
             values = validate_project_form(form.values(), project_type)
         except FormValidationError as error:
             form.show_validation(error)
@@ -2856,6 +3180,8 @@ class Factory(tk.Tk):
 
         editing_project_id = form.editing_project_id
         existing = self.projects.get(editing_project_id) if editing_project_id else None
+        if project_type is ProjectType.FOOTBALL:
+            existing = form.football_existing(existing)
         if existing and existing.project_type is not project_type:
             messagebox.showerror(DESKTOP_TITLE, "A saved project cannot be changed to a different project type.")
             return False
@@ -2902,6 +3228,7 @@ class Factory(tk.Tk):
                 "manual_ids": {video.video_id for video in (manual_catalogue.videos if manual_catalogue else [])},
                 "editing_project_id": editing_project_id,
                 "excluded_ids": set(existing.excluded_video_ids) if existing else set(),
+                "football_existing": existing if project_type is ProjectType.FOOTBALL else None,
                 "source_results": source_results,
                 "thumbnails": thumbnail_bytes,
             }
@@ -3067,6 +3394,8 @@ class Factory(tk.Tk):
             self.logger.info("Build started slug=%s type=%s", slug, project_type.value)
             editing_project_id = str(candidate.get("editing_project_id") or "")
             existing = self.projects.get(editing_project_id) if editing_project_id else None
+            if project_type is ProjectType.FOOTBALL:
+                existing = candidate.get("football_existing", existing)
             project_dir = self.store.project_dir(slug)
             banjo_config = None
             white_label_config = None
@@ -3118,6 +3447,8 @@ class Factory(tk.Tk):
                     project.channel_master_config.intro_mp4,
                     project_dir,
                 )
+            if project_type is ProjectType.FOOTBALL:
+                import_club_logos(project, project_dir)
             if project_type is ProjectType.TOURISM and project.tourism_config:
                 discovery_assets = project_dir / "assets"
                 discovery_assets.mkdir(parents=True, exist_ok=True)
@@ -3163,6 +3494,9 @@ class Factory(tk.Tk):
         included_count = len([video for video in project.videos if video.video_id not in set(project.excluded_video_ids)])
         self.forms[project.project_type].load_project(project)
         self._open_project_preview(project)
+        if project.project_type is ProjectType.FOOTBALL:
+            messagebox.showinfo(DESKTOP_TITLE, f"{project.title} saved locally with {included_count} reviewed videos.\n\nFootball is a local-only prototype. No publication is available in this milestone.")
+            return
         summary = ""
         if project.project_type is ProjectType.BANJO and project.banjo_config:
             sponsor_count, sponsor_bytes = sponsor_media_summary(project.banjo_config.sponsor.creatives)
@@ -3411,6 +3745,10 @@ def smoke_test() -> None:
         resource_path("static/base-machine.css"),
         resource_path("static/video-machine.css"),
         resource_path("static/video-machine.js"),
+        resource_path("static/football.js"),
+        resource_path("static/football.css"),
+        resource_path("static/football-video.js"),
+        resource_path("static/secondary-cta.css"),
         resource_path("static/music-machine/aggits-cabinet.webp"),
         resource_path("static/music-machine/crispy-bits-logo-cutout-v2.png"),
         resource_path("templates/social-preview/crispy-bits-social-preview-template.png"),
@@ -3483,11 +3821,27 @@ def functional_smoke_test() -> None:
         try:
             expected_tabs = {
                 "BUSINESS", "MUSIC", "TOURISM", "BANJO", "CHANNEL MASTER",
-                "WHITE LABEL", "LOVE MY LOCALS", "BULK UPLOAD",
+                "WHITE LABEL", "LOVE MY LOCALS", "BULK UPLOAD", "FOOTBALL",
             }
             actual_tabs = {app.notebook.tab(tab_id, "text") for tab_id in app.notebook.tabs()}
             if actual_tabs != expected_tabs:
                 raise RuntimeError(f"Packaged Desktop tab smoke failed: {sorted(actual_tabs)}")
+            # Exercise the real packaged worker start with an unreachable Tk
+            # image cycle, which previously deadlocked Save before work began.
+            import time
+            import weakref
+            photo = ImageTk.PhotoImage(Image.new("RGB", (2, 2)), master=app)
+            photo.cycle = photo
+            photo_reference = weakref.ref(photo)
+            del photo
+            completed = []
+            app._run_async("PACKAGED IMAGE/SAVE QA", lambda: "ok", completed.append)
+            deadline = time.monotonic() + 5
+            while (not completed or photo_reference() is not None) and time.monotonic() < deadline:
+                app.update()
+                time.sleep(.01)
+            if completed != ["ok"] or photo_reference() is not None:
+                raise RuntimeError("Packaged image cleanup / worker Save smoke failed.")
             form = app.forms[ProjectType.CHANNEL_MASTER]
             if not isinstance(form, ProjectForm) or not {"url_preview_image", "intro_mp4"}.issubset(form.field_widgets):
                 raise RuntimeError("Packaged Channel Master media controls are missing.")
@@ -3498,6 +3852,43 @@ def functional_smoke_test() -> None:
                     raise RuntimeError("Packaged Channel Master form layout smoke failed.")
             restored = ProjectStore().load_project(project.slug)
             form.load_project(restored)
+            form.cta2_url_var.set("https://example.com/secondary")
+            form.cta2_label_var.set("MORE DETAILS")
+            restored.cta_2 = validate_project_form(form.values(), ProjectType.CHANNEL_MASTER).cta_2
+            store.save_project(restored)
+            restored = store.load_project(restored.slug)
+            form.load_project(restored)
+            if form.cta2_url_var.get() != "https://example.com/secondary":
+                raise RuntimeError("Packaged CTA 2 Save/Reload failed.")
+            build_project_site(restored, project_dir / "site")
+            if 'class="secondary-cta"' not in (project_dir / "site/index.html").read_text(encoding="utf-8"):
+                raise RuntimeError("Packaged CTA 2 preview failed.")
+            football_form = app.forms[ProjectType.FOOTBALL]
+            football_form.cta2_url_var.set("https://example.com/football")
+            football_form._football_capture()
+            if not football_form.football_records:
+                raise RuntimeError("Packaged Football editor failed to capture its club.")
+            football_project = deepcopy(restored)
+            football_project.slug = "packaged-football-qa"
+            football_project.project_type = ProjectType.FOOTBALL
+            football_project.channel_master_config = None
+            football_project.football_config = FootballConfig(
+                club_id="packaged-test-club", base_colour="#112233",
+                primary_colour="#224466", highlight_colour="#FFEEDD",
+                membership_url="https://example.com/membership",
+            )
+            football_dir = store.project_dir(football_project.slug)
+            football_project.football_config.logo_asset = import_logo(str(source), football_dir)
+            store.save_project(football_project)
+            football_project = store.load_project(football_project.slug)
+            football_form.load_project(football_project)
+            if football_form.football_vars["base_colour"].get() != "#112233":
+                raise RuntimeError("Packaged Football colours did not survive Save/Reload.")
+            build_project_site(football_project, football_dir / "site")
+            football_data = json.loads((football_dir / "site/machine.json").read_text(encoding="utf-8"))
+            club = football_data["footballConfig"]["clubs"][0]
+            if not (football_dir / "site" / club["logo"]).is_file():
+                raise RuntimeError("Packaged Football logo/preview resource is missing.")
             if form.url_preview_image_var.get() != reference:
                 raise RuntimeError("Packaged Channel Master preview did not survive Save/Reload.")
             if form.intro_mp4_var.get() != intro_reference:

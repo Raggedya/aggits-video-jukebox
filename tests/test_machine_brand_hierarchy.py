@@ -52,6 +52,7 @@ def project_for(project_type: ProjectType) -> Project:
     common = dict(
         slug=f"hero-{project_type.value}",
         title={
+            ProjectType.FOOTBALL: "North Melbourne",
             ProjectType.BUSINESS: "ACCESS WORKWEAR & SAFETY",
             ProjectType.MUSIC: "WRAITH",
             ProjectType.TOURISM: "VISIT MERIMBULA",
@@ -68,6 +69,8 @@ def project_for(project_type: ProjectType) -> Project:
         project_type=project_type,
         videos=[sample_video()],
     )
+    if project_type is ProjectType.FOOTBALL:
+        return Project(**common)
     if project_type is ProjectType.BUSINESS:
         return Project(**common, business_config=BusinessConfig(shop_url="https://example.com/quote"))
     if project_type is ProjectType.MUSIC:

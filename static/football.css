@@ -1,0 +1,52 @@
+/* Football only. The existing cabinet, reel and other product rules are untouched. */
+.music-machine[data-project-type="football"]{--football-base:#081426;--football-primary:#005EB8;--football-highlight:#fff;background:var(--football-base)}
+.music-machine[data-project-type="football"] .experience-frame{background:linear-gradient(var(--football-primary),var(--football-base) 48%)}
+.music-machine[data-project-type="football"] .customer-backdrop{background:var(--football-base)}
+.music-machine[data-project-type="football"] :is(.customer-identity,.customer-story,.utility-controls,.content-logo-shell){display:none}
+.music-machine[data-project-type="football"] .experience-frame{padding-top:18px}
+.music-machine[data-project-type="football"][data-football-view="grid"] .lever{display:none}
+.music-machine[data-project-type="football"][data-football-view="club"] .football-maker{display:none}
+.music-machine[data-project-type="football"] .content-card{grid-template-columns:1fr;background:var(--football-base)}
+.music-machine[data-project-type="football"] .control-button:not(.control-button--primary){background:linear-gradient(var(--football-primary),var(--football-base))}
+.music-machine[data-project-type="football"] .control-button b{white-space:normal;overflow-wrap:anywhere}
+.music-machine[data-project-type="football"] .video-shutter{background:linear-gradient(90deg,var(--football-base),var(--football-primary))}
+.music-machine[data-project-type="football"][data-football-view="grid"] :is(.video-stage,.content-card,.machine-controls){display:none}
+.football-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:14px;margin:18px;padding:16px;border:1px solid #ad864c;border-radius:16px}
+.football-grid[hidden],.football-identity[hidden]{display:none}
+.football-maker{width:110px;margin:0 auto 10px}.football-maker img{display:block;width:100%;height:auto;object-fit:contain}
+.football-grid button,.football-identity button{color:#f7e6bf;background:var(--football-base);border:1px solid #c2a060;border-radius:12px;padding:14px;font:700 16px var(--font-copy);cursor:pointer}
+.football-grid button{display:grid;grid-template-rows:144px auto;align-items:center;justify-items:center;gap:12px;min-width:0;min-height:190px}
+.football-grid button>span:last-child{overflow-wrap:anywhere}
+.football-logo-slot{display:block;position:relative;width:100%;height:144px;min-width:0}
+.football-logo-art{display:block;position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);overflow:hidden}
+.football-logo-art img{position:absolute;max-width:none;max-height:none;object-fit:contain}
+.football-identity{margin:12px 14px;text-align:center;min-width:0}
+.football-identity button{display:block;font-size:12px;padding:10px;margin-bottom:10px}
+.football-identity-row{display:grid;grid-template-columns:minmax(0,1fr) clamp(112px,24vw,192px) minmax(0,1fr);align-items:center;gap:clamp(6px,1.5vw,18px);margin-bottom:14px}
+.football-medallion{grid-column:2;grid-row:1;position:relative;display:grid;place-items:center;width:100%;aspect-ratio:1;margin:0;border:3px solid #d9b76f;border-radius:50%;background:var(--football-base);box-shadow:0 0 0 2px #352815,inset 0 0 0 2px var(--football-highlight),0 4px 9px #0009;box-sizing:border-box}
+/* A contained square fits wholly within the ring, even with opaque image corners.
+   Preserve the entire original image and every word; never crop the artwork. */
+.football-logo-slot--hero{position:absolute;inset:3px;width:auto;height:auto;pointer-events:none}
+.football-membership{grid-row:1;box-sizing:border-box;display:flex;align-items:center;justify-content:center;min-width:0;min-height:56px;padding:12px 7px;border:3px ridge #d9b76f;border-radius:8px;background:linear-gradient(#080d14ed,#080d14ed),linear-gradient(var(--football-primary),var(--football-base));box-shadow:inset 0 0 0 2px #372817,0 3px 6px #0009;color:#ffe4aa;text-shadow:0 1px 2px #000;text-decoration:none;font:700 clamp(12px,1.8vw,20px)/1.25 var(--font-display);text-transform:uppercase;overflow-wrap:normal}
+.football-membership:first-child{grid-column:1}.football-membership:last-child{grid-column:3}
+.football-membership span{border-bottom:2px solid var(--football-highlight);padding-bottom:3px}
+.football-membership[hidden]{display:none}
+.football-membership:hover{filter:brightness(1.12)}
+.football-membership:focus-visible{outline:3px solid #fff;outline-offset:3px}
+@media(max-width:420px){.football-membership{font-size:12px;min-height:64px;padding:8px 4px}.football-identity-row{gap:6px}}
+.football-medallion span{font:10px var(--font-copy);color:#f7e6bf}
+.football-identity h2{font:700 clamp(18px,4vw,26px) var(--font-display);color:var(--football-highlight);margin:10px 0}
+.football-ticker{overflow:hidden;border:1px solid #ad864c;border-radius:12px;background:var(--football-base);padding:12px 0;color:#f7e6bf}
+.football-ticker span{display:block;width:max-content;min-width:100%;box-sizing:content-box;padding-left:100%;white-space:nowrap;font:700 18px var(--font-display);animation:footballTicker var(--football-ticker-duration,30s) linear var(--football-ticker-delay,0s) infinite}
+@keyframes footballTicker{to{transform:translateX(-100%)}}
+.football-grid button:focus-visible,.football-identity button:focus-visible{outline:3px solid var(--football-highlight);outline-offset:3px}
+@media(prefers-reduced-motion:reduce){.football-ticker span{animation:none;padding-left:12px;white-space:normal;width:auto}}
+/* The master player's engraved bronze treatment, scoped to Football. */
+.football-title-plaque{position:absolute;left:50%;bottom:-5px;z-index:12;box-sizing:border-box;width:max-content;max-width:80%;padding:7px 28px 6px;border:1px solid #5b3217;border-radius:3px;color:#2b160b;background:linear-gradient(180deg,#f1cd83 0,#c18a4b 16%,#8b5128 51%,#bd8040 78%,#e2b66a 100%);box-shadow:inset 0 1px rgba(255,239,185,.82),inset 0 -2px rgba(70,31,12,.52),inset 0 0 0 2px rgba(105,57,24,.25),0 2px 3px rgba(0,0,0,.72);font:900 clamp(10px,1.65vw,12px)/1.15 var(--font-display);letter-spacing:.08em;text-align:center;text-shadow:0 1px rgba(244,206,137,.58),0 -1px rgba(58,26,10,.38);text-transform:uppercase;overflow-wrap:anywhere;pointer-events:none;transform:translateX(-50%)}
+.football-title-plaque::before,.football-title-plaque::after{content:"";position:absolute;top:50%;width:8px;height:8px;border:1px solid #553018;border-radius:50%;background:radial-gradient(circle at 36% 32%,#f1cf88 0 16%,#9a5c2c 42%,#4b2510 78%);transform:translateY(-50%)}
+.football-title-plaque::before{left:9px}.football-title-plaque::after{right:9px}
+.music-machine[data-project-type="football"] .discovery-zone{margin-bottom:16px}
+.football-video-error{position:absolute;inset:0;z-index:20;display:grid;place-content:center;text-align:center;padding:20px;background:var(--football-base);color:#f7e6bf;font:16px/1.4 var(--font-copy)}
+.football-video-error[hidden],.football-title-plaque[hidden]{display:none}
+.football-video-error a{color:#f7e6bf;text-decoration:underline;padding:12px}
+.football-video-error a:focus-visible{outline:2px solid var(--football-highlight)}

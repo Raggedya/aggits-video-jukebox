@@ -17,6 +17,7 @@ from .models import (
 )
 from .white_label import prepare_white_label_logo, validate_logo_adjustments
 from .youtube_api import YouTubeClient
+from .football import FootballConfig
 
 
 CTA_CHOICES: tuple[tuple[str, PrimaryCtaType], ...] = (
@@ -76,6 +77,7 @@ def _channel_master_cta_choices() -> tuple[tuple[str, PrimaryCtaType], ...]:
 
 CHANNEL_MASTER_CTA_CHOICES = _channel_master_cta_choices()
 CTA_CHOICES_BY_PROJECT = {
+    ProjectType.FOOTBALL: (("Custom", PrimaryCtaType.CUSTOM),),
     ProjectType.BUSINESS: BUSINESS_CTA_CHOICES,
     ProjectType.MUSIC: CTA_CHOICES,
     ProjectType.TOURISM: TOURISM_CTA_CHOICES,
@@ -111,6 +113,9 @@ class FormValidationError(ValueError):
 
 @dataclass(slots=True)
 class ProjectFormValues:
+    cta2_url: str = ""
+    cta2_label: str = ""
+    football_config: FootballConfig | None = None
     title: str = ""
     channel_url: str = ""
     additional_urls: list[str] = field(default_factory=list)
@@ -146,6 +151,7 @@ class ProjectFormValues:
 
     def comparable(self) -> tuple[object, ...]:
         return (
+            json.dumps(self.football_config.to_dict(), sort_keys=True) if self.football_config else None,
             self.title,
             self.channel_url,
             tuple(self.additional_urls),
@@ -181,6 +187,7 @@ class ProjectFormValues:
             ),
             self.url_preview_image,
             self.intro_mp4,
+            self.cta2_url, self.cta2_label,
         )
 
 
@@ -196,6 +203,8 @@ class ValidatedProjectForm:
     tourism_config: TourismConfig | None
     channel_master_config: ChannelMasterConfig | None = None
     white_label_config: WhiteLabelConfig | None = None
+    cta_2: dict[str, str] | None = None
+    football_config: FootballConfig | None = None
     banjo_choice_urls: list[str] = field(default_factory=list)
     banjo_choice_titles: list[str] = field(default_factory=list)
     banjo_choice_active: list[bool] = field(default_factory=list)
@@ -231,6 +240,11 @@ def youtube_urls_for_project_review(
 
 
 def validate_project_form(values: ProjectFormValues, project_type: ProjectType | str) -> ValidatedProjectForm:
+    from .secondary_cta import normalize_cta2
+    try:
+        cta2 = normalize_cta2({'url': values.cta2_url, 'label': values.cta2_label})
+    except ValueError as error:
+        raise FormValidationError('cta2_url', str(error)) from error
     project_type = ProjectType(project_type)
     title = BANJO_TITLE if project_type is ProjectType.BANJO else re.sub(r"\s+", " ", values.title).strip()
     if not title:
@@ -303,7 +317,7 @@ def validate_project_form(values: ProjectFormValues, project_type: ProjectType |
                 f"Banjo YouTube videos, including Banjo's Choice awards, cannot exceed {manual_limit} in total.",
             )
 
-    if not channel_url and not manual_urls and not choice_rows:
+    if not channel_url and not manual_urls and not choice_rows and project_type is not ProjectType.FOOTBALL:
         raise FormValidationError(
             "channel_url",
             "Add a YouTube channel URL or an individual YouTube video."
@@ -320,6 +334,21 @@ def validate_project_form(values: ProjectFormValues, project_type: ProjectType |
             else "Bio / Story Information"
         )
         raise FormValidationError("story_text", f"{label} cannot exceed {ticker_limit} characters.")
+
+    if project_type is ProjectType.FOOTBALL:
+        try:
+            football = FootballConfig.from_dict((values.football_config or FootballConfig()).to_dict())
+            football.cta_label = values.custom_label.strip() or "Visit club"
+            football.cta_url = values.destination_url.strip()
+            football.__post_init__()
+        except ValueError as error:
+            raise FormValidationError("title", str(error)) from error
+        return ValidatedProjectForm(
+            cta_2=cta2,
+            title=title, channel_url=channel_url, additional_urls=[], story_text=story_text,
+            manual_video_urls=manual_urls, business_config=None, music_config=None, tourism_config=None,
+            football_config=football,
+        )
 
     if project_type is ProjectType.BANJO:
         choice_urls = [row[0] for row in choice_rows]
@@ -359,6 +388,7 @@ def validate_project_form(values: ProjectFormValues, project_type: ProjectType |
                 except ValueError as error:
                     raise FormValidationError("sponsor_creatives", str(error)) from error
         return ValidatedProjectForm(
+            cta_2=cta2,
             title=BANJO_TITLE, channel_url=channel_url, additional_urls=[], story_text=story_text,
             manual_video_urls=manual_urls, business_config=None, music_config=None, tourism_config=None,
             banjo_choice_urls=choice_urls,
@@ -534,6 +564,7 @@ def validate_project_form(values: ProjectFormValues, project_type: ProjectType |
         raise FormValidationError(field_name, message) from error
 
     return ValidatedProjectForm(
+        cta_2=cta2,
         title=validated.title,
         channel_url=channel_url,
         additional_urls=list(validated.additional_urls),
@@ -554,6 +585,7 @@ def project_to_form_values(project: Project) -> ProjectFormValues:
         sponsor = config.sponsor if config else None
         by_id = {video.video_id: video.url for video in project.videos}
         return ProjectFormValues(
+            cta2_url=(project.cta_2 or {}).get('url', ''), cta2_label=(project.cta_2 or {}).get('label', ''),
             title=BANJO_TITLE,
             channel_url=project.source_channel_url or project.channel_url,
             manual_video_urls=list(project.manual_video_urls),
@@ -577,7 +609,9 @@ def project_to_form_values(project: Project) -> ProjectFormValues:
         else None
     )
     return ProjectFormValues(
+        cta2_url=(project.cta_2 or {}).get('url', ''), cta2_label=(project.cta_2 or {}).get('label', ''),
         title=project.title,
+        football_config=FootballConfig.from_dict(project.football_config.to_dict()) if project.football_config else None,
         channel_url=project.source_channel_url or project.channel_url,
         additional_urls=list(project.additional_urls),
         story_text=project.ticker_text,
@@ -585,7 +619,7 @@ def project_to_form_values(project: Project) -> ProjectFormValues:
         shop_url=project.business_config.shop_url or "" if project.business_config else "",
         cta_label=CTA_TYPE_TO_LABEL_BY_PROJECT[project.project_type].get(cta.cta_type, default_label) if cta else default_label,
         destination_url=cta.destination_url if cta else "",
-        custom_label=cta.custom_label or "" if cta else "",
+        custom_label=project.football_config.cta_label if project.football_config else cta.custom_label or "" if cta else "",
         more_info_url=project.tourism_config.more_info_url or "" if project.tourism_config else "",
         stay_url=project.tourism_config.stay_url or "" if project.tourism_config else "",
         palette=channel_master.palette if channel_master else "MIDNIGHT",

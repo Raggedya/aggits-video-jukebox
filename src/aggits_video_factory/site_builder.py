@@ -17,6 +17,7 @@ from .banjo import BANJO_TITLE, validate_sponsor_logo, validate_sponsor_mp4, ver
 from .channel_master_preview import package_url_preview_image, remove_packaged_url_preview_images
 from .channel_master_intro import package_intro_mp4
 from .models import Project, ProjectType, project_primary_cta
+from .secondary_cta import normalize_cta2
 from .social_preview import (
     BANJO_SOCIAL_PREVIEW_SIZE,
     LOVE_MY_LOCALS_LOGO_RESOURCE,
@@ -284,7 +285,7 @@ def create_love_my_locals_qr_card(project: Project, destination: Path) -> None:
 def build_project_site(project: Project, destination: Path) -> Path:
     if project.project_type not in {
         ProjectType.BUSINESS, ProjectType.MUSIC, ProjectType.TOURISM,
-        ProjectType.BANJO, ProjectType.CHANNEL_MASTER, ProjectType.WHITE_LABEL, ProjectType.LOVE_MY_LOCALS,
+        ProjectType.BANJO, ProjectType.CHANNEL_MASTER, ProjectType.WHITE_LABEL, ProjectType.LOVE_MY_LOCALS, ProjectType.FOOTBALL,
     }:
         raise ValueError(f"Unsupported project type: {project.project_type!r}.")
     primary_cta = project_primary_cta(project)
@@ -391,7 +392,7 @@ def build_project_site(project: Project, destination: Path) -> Path:
         social_filename = social_preview_filename(public_social_title, project.project_type)
     social_url = f"{canonical.rstrip('/')}/{social_filename}"
     included_videos = included_project_videos(project)
-    if not included_videos:
+    if not included_videos and project.project_type is not ProjectType.FOOTBALL:
         raise ValueError("A project must include at least one video before generation.")
     social_title = (
         f"Love My Locals — {public_social_title}"
@@ -438,6 +439,8 @@ def build_project_site(project: Project, destination: Path) -> Path:
         else primary_action_label if primary_cta and primary_cta.destination_url else f"{primary_action_label} unavailable"
     )
     initial_reel_instruction = "PULL THE LEVER  ──────→"
+    if project.project_type is ProjectType.FOOTBALL:
+        initial_reel_instruction = "CHOOSE YOUR CLUB"
     story_header_markup = ""
     story_aria_label = project.title
     banjo_sponsor_area_markup = ""
@@ -657,6 +660,31 @@ def build_project_site(project: Project, destination: Path) -> Path:
         template = template.replace(
             "Loading the Crispy Bits video discovery machine.", "Loading the video discovery machine.",
         )
+    if project.project_type is ProjectType.FOOTBALL:
+        template = template.replace('</head>', '<link rel="stylesheet" href="assets/football.css"></head>')
+        template = template.replace('<div class="experience-frame">', '<div class="experience-frame">'
+            '<div class="football-maker"><img src="assets/music-machine/crispy-bits-logo-cutout-v2.png" alt="Crispy Bits"></div>')
+        template = template.replace('<section class="video-stage"',
+            '<section class="football-grid" data-football-grid aria-label="Choose your club"></section>'
+            '<section class="football-identity" data-football-identity hidden>'
+            '<button type="button" data-football-back>← BACK TO CLUBS</button>'
+            '<div class="football-identity-row">'
+            '<a class="football-membership" data-football-membership hidden target="_blank" rel="noopener noreferrer" aria-label="Become a Member"><span>Become a Member</span></a>'
+            '<div class="football-medallion"><img data-football-logo hidden alt=""><span data-football-no-logo>CLUB LOGO NOT SUPPLIED</span></div>'
+            '<a class="football-membership" data-football-membership hidden target="_blank" rel="noopener noreferrer" aria-label="Become a Member"><span>Become a Member</span></a></div>'
+            '<div class="football-ticker"><span data-football-ticker></span></div>'
+            '</section><section class="video-stage"')
+        template = template.replace('data-project-type="football"', 'data-project-type="football" data-football-view="grid"')
+        template = template.replace('<div class="reel-bank"', '<div class="channel-master-title-plaque football-title-plaque" data-football-name hidden></div><div class="reel-bank"', 1)
+    cta2 = normalize_cta2(project.cta_2)
+    if cta2:
+        template = template.replace('<section class="content-card"', '<section data-cta2 class="content-card"')
+        button = ('<a class="secondary-cta" href="' + html.escape(cta2['url'], quote=True)
+                  + '" target="_blank" rel="noopener noreferrer">'
+                  + html.escape(cta2['label']) + '</a>')
+        template = template.replace('<a class="youtube-cta"', button + '<a class="youtube-cta"', 1)
+        digest = hashlib.sha256((assets / 'secondary-cta.css').read_bytes()).hexdigest()[:12]
+        template = template.replace('</head>', f'<link rel="stylesheet" href="assets/secondary-cta.css?v={digest}"></head>')
     if (assets / "machine-statistics.js").is_file():
         stats_hash = hashlib.sha256((assets / "machine-statistics.js").read_bytes()).hexdigest()[:12]
         template = template.replace('</body>', f'<script defer src="assets/machine-statistics.js?v={stats_hash}"></script></body>')
@@ -909,6 +937,11 @@ def build_project_site(project: Project, destination: Path) -> Path:
             "exploreUrl": locals_config.explore_url or "",
             "localPicks": [item.to_dict() for item in locals_config.local_picks],
         }
+    if project.project_type is ProjectType.FOOTBALL:
+        from .football import package_football
+        payload["footballConfig"] = package_football(project, destination, payload["videos"])
+    if cta2:
+        payload['cta2'] = cta2
     (destination / "machine.json").write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     create_qr_card(project, destination / "qr-card.png")
     if custom_social_image:

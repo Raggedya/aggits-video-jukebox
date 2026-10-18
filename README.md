@@ -8,6 +8,18 @@ LOVE MY LOCALS accepts one to three locations, discovers and scores a varied poo
 
 ## Factory workflow
 
+### v3.15.0 additions
+
+The FOOTBALL tab adds a roster of up to 18 independently configured clubs,
+with logo import, colour pickers, snapshot eyedropper, membership links and
+reviewed video catalogues. Club selection reuses the existing lever/reel player.
+
+Reel editors also offer optional **CTA 2 URL** and **CTA 2 BUTTON TEXT**.
+When configured, the extra button stays on the right inside the information
+panel, including on mobile. Primary and secondary borders alternate gently
+with quiet gaps; reduced-motion users see static borders. Existing machines
+are unchanged until an operator deliberately saves and republishes them.
+
 1. Open **Settings** once and save a YouTube Data API v3 key, Delivery Email and provisioned delivery credential.
 2. Choose **BUSINESS**, **MUSIC** or **TOURISM**, enter a title and Bio / Story, then supply a channel URL, up to 15 individual video URLs, or both.
 3. Business projects may configure a Shop URL. Music projects configure one Primary Call to Action and Destination URL. Tourism projects configure an official destination URL and may add a manually verified Local Discovery Deck alongside their YouTube videos.

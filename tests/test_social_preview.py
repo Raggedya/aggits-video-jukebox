@@ -107,6 +107,8 @@ def project_for(project_type: ProjectType, title: str = "WRAITH") -> Project:
         videos=[sample_video()],
         published_url=f"https://example.com/crispy-bits/preview-{project_type.value}/",
     )
+    if project_type is ProjectType.FOOTBALL:
+        return Project(**common)
     if project_type is ProjectType.BUSINESS:
         return Project(**common, business_config=BusinessConfig())
     if project_type is ProjectType.MUSIC:

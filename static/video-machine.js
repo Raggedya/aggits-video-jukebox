@@ -1,5 +1,7 @@
 import {ARTIST_SINGLE_REEL_PROFILE,populateSingleReel,spinSingleReel} from './single-reel-engine.js';
 import {MUSIC_MACHINE_REEL_PROFILE,leverResistance} from './machine-mechanics-core.js';
+import {mountFootball} from './football.js';
+import {footballVideoUrl, footballVideoMonitor, youtubeId} from './football-video.js';
 
 const machine = document.querySelector('.music-machine[data-machine-platform="youtube"]');
 
@@ -24,6 +26,40 @@ if (machine) {
   const soundLabel = machine.querySelector('[data-sound-label]');
   const homeButton = machine.querySelector('[data-action="home"]');
   const player = machine.querySelector('[data-youtube-player]');
+  let footballMonitor, footballError;
+  function clearFootballError() {
+    footballMonitor?.reset();
+    if (footballError) footballError.hidden = true;
+  }
+  function failFootballVideo(reason) {
+    if (!current || activeProjectType !== 'football') return;
+    pendingYouTubePlay = false;
+    window.clearTimeout(footballPlayTimer);
+    cancelPendingReveal();
+    footballMonitor?.reset();
+    player.src = 'about:blank';
+    footballError.replaceChildren();
+    const message = document.createElement('p');
+    message.textContent = 'This video is unavailable in the embedded player. Watch on YouTube or pull the lever to choose another video.';
+    footballError.append(message);
+    const original = current.videoURL || current.url;
+    const id = youtubeId(original);
+    if (id && id === current.videoId) {
+      const link = document.createElement('a');
+      link.href = `https://www.youtube.com/watch?v=${id}`;
+      link.textContent = 'Watch on YouTube';
+      link.target = '_blank'; link.rel = 'noopener noreferrer';
+      footballError.append(link);
+    }
+    footballError.hidden = false;
+    machine.dataset.videoOpen = 'true';
+    stage.setAttribute('aria-hidden', 'false');
+    playButton.disabled = true;
+    respinButton.disabled = false;
+    lever.disabled = false;
+    setState('VIDEO_UNAVAILABLE', message.textContent);
+    console.warn('[Crispy Bits Football] Embedded video unavailable:', reason);
+  }
   const tourismDiscoveryPoster = machine.querySelector('[data-tourism-discovery-poster]');
   const tourismDiscoveryBackdrop = machine.querySelector('[data-tourism-discovery-backdrop]');
   const tourismDiscoveryHook = machine.querySelector('[data-tourism-discovery-hook]');
@@ -78,6 +114,11 @@ if (machine) {
   const CHANNEL_PRODUCT_TYPES = [...CHANNEL_MASTER_PRODUCT_TYPES, 'love_my_locals'];
 
   let catalogue = [];
+  let footballEpoch = 0;
+  let footballFrame = 0;
+  let footballPlayTimer = 0;
+  let footballLeverTimer = 0;
+  let footballLeverResetTimer = 0;
   let current = null;
   let spinning = false;
   let soundEnabled = (() => {
@@ -838,6 +879,7 @@ if (machine) {
   }
 
   async function closeVideo() {
+    if (activeProjectType === 'football') clearFootballError();
     if (machine.dataset.videoOpen !== 'true') return;
     pendingYouTubePlay = false;
     machine.dataset.videoOpen = 'false';
@@ -863,7 +905,9 @@ if (machine) {
   }
 
   async function spin() {
+    if (activeProjectType === 'football' && machine.dataset.footballView !== 'club') return;
     if (spinning || catalogue.length === 0) return;
+    const epoch = footballEpoch;
     cancelChannelMasterIntro();
     if (activeProjectType === 'banjo' && current?.contentType === 'sponsor_mp4') emitBanjoEvent('sponsor_respin', {creativeId: current.creativeId});
     cancelPendingReveal();
@@ -871,6 +915,7 @@ if (machine) {
     ensureMachineSamples();
     await closeVideo();
     if (machineAudioUnlockPromise) await machineAudioUnlockPromise;
+    if (activeProjectType === 'football' && epoch !== footballEpoch) return;
     setState('SPINNING', 'The reel is selecting a video.');
     meterMode = 'spin';
     playButton.disabled = true;
@@ -884,6 +929,10 @@ if (machine) {
     const winner = sponsorWinner || nextWinner();
     emitTourismEvent('tourism_spin', {contentType: winner?.contentType || 'video'});
     await spinSingleReel({
+      ...(activeProjectType === 'football' ? {requestFrame: callback => {
+        footballFrame = requestAnimationFrame(callback);
+        return footballFrame;
+      }} : {}),
       reel,
       finalEntry: winner,
       stopAfter: reducedMotion.matches ? ARTIST_SINGLE_REEL_PROFILE.reducedMotionDuration : ARTIST_SINGLE_REEL_PROFILE.duration,
@@ -892,6 +941,7 @@ if (machine) {
       reelIndex: 0,
       onStop: reelThunk,
     });
+    if (activeProjectType === 'football' && epoch !== footballEpoch) return;
     stopReelSound();
     current = winner;
     if (activeProjectType === 'banjo') {
@@ -938,7 +988,10 @@ if (machine) {
     leverProgress = 0;
     lever.style.transition = animated ? 'transform .48s cubic-bezier(.18,.72,.23,1)' : 'none';
     lever.style.transform = 'translateY(-50%) translateY(0) rotate(0)';
-    window.setTimeout(() => { lever.style.transition = ''; }, 500);
+    if (activeProjectType === 'football') {
+      window.clearTimeout(footballLeverResetTimer);
+      footballLeverResetTimer = window.setTimeout(() => { lever.style.transition = ''; }, 500);
+    } else window.setTimeout(() => { lever.style.transition = ''; }, 500);
   }
 
   function pullVisual(progress) {
@@ -948,15 +1001,24 @@ if (machine) {
   }
 
   function animateLeverAndSpin() {
+    if (activeProjectType === 'football' && (lever.disabled || footballLeverTimer)) return;
     if (spinning) return;
     cancelChannelMasterIntro();
     ensureMachineSamples();
     lever.style.transition = 'transform .34s cubic-bezier(.2,.7,.25,1)';
     pullVisual(1);
-    window.setTimeout(() => { void spin(); resetLever(true); }, 250);
+    if (activeProjectType === 'football') {
+      const epoch = footballEpoch;
+      footballLeverTimer = window.setTimeout(() => {
+        footballLeverTimer = 0;
+        if (epoch !== footballEpoch) return;
+        void spin(); resetLever(true);
+      }, 250);
+    } else window.setTimeout(() => { void spin(); resetLever(true); }, 250);
   }
 
   function onLeverDown(event) {
+    if (activeProjectType === 'football' && (lever.disabled || footballLeverTimer)) return;
     if (spinning) return;
     cancelChannelMasterIntro();
     ensureMachineSamples();
@@ -993,6 +1055,7 @@ if (machine) {
   }
 
   function playerUrl(video) {
+    if (activeProjectType === 'football') return footballVideoUrl(video, location.origin);
     const url = new URL(video.embedUrl || `https://www.youtube.com/embed/${encodeURIComponent(video.videoId)}`);
     url.searchParams.set('enablejsapi', '1');
     url.searchParams.set('autoplay', '0');
@@ -1011,6 +1074,7 @@ if (machine) {
   }
 
   function requestPlayerPlay() {
+    if (activeProjectType === 'football') { footballMonitor?.play(); return; }
     sendPlayerMessage({event: 'command', func: 'playVideo', args: []});
   }
 
@@ -1085,7 +1149,9 @@ if (machine) {
   }
 
   async function openVideo(playRequested = false) {
+    const epoch = footballEpoch;
     if (!current || spinning) return;
+    if (activeProjectType === 'football' && footballError && !footballError.hidden) return;
     ensureMachineSamples();
     const isSponsor = current.contentType === 'sponsor_mp4';
     const isTourismDiscovery = activeProjectType === 'tourism' && current.contentType === 'discovery';
@@ -1143,7 +1209,13 @@ if (machine) {
     } else {
       if (tourismDiscoveryPoster) tourismDiscoveryPoster.hidden = true;
       pendingYouTubePlay = playRequested;
-      player.src = playerUrl(current);
+      if (activeProjectType === 'football') {
+        const source = playerUrl(current);
+        if (!source) { failFootballVideo('Invalid video record'); return; }
+        void footballMonitor.watch(source);
+      } else {
+        player.src = playerUrl(current);
+      }
       if (sponsorPlayer) sponsorPlayer.hidden = true;
     }
     machine.dataset.revealedVideoId = openingVideoId;
@@ -1151,6 +1223,8 @@ if (machine) {
     playSample(shutterGearAudio, {volume: .62, rate: .9});
     machine.dataset.videoOpen = 'true';
     await sleep(reducedMotion.matches ? 300 : 900);
+    if (activeProjectType === 'football' && epoch !== footballEpoch) return;
+    if (activeProjectType === 'football' && !footballError.hidden) return;
     if (spinning || machine.dataset.videoOpen !== 'true' || current?.videoId !== openingVideoId) return;
     meterMode = 'video';
     setState('VIDEO_READY', isTourismDiscovery
@@ -1165,7 +1239,8 @@ if (machine) {
       }
     } else if (playRequested && !isTourismDiscovery) {
       requestPlayerPlay();
-      window.setTimeout(requestPlayerPlay, 240);
+      if (activeProjectType === 'football') footballPlayTimer = window.setTimeout(requestPlayerPlay, 240);
+      else window.setTimeout(requestPlayerPlay, 240);
     }
   }
 
@@ -1173,6 +1248,11 @@ if (machine) {
     const canonicalUrl = document.querySelector('link[rel="canonical"]')?.href || location.href;
     const jukeboxTitle = machineIdentity || document.title;
     const data = {title: jukeboxTitle, text: jukeboxTitle, url: canonicalUrl};
+    if (activeProjectType === 'football' && current?.videoId) {
+      data.url = `https://www.youtube.com/watch?v=${encodeURIComponent(current.videoId)}`;
+      data.title = current.title || jukeboxTitle;
+      data.text = data.title;
+    }
     try {
       if (navigator.share) await navigator.share(data);
       else {
@@ -1452,6 +1532,15 @@ if (machine) {
       if (!player.getAttribute('src') || player.getAttribute('src') === 'about:blank') return;
       if (pendingYouTubePlay) {
         requestPlayerPlay();
+        if (activeProjectType === 'football') {
+          const epoch = footballEpoch;
+          footballPlayTimer = window.setTimeout(() => {
+            if (epoch !== footballEpoch) return;
+            requestPlayerPlay();
+            pendingYouTubePlay = false;
+          }, 240);
+          return;
+        }
         window.setTimeout(() => {
           requestPlayerPlay();
           pendingYouTubePlay = false;
@@ -1599,6 +1688,96 @@ if (machine) {
     });
   }
 
+  function resetFootball() {
+    clearFootballError();
+    footballEpoch += 1;
+    window.clearTimeout(footballLeverTimer);
+    window.clearTimeout(footballLeverResetTimer);
+    footballLeverTimer = 0;
+    if (leverPointer !== null && lever.hasPointerCapture?.(leverPointer)) lever.releasePointerCapture(leverPointer);
+    leverPointer = null;
+    leverProgress = 0;
+    leverMoved = false;
+    leverTriggered = false;
+    lever.disabled = true;
+    lever.style.transition = '';
+    lever.style.transform = '';
+    cancelAnimationFrame(footballFrame);
+    window.clearTimeout(footballPlayTimer);
+    cancelPendingReveal();
+    cancelChannelMasterIntro();
+    stopShopPlaqueCycle();
+    window.clearTimeout(channelMasterHeaderTickerTimer);
+    stopReelSound(true);
+    stopSample(shutterGearAudio);
+    pendingYouTubePlay = false;
+    player.src = 'about:blank';
+    machine.dataset.videoOpen = 'false';
+    machine.dataset.hasWinner = 'false';
+    delete machine.dataset.revealedVideoId;
+    stage.setAttribute('aria-hidden', 'true');
+    current = null;
+    catalogue = [];
+    bag = [];
+    machineIdentity = '';
+    primaryActionDestination = '';
+    plaqueDestination = '';
+    winnerTitle.textContent = '';
+    contentDescription.textContent = '';
+    contentMeta.textContent = '';
+    spinning = false;
+    meterMode = 'idle';
+    reel.classList.remove('is-spinning', 'is-locking');
+    reel.querySelector('.reel-strip').style.transform = '';
+    rows.forEach((row, index) => { row.textContent = index === 1 ? 'CHOOSE YOUR CLUB' : ''; });
+    for (const button of [playButton, shareButton, respinButton, primaryActionButton]) button.disabled = true;
+    setState('CHOOSE_CLUB', 'Choose your club.');
+  }
+
+  function loadFootball(config) {
+    footballError = document.createElement('div');
+    footballError.className = 'football-video-error';
+    footballError.setAttribute('role', 'status');
+    footballError.hidden = true;
+    player.parentElement.append(footballError);
+    footballMonitor = footballVideoMonitor(player, failFootballVideo);
+    resetFootball();
+    respinButton.removeEventListener('click', spin);
+    respinButton.addEventListener('click', animateLeverAndSpin);
+    lever.disabled = true;
+    mountFootball(machine, config.footballConfig, {
+      reset: resetFootball,
+      select: club => {
+        resetFootball();
+        catalogue = (club.videos || []).filter(video => footballVideoUrl(video, location.origin));
+        machineIdentity = club.name;
+        primaryActionLabel = club.ctaLabel;
+        primaryActionDestination = club.ctaUrl || '';
+        primaryActionButton.querySelector('b').textContent = club.ctaLabel;
+        primaryActionButton.setAttribute('aria-label', club.ctaLabel);
+        plaqueDestination = '';
+        if (!catalogue.length) {
+          rows[1].textContent = club.name;
+          winnerTitle.textContent = 'CLUB VIDEOS NOT SUPPLIED';
+          contentDescription.textContent = 'Add and review the real club videos in the desktop editor.';
+          contentMeta.textContent = 'LOCAL PROTOTYPE';
+          setState('EMPTY_CLUB', 'No reviewed club videos are available.');
+          return;
+        }
+        current = nextWinner();
+        lever.disabled = false;
+        renderRows(current);
+        updateSelectedContent(current);
+        machine.dataset.hasWinner = 'true';
+        playButton.disabled = false;
+        shareButton.disabled = false;
+        respinButton.disabled = false;
+        updatePrimaryActionAvailability(true);
+        void openVideo(false);
+      },
+    });
+  }
+
   async function load() {
     bind();
     updateSoundControl();
@@ -1613,6 +1792,10 @@ if (machine) {
       activeProjectType = String(config.projectType || 'business').trim().toLowerCase();
       if (activeProjectType === 'channel_master' && !soundButton) soundEnabled = true;
       machine.dataset.projectType = activeProjectType;
+      if (activeProjectType === 'football') {
+        loadFootball(config);
+        return;
+      }
       configureLocalPicks();
       banjoConfig = activeProjectType === 'banjo' ? (config.banjoConfig || {}) : null;
       channelMasterIntro = activeProjectType === 'channel_master' ? (config.channelMasterConfig?.introMP4 || null) : null;

@@ -10,6 +10,7 @@ from urllib.parse import urlparse
 from uuid import uuid4
 
 from .config import MAX_LOVE_MY_LOCALS_CANDIDATES, MAX_LOVE_MY_LOCALS_VIDEOS
+from .secondary_cta import normalize_cta2
 from .models import (
     CHANNEL_MASTER_CTA_TYPES,
     ChannelMasterConfig,
@@ -137,6 +138,8 @@ class LoveMyLocalsFormValues:
     include_council_meetings: bool = False
     explore_url: str = ""
     public_title: str = ""
+    cta2_url: str = ""
+    cta2_label: str = ""
 
     def comparable(self) -> tuple[object, ...]:
         return (
@@ -150,6 +153,7 @@ class LoveMyLocalsFormValues:
             bool(self.include_council_meetings),
             self.explore_url,
             self.public_title,
+            self.cta2_url, self.cta2_label,
         )
 
 
@@ -165,6 +169,10 @@ def normalize_locations(values: Iterable[str]) -> list[str]:
 
 
 def validate_form(values: LoveMyLocalsFormValues) -> LoveMyLocalsFormValues:
+    try:
+        cta2 = normalize_cta2({'url': values.cta2_url, 'label': values.cta2_label}) or {}
+    except ValueError as error:
+        raise LoveMyLocalsError(str(error)) from error
     locations = normalize_locations(values.locations)
     public_title = re.sub(r"\s+", " ", str(values.public_title or "")).strip() or locations[0]
     if len(public_title) > 80:
@@ -195,6 +203,7 @@ def validate_form(values: LoveMyLocalsFormValues) -> LoveMyLocalsFormValues:
         if parsed.scheme not in {"http", "https"} or not parsed.netloc:
             raise LoveMyLocalsError("Explore Tourism URL must be a complete http or https URL.")
     return LoveMyLocalsFormValues(
+        cta2_url=cta2.get('url', ''), cta2_label=cta2.get('label', ''),
         locations=locations,
         public_title=public_title,
         geography=geography,
@@ -712,6 +721,7 @@ def assemble_project(
     excluded = [item.video.video_id for item in config.candidates if not item.active]
     active = config.selected_videos
     return Project(
+        cta_2=normalize_cta2({'url': validated.cta2_url, 'label': validated.cta2_label}),
         slug=existing.slug if existing else slug,
         title=location_title(validated.locations),
         ticker_text=validated.ticker_text,

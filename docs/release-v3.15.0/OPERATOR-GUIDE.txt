@@ -1,0 +1,18 @@
+CRISPY BITS DESKTOP v3.15.0
+=========================
+
+Close your previous Desktop EXE before opening this version.
+Existing projects remain in the same application data folder.
+
+CTA 2: edit a project, enter CTA 2 URL and optional button text, save and preview.
+Blank text defaults to FIND OUT MORE. Blank URL removes the extra button.
+The optional button stays to the right of the video information on mobile too.
+To change a live machine, deliberately use the existing republish workflow.
+Installing this EXE does not change any customer machine automatically.
+
+Football: choose the FOOTBALL tab and edit the selected club. Use Add/Remove
+for up to 18 clubs. Supply your real logos and reviewed YouTube catalogues.
+Set colours using the swatches or Pick from screen. Set membership URLs to
+show the matching buttons. Save and preview before publishing.
+YouTube owner restrictions cannot be overridden; use Watch on YouTube or Re-spin
+when a reviewed video later becomes unavailable in the embedded player.

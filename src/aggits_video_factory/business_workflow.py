@@ -22,7 +22,12 @@ def assemble_reviewed_project(
     white_label_config: WhiteLabelConfig | None = None,
 ) -> Project:
     """Create a persisted project after the shared authoritative video review."""
-    if project_type is ProjectType.BUSINESS:
+    if project_type is ProjectType.FOOTBALL:
+        if values.football_config is None:
+            raise ValueError("Football club configuration is required.")
+        if existing and existing.football_config.club_id != values.football_config.club_id:
+            raise ValueError("The saved club ID cannot be changed.")
+    elif project_type is ProjectType.BUSINESS:
         if values.business_config is None or values.music_config is not None or values.tourism_config is not None:
             raise ValueError("Validated Business configuration is required.")
     elif project_type is ProjectType.MUSIC:
@@ -58,6 +63,7 @@ def assemble_reviewed_project(
     extra_fields["additional_source_context"] = [result.to_dict() for result in source_results]
 
     return Project(
+        cta_2=values.cta_2,
         slug=existing.slug if existing else slug,
         title=values.title,
         ticker_text=values.story_text,
@@ -67,6 +73,7 @@ def assemble_reviewed_project(
         channel_thumbnail=catalogue.channel_thumbnail,
         id=existing.id if existing else str(uuid4()),
         project_type=project_type,
+        football_config=values.football_config if project_type is ProjectType.FOOTBALL else None,
         additional_urls=list(values.additional_urls),
         business_config=values.business_config if project_type is ProjectType.BUSINESS else None,
         music_config=values.music_config if project_type is ProjectType.MUSIC else None,
