@@ -28,7 +28,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/configure-pages@v5
-      - name: Preserve DAAS first-party statistics
+      - name: Preserve per-machine reel spin statistics
         run: python tools/inject_daas_statistics.py
       - uses: actions/upload-pages-artifact@v3
         with:
