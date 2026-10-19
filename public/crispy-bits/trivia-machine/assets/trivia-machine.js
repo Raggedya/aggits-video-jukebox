@@ -9,6 +9,26 @@ const HEADER_TITLE_MS = 10000;
 const machine = document.querySelector('[data-project-type="trivia"]');
 
 if (!machine) throw new Error('trivia_machine_root_missing');
+machine.dataset.spinTelemetry = 'accepted-v1';
+let acceptedSpinGesture = null;
+let leverGesture = null;
+machine.addEventListener('pointerdown', event => {
+  if (event.isTrusted && event.target instanceof Element && event.target.closest('.lever')) leverGesture = {counted:false};
+}, true);
+// Observe the existing handlers, not a second spin engine. The gesture token
+// exists only during its real DOM event task, so a later scripted animation cannot
+// borrow an earlier interaction. NEXT QUESTION is deliberately not a reel spin.
+for (const name of ['click', 'pointermove', 'keydown']) machine.addEventListener(name, event => {
+  if (!event.isTrusted || !(event.target instanceof Element) ||
+      !event.target.closest('.lever,[data-action="spin-again"]')) return;
+  const leverAction = Boolean(event.target.closest('.lever'));
+  if (leverAction && (name === 'keydown' && !event.repeat || name === 'click' && event.detail === 0 || !leverGesture)) leverGesture = {counted:false};
+  const gesture = {event,token:leverAction ? leverGesture : {counted:false}};
+  acceptedSpinGesture = gesture;
+  // Browsers may checkpoint microtasks between capture/target listeners. Clear
+  // on the next task, after the unchanged target handler has accepted/refused it.
+  setTimeout(() => { if (acceptedSpinGesture === gesture) acceptedSpinGesture = null; }, 0);
+}, true);
 
 const modeSelection = machine.querySelector('[data-mode-selection]');
 const modeGrid = machine.querySelector('[data-mode-grid]');
@@ -262,6 +282,12 @@ async function spin() {
   closeStage();
   lever.disabled = true;
   machine.dataset.machineState = 'SPINNING';
+  if (acceptedSpinGesture && !acceptedSpinGesture.token.counted) {
+    acceptedSpinGesture.token.counted = true;
+    machine.dispatchEvent(new CustomEvent('crispy-bits:accepted-spin', {
+      bubbles: true, detail: {action: acceptedSpinGesture.event.target.closest('[data-action="spin-again"]') ? 'respin' : 'lever'},
+    }));
+  }
   setTickerText(`${selectedMode.label} MODE ★ THE REEL IS SPINNING ★`, true);
   setStatus('The trivia reel is spinning.');
   startReelSound();

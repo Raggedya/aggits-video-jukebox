@@ -5,13 +5,14 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex, nofollow">
   <title>Crispy Bits — Comedy Arcade</title>
-  <link rel="preload" as="image" href="generations/225582d647a2ac35fd535d93/assets/cabinet-shell.webp">
-  <link rel="preload" as="font" href="generations/225582d647a2ac35fd535d93/assets/oswald-latin.woff2" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="generations/225582d647a2ac35fd535d93/arcade.css">
-  <link rel="stylesheet" href="generations/225582d647a2ac35fd535d93/interaction.css">
-  <link rel="stylesheet" href="generations/225582d647a2ac35fd535d93/registry.css">
-  <link rel="stylesheet" href="generations/225582d647a2ac35fd535d93/marquee.css">
-  <script type="module" src="generations/225582d647a2ac35fd535d93/arcade.js"></script>
+  <link rel="preload" as="image" href="generations/d055fbab76b22fb31522ee30/assets/cabinet-shell.webp">
+  <link rel="preload" as="font" href="generations/d055fbab76b22fb31522ee30/assets/oswald-latin.woff2" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="generations/d055fbab76b22fb31522ee30/arcade.css">
+  <link rel="stylesheet" href="generations/d055fbab76b22fb31522ee30/interaction.css">
+  <link rel="stylesheet" href="generations/d055fbab76b22fb31522ee30/registry.css">
+  <link rel="stylesheet" href="generations/d055fbab76b22fb31522ee30/marquee.css">
+  <link rel="stylesheet" href="generations/d055fbab76b22fb31522ee30/lever-counter.css">
+  <script type="module" src="generations/d055fbab76b22fb31522ee30/arcade.js"></script>
 <script id="arcade-data" type="application/json">{
   "comedians": [
     {
@@ -119,15 +120,14 @@
 <body>
   <header class="arcade-header" aria-describedby="prototype-note">
     <span class="round-icon menu-icon" role="img" aria-label="Menu decoration"><i></i><i></i><i></i></span>
-    <img class="brand" src="generations/225582d647a2ac35fd535d93/assets/crispy-bits-logo.webp" width="2172" height="724" alt="Crispy Bits">
-    <span class="round-icon search-icon" role="img" aria-label="Search decoration"><i></i></span>
+    <img class="brand" src="generations/d055fbab76b22fb31522ee30/assets/crispy-bits-logo.webp" width="2172" height="724" alt="Crispy Bits">
     <div class="marquee"><h1>COMEDY ARCADE</h1></div>
     <p class="strapline"><span>WATCH</span><b>•</b><span>GET TICKETS</span><b>•</b><span>BOOK</span></p>
     <label class="search-field"><span class="magnifier" aria-hidden="true"></span><input id="search" type="search" placeholder="Search comedians..." aria-label="Search comedians" autocomplete="off"></label>
   </header>
   <main class="machine-stack" aria-label="Comedy Arcade machines"></main>
   <p id="status" class="sr-only" role="status"></p>
-  <footer id="prototype-note">CRISPY BITS · COMEDY ARCADE</footer>
+  <footer id="prototype-note" class="has-lever-counter"><span class="counter-layout-reserve" aria-hidden="true">CRISPY BITS · COMEDY ARCADE</span><section class="lever-total" data-lever-total hidden role="img" aria-label="Recorded network lever total unavailable"><div class="lever-counter-frame"><div data-lever-digits></div></div><span class="lever-total-label">LEVERS PULLED</span></section></footer>
   <nav class="control-dock" aria-label="Gallery controls">
     <button id="pause" type="button" aria-pressed="false">PAUSE</button>
     <button id="sound" type="button" aria-pressed="false">SOUND ON</button>
@@ -135,5 +135,5 @@
     <button id="faster" type="button" aria-label="Hold to move the comedy machines faster" aria-describedby="faster-help" aria-pressed="false">FASTER</button>
     <span id="faster-help" class="sr-only">Hold Space or Enter for twice the normal speed. Release to return to normal. Alternatively use Next to browse one machine at a time. Fewer than three listings are stationary to avoid duplicate cabinets.</span>
   </nav>
-</body>
+<script defer src="assets/machine-statistics.js?v=c47867a19512"></script></body>
 </html>

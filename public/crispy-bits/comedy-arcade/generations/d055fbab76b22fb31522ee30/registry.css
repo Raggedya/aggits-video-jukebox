@@ -1,0 +1,4 @@
+/* Data-length safeguards only; the approved cabinet geometry and styling remain intact. */
+.reel-labels>*{display:block;align-content:center;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.control-dock button:disabled{opacity:.6;cursor:default}
+.mini-machine h2.nameplate--long{overflow:hidden;display:block;align-content:center;white-space:nowrap;text-overflow:ellipsis}

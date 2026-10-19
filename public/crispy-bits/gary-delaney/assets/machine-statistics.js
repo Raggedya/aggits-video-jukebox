@@ -17,13 +17,25 @@
   const selectedVideo=()=>window.CrispyBitsMachine?.getState?.().selectedId || '';
   function record(name,selected=selectedVideo()){
     const body={eventId:crypto.randomUUID(),sessionId,slug,name,videoId:/^[\w-]{11}$/.test(selected)?selected:''};
-    void fetch(`${endpoint}/api/events`,{
-      method:'POST',headers:{'content-type':'text/plain;charset=UTF-8'},body:JSON.stringify(body),
-      credentials:'omit',keepalive:true
-    }).then(response=>{if(name==='spin' && response.status===204)void refreshCount();}).catch(()=>{});
+    const encoded=JSON.stringify(body);
+    function deliver(attempt=0){
+      const retry=()=>{if(name==='spin'&&attempt<3)window.setTimeout(()=>deliver(attempt+1),1000*2**attempt)};
+      void fetch(`${endpoint}/api/events`,{
+        method:'POST',headers:{'content-type':'text/plain;charset=UTF-8'},body:encoded,
+        credentials:'omit',keepalive:true
+      }).then(response=>{
+        if(name==='spin'&&response.status===204&&!gallery)void refreshCount();
+        else if(response.status>=500||response.status===429)retry();
+      }).catch(retry);
+    }
+    deliver(); // Retries reuse this UUID/body; only a server-accepted row counts.
   }
   // A gallery visit is separate from a machine visit, never a machine spin.
-  if(gallery){record('page_view','');return;}
+  if(gallery){
+    record('page_view','');
+    gallery.addEventListener('crispy-bits:accepted-spin',()=>record('spin',''));
+    return;
+  }
   const counter=document.createElement('p');
   counter.hidden=true;
   counter.dataset.spinCounter='';
@@ -49,9 +61,10 @@
   let previous=machine.dataset.machineState;
   new MutationObserver(()=>{
     const state=machine.dataset.machineState;
-    if(state==='SPINNING' && previous!=='SPINNING')record('spin');
+    if(machine.dataset.spinTelemetry!=='accepted-v1' && state==='SPINNING' && previous!=='SPINNING')record('spin');
     previous=state;
   }).observe(machine,{attributes:true,attributeFilter:['data-machine-state']});
+  machine.addEventListener('crispy-bits:accepted-spin',()=>record('spin'));
   // Read public configuration only to distinguish an actual Spotify destination
   // from a ticket/shop/other CTA. It never blocks or alters the player.
   const config=fetch(new URL('machine.json',location.href),{credentials:'omit'})

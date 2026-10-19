@@ -1,6 +1,12 @@
 const machine = document.querySelector('.music-machine[data-machine-platform="youtube"]');
 
 if (machine) {
+  machine.dataset.spinTelemetry='accepted-v1';
+  const spinIntents=new WeakSet();
+  function trustedSpinIntent(event,action='lever') {
+    if(!event?.isTrusted || event.type==='pointercancel')return null;
+    const intent={action};spinIntents.add(intent);return intent;
+  }
   const reel = machine.querySelector('[data-reel]');
   const rows = [...reel.querySelectorAll('.reel-strip > *')];
   const lever = machine.querySelector('.lever');
@@ -261,11 +267,15 @@ if (machine) {
   }
 
   async function spin() {
+    const input=arguments[0];
+    const intent=spinIntents.has(input)?input:trustedSpinIntent(input,'respin');
+    if(intent)spinIntents.delete(intent);
     if (spinning || catalogue.length === 0) return;
     spinning = true;
     ensureMachineSamples();
     await closeVideo();
     setState('SPINNING', 'The reel is selecting a video.');
+    if(intent)machine.dispatchEvent(new CustomEvent('crispy-bits:accepted-spin',{bubbles:true,detail:{action:intent.action}}));
     meterMode = 'spin';
     reel.classList.add('is-spinning');
     playButton.disabled = true;
@@ -372,7 +382,7 @@ if (machine) {
     document.addEventListener('keydown', event => {
       if ((event.key === ' ' || event.key === 'Enter') && event.target === document.body) {
         event.preventDefault();
-        spin();
+        spin(event);
       }
     });
   }

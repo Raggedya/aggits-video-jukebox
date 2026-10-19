@@ -6,6 +6,7 @@ on:
     paths:
       - "public/**"
       - "static/machine-statistics.js"
+      - "static/comedy-arcade/**"
       - "tools/inject_daas_statistics.py"
       - "tools/inject_arcade_shares.py"
       - "src/aggits_video_factory/arcade_presentation.py"

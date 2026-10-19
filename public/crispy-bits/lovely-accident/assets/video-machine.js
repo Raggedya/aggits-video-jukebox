@@ -4,6 +4,12 @@ import {MUSIC_MACHINE_REEL_PROFILE,leverResistance} from './machine-mechanics-co
 const machine = document.querySelector('.music-machine[data-machine-platform="youtube"]');
 
 if (machine) {
+  machine.dataset.spinTelemetry='accepted-v1';
+  const spinIntents=new WeakSet();
+  function trustedSpinIntent(event,action='lever') {
+    if(!event?.isTrusted || event.type==='pointercancel')return null;
+    const intent={action};spinIntents.add(intent);return intent;
+  }
   const reel = machine.querySelector('[data-reel]');
   const rows = [...reel.querySelectorAll('.reel-strip > *')];
   const lever = machine.querySelector('.lever');
@@ -421,12 +427,16 @@ if (machine) {
   }
 
   async function spin() {
+    const input=arguments[0];
+    const intent=spinIntents.has(input)?input:trustedSpinIntent(input,'respin');
+    if(intent)spinIntents.delete(intent);
     if (spinning || catalogue.length === 0) return;
     cancelPendingReveal();
     spinning = true;
     ensureMachineSamples();
     await closeVideo();
     setState('SPINNING', 'The reel is selecting a video.');
+    if(intent)machine.dispatchEvent(new CustomEvent('crispy-bits:accepted-spin',{bubbles:true,detail:{action:intent.action}}));
     meterMode = 'spin';
     playButton.disabled = true;
     shareButton.disabled = true;
@@ -476,11 +486,12 @@ if (machine) {
   }
 
   function animateLeverAndSpin() {
+    const event=arguments[0],intent=trustedSpinIntent(event);
     if (spinning) return;
     ensureMachineSamples();
     lever.style.transition = 'transform .34s cubic-bezier(.2,.7,.25,1)';
     pullVisual(1);
-    window.setTimeout(() => { void spin(); resetLever(true); }, 250);
+    window.setTimeout(() => { void spin(intent); resetLever(true); }, 250);
   }
 
   function onLeverDown(event) {
@@ -510,8 +521,8 @@ if (machine) {
     if (event.pointerId !== leverPointer) return;
     lever.releasePointerCapture?.(event.pointerId);
     leverPointer = null;
-    if (leverTriggered) { void spin(); resetLever(true); }
-    else if (!leverMoved) animateLeverAndSpin();
+    if (leverTriggered) { void spin(trustedSpinIntent(event)); resetLever(true); }
+    else if (!leverMoved) animateLeverAndSpin(event);
     else {
       setState(current ? 'READY_TO_PLAY' : 'IDLE', 'The lever returned without starting the reel.');
       resetLever(true);
@@ -645,7 +656,7 @@ if (machine) {
     lever.addEventListener('keydown', event => {
       if (event.key === 'Enter' || event.key === ' ') {
         event.preventDefault();
-        animateLeverAndSpin();
+        animateLeverAndSpin(event);
       }
     });
     respinButton.addEventListener('click', spin);
@@ -695,7 +706,7 @@ if (machine) {
     document.addEventListener('keydown', event => {
       if ((event.key === ' ' || event.key === 'Enter') && event.target === document.body) {
         event.preventDefault();
-        spin();
+        spin(event);
       }
     });
   }

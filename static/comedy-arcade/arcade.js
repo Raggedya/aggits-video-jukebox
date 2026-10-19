@@ -1,5 +1,6 @@
 import {spinSingleReel} from './assets/shared/single-reel-engine.js';
 import {MUSIC_MACHINE_REEL_PROFILE} from './assets/shared/machine-mechanics-core.js';
+import {mountLeverCounter} from './lever-counter.js';
 
 // Browsers without typed custom-property support retain the approved static bulbs.
 if (typeof globalThis.CSS?.registerProperty === 'function') {
@@ -85,8 +86,28 @@ let boostHeld = false, boostPointer = null, boostKey = null, activating = null;
 let blurred = false, galleryFocused = false, ignoreScrollUntil = 0, suppressClickUntil = 0;
 const pointers = new Map();
 let soundEnabled = true;
+let counterAudioUnlocked = false;
 try { soundEnabled = localStorage.getItem('comedyArcadeSound') !== 'off'; } catch { /* Storage is optional. */ }
 let audio;
+let counterAudio;
+function counterClick() {
+  if(!soundEnabled || !counterAudioUnlocked || document.hidden)return;
+  try {
+    counterAudio ??= new Audio(new URL('./assets/reel-stop-lock-mixkit-2857.mp3',import.meta.url).href);
+    counterAudio.pause();counterAudio.currentTime=0;counterAudio.volume=.10;counterAudio.playbackRate=1.35;
+    counterAudio.play()?.catch(()=>{});
+  }catch{/* A blocked decorative click must not affect the count. */}
+}
+function unlockCounterAudio(event) {
+  if(!event.isTrusted)return;
+  counterAudioUnlocked=true;
+  // Sticky user activation permits this on supporting browsers. A browser that
+  // still denies delayed audio stays silent; never add a second lever sample.
+}
+document.addEventListener('pointerdown',unlockCounterAudio,{once:true});
+document.addEventListener('keydown',unlockCounterAudio,{once:true});
+const totalRoot=document.querySelector('[data-lever-total]');
+const globalCounter=totalRoot?mountLeverCounter(totalRoot,{click:counterClick}):null;
 function updateSound() {
   sound.textContent = soundEnabled ? 'SOUND ON' : 'SOUND OFF';
   sound.setAttribute('aria-pressed', String(!soundEnabled));
@@ -199,12 +220,13 @@ function delay(ms, signal) {
     signal.addEventListener('abort', () => { clearTimeout(timer); resolve(); }, {once:true});
   });
 }
-async function activate(article) {
+async function activate(article, event) {
   if (activating || performance.now() < suppressClickUntil || article.dataset.state !== 'active') return;
   const destination = destinations[article.dataset.comedian];
   if (!destination) return;
   const controller = new AbortController(), {signal} = controller;
   activating = controller; releaseBoost(); reconcile(); clickSound();
+  if(event?.isTrusted)gallery.dispatchEvent(new CustomEvent('crispy-bits:accepted-spin',{bubbles:true,detail:{action:'gallery_lever'}}));
   article.classList.add('activating');
   status.textContent = `Entering ${article.querySelector('h2').textContent}.`;
   const lever = article.querySelector('.shell-lever');
@@ -272,11 +294,11 @@ gallery.addEventListener('scroll', () => {
 gallery.addEventListener('focusin', () => { galleryFocused = true; reconcile(); });
 gallery.addEventListener('focusout', () => { galleryFocused = false; activity(); });
 gallery.addEventListener('click', event => {
-  if (event.target.closest('.lever-hit')) activate(event.target.closest('article'));
+  if (event.target.closest('.lever-hit')) activate(event.target.closest('article'), event);
 });
 pause.addEventListener('click', () => { manualPaused = !manualPaused; releaseBoost(); reconcile(); });
 sound.addEventListener('click', () => {
-  soundEnabled = !soundEnabled; if (!soundEnabled) audio?.pause();
+  soundEnabled = !soundEnabled; if (!soundEnabled) {audio?.pause();counterAudio?.pause();}
   try { localStorage.setItem('comedyArcadeSound',soundEnabled ? 'on' : 'off'); } catch { /* Optional. */ }
   updateSound();
 });
@@ -318,7 +340,7 @@ document.addEventListener('visibilitychange', () => {
   if (document.hidden) abortActivation(); else activity();
   reconcile();
 });
-window.addEventListener('pagehide', () => { abortActivation(); cancelAnimationFrame(frame); clearTimeout(resumeTimer); audio?.pause(); releaseBoost(); });
+window.addEventListener('pagehide', () => { abortActivation(); cancelAnimationFrame(frame); clearTimeout(resumeTimer); audio?.pause();counterAudio?.pause();globalCounter?.stop();releaseBoost(); });
 reduced.addEventListener('change', () => { releaseBoost(); reconcile(); });
 window.addEventListener('resize', measure);
 updateSound(); build();
