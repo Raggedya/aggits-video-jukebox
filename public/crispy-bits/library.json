@@ -86,6 +86,17 @@
     "socialImage": "social-card-v2-560ad4c0193d.jpg"
   },
   {
+    "slug": "celia-pacquola",
+    "title": "CELIA PACQUOLA",
+    "projectType": "channel_master",
+    "channelId": "",
+    "channelTitle": "Custom video selection",
+    "videoCount": 5,
+    "publishedAt": "2026-10-19T05:43:29Z",
+    "url": "https://raggedya.github.io/aggits-video-jukebox/crispy-bits/celia-pacquola/",
+    "socialImage": "channel-master-url-preview-ddecd34706529a6d.png"
+  },
+  {
     "slug": "cheeky-leash",
     "title": "CHEEKY LEASH",
     "projectType": "music",
