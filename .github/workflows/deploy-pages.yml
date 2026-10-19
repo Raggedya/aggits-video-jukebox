@@ -10,6 +10,8 @@ on:
       - "tools/inject_arcade_shares.py"
       - "src/aggits_video_factory/arcade_presentation.py"
       - "static/arcade-presentation.js"
+      - "static/arcade-navigation.js"
+      - "static/arcade-navigation.css"
       - ".github/workflows/deploy-pages.yml"
   workflow_dispatch:
 

@@ -60,11 +60,15 @@ def inject(root: Path):
         # The renderer hashes resources in assets. Point only this JS lookup at
         # the approved shared source, without changing any published artwork.
         class Resources:
-            def __truediv__(self,name):return source if name=='arcade-presentation.js' else assets/name
+            def __truediv__(self,name):
+                return root/'static'/name if name in ('arcade-presentation.js','arcade-navigation.css','arcade-navigation.js') else assets/name
         standalone,theatre=arcade_share_documents(document,Resources(),url)
         writes[page]=standalone.encode('utf-8')
         writes[folder/'theatre.html']=theatre.encode('utf-8')
         writes[assets/'arcade-presentation.js']=script
+        if 'data-arcade-return' in standalone:
+            for name in ('arcade-navigation.css','arcade-navigation.js'):
+                writes[assets/name]=(root/'static'/name).read_bytes()
     for path,payload in writes.items():path.write_bytes(payload)
     # Remove only our explicitly marked aliases for records no longer listed.
     # Do not touch standalone pages, catalogues, assets or unrelated HTML.

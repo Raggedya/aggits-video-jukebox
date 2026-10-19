@@ -7,6 +7,8 @@ from tools.inject_arcade_shares import inject,BASE,ASSETS
 class SharePublishTests(unittest.TestCase):
     def fixture(self,root):
         (root/'static').mkdir();(root/'static/arcade-presentation.js').write_text('// approved JS')
+        (root/'static/arcade-navigation.js').write_text('// external links')
+        (root/'static/arcade-navigation.css').write_text('/* small return button */')
         gallery=root/'public/crispy-bits/comedy-arcade';gallery.mkdir(parents=True)
         records=[{'status':'active','primaryMachineId':'test-id','destinationUrl':BASE+'test-artist/'}]
         self.manifest(gallery,records)
@@ -63,3 +65,19 @@ class SharePublishTests(unittest.TestCase):
                 if field=='identity':(folder/'machine.json').write_text('{"slug":"another","projectType":"channel_master"}')
                 else:(folder/'index.html').write_text((folder/'index.html').read_text().replace(BASE, 'https://evil.test/'))
                 with self.assertRaises(ValueError):inject(root)
+    def test_return_button_survives_republish_with_one_safe_same_tab_link_and_isolated_resources(self):
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d);_,folder,_=self.fixture(root)
+            page=folder/'index.html'
+            page.write_text(page.read_text().replace('</main>','<footer class="channel-master-footer-mark">ORIGINAL FOOTER</footer></main>'))
+            inject(root);before=page.read_bytes();inject(root)
+            self.assertEqual(page.read_bytes(),before)
+            for file in (page,folder/'theatre.html'):
+                text=file.read_text(encoding='utf-8')
+                self.assertEqual(text.count('<nav data-arcade-return'),1)
+                self.assertIn('BACK TO COMEDY ARCADE</a>',text)
+                self.assertEqual(text.count('src="assets/arcade-navigation.js?'),1)
+                self.assertEqual(text.count('href="assets/arcade-navigation.css?'),1)
+                self.assertIn('ORIGINAL FOOTER',text)
+            for name in ('arcade-navigation.js','arcade-navigation.css'):
+                self.assertEqual((folder/'assets'/name).read_bytes(),(root/'static'/name).read_bytes())

@@ -58,6 +58,20 @@ def arcade_share_documents(document: str, assets: Path, standalone_url: str, *, 
         raise ValueError('Theatrical sharing requires one complete generated HTML document.')
     document = _head_meta(document, 'name', 'crispy-arcade-theatre-url', share_url)
     document = _head_meta(document, 'name', 'crispy-arcade-local-preview', 'true' if local_preview else None)
+    # Only registry-approved Arcade entries call this renderer. Keep the return
+    # control separate from the established four-button row and accessible footer.
+    document = re.sub(r'<nav data-arcade-return[^>]*>.*?</nav>\s*', '', document, flags=re.S)
+    if '<footer class="channel-master-footer-mark"' in document:
+        nav = ('<nav data-arcade-return aria-label="Comedy Arcade navigation">'
+               '<a href="https://raggedya.github.io/aggits-video-jukebox/crispy-bits/comedy-arcade/">'
+               '← BACK TO COMEDY ARCADE</a></nav>\n')
+        document = document.replace('<footer class="channel-master-footer-mark"', nav + '<footer class="channel-master-footer-mark"', 1)
+        for filename in ('arcade-navigation.css', 'arcade-navigation.js'):
+            digest = hashlib.sha256((assets / filename).read_bytes()).hexdigest()[:16]
+            document = re.sub(rf'<(?:link|script)\b[^>]*(?:href|src)="assets/{re.escape(filename)}(?:\?[^"<>]*)?"[^>]*>(?:</script>)?\s*', '', document)
+            url = f'assets/{filename}?v={digest}'
+            tag = f'<script defer src="{url}"></script>' if filename.endswith('.js') else f'<link rel="stylesheet" href="{url}">'
+            document = document.replace('</head>', tag + '\n</head>', 1)
     # Preview snapshots can predate current tracking. Use the same current
     # first-party adapter, now also recognizing the fixed theatrical filename.
     if (assets / 'machine-statistics.js').is_file():

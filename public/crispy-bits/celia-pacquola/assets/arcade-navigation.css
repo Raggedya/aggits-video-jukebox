@@ -1,0 +1,27 @@
+/* Eligible Arcade machines only. No cabinet, controls or artwork selectors. */
+[data-arcade-return] {
+  display: flex;
+  justify-content: center;
+  position: relative;
+  z-index: 2;
+  margin: 12px 0 0;
+}
+[data-arcade-return] a {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  max-width: 100%;
+  padding: 0 14px;
+  border: 1px solid #9b804b;
+  border-radius: 7px;
+  background: #101217;
+  color: #e4d3a8;
+  font: 600 11px/1.4 system-ui, sans-serif;
+  letter-spacing: .06em;
+  text-align: center;
+  text-decoration: none;
+}
+[data-arcade-return] a:hover { border-color: #e4d3a8; }
+[data-arcade-return] a:focus-visible { outline: 2px solid #f3dcaa; outline-offset: 3px; }
