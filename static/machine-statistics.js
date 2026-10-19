@@ -1,7 +1,7 @@
 // Machine-scoped detailed events; no collection in local previews. No cookies or
 // cross-site identifier. A session means one browser-tab session, not a person.
 (() => {
-  const match=location.pathname.match(/^\/aggits-video-jukebox\/(?:crispy-bits\/)?([a-z0-9]+(?:-[a-z0-9]+)*)\/(?:index.html)?$/);
+  const match=location.pathname.match(/^\/aggits-video-jukebox\/(?:crispy-bits\/)?([a-z0-9]+(?:-[a-z0-9]+)*)\/(?:index\.html|theatre\.html)?$/);
   if(location.origin!=='https://raggedya.github.io' || !match || match[1].length>100)return;
   const slug=match[1],daas=slug==='doug-anthony-allstars';
   const machine=document.querySelector('.music-machine');
