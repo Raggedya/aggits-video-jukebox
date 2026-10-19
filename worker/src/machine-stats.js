@@ -2,7 +2,8 @@
 // never through a public report endpoint. Only aggregate spin totals are public.
 export const SLUG = 'doug-anthony-allstars';
 const ORIGIN = 'https://raggedya.github.io';
-const EVENTS = new Set(['page_view','spin','play_click','share_click','spotify_click']);
+const EVENTS = new Set(['page_view','spin','play_click','share_click','spotify_click',
+  'cta_click','cta2_click','contact_click','membership_click']);
 const UUID = /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i;
 export const validSlug = value => typeof value==='string' && /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(value) && value.length<=100;
 const headers = {'access-control-allow-origin':ORIGIN, 'cache-control':'no-store','vary':'Origin'};
@@ -11,7 +12,6 @@ export function validEvent(body) {
   return body && typeof body==='object' && !Array.isArray(body) &&
     Object.keys(body).sort().join(',')==='eventId,name,sessionId,slug,videoId' &&
     validSlug(body.slug) && UUID.test(body.eventId) && UUID.test(body.sessionId) &&
-    (body.slug===SLUG || body.name==='spin') &&
     EVENTS.has(body.name) && typeof body.videoId==='string' &&
     (body.videoId==='' || /^[A-Za-z0-9_-]{11}$/.test(body.videoId));
 }

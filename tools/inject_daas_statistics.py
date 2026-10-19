@@ -12,7 +12,9 @@ def inject(root: Path):
     for page in sorted(set(public.glob('*/index.html')) | set(public.glob('crispy-bits/*/index.html'))):
         if not re.fullmatch(r'[a-z0-9]+(?:-[a-z0-9]+)*',page.parent.name) or len(page.parent.name)>100:continue
         html=page.read_text(encoding='utf-8')
-        if not re.search(r'class="[^"]*\bmusic-machine\b',html):continue
+        machine = re.search(r'class="[^"]*\bmusic-machine\b',html)
+        gallery = page.parent.name == 'comedy-arcade' and re.search(r'<main\b[^>]*class="[^"]*\bmachine-stack\b',html)
+        if not machine and not gallery:continue
         inject_site(root,page.parent)
 
 def inject_site(root: Path, site: Path):

@@ -1,7 +1,7 @@
-# Doug Anthony All Stars statistics
+# First-party machine statistics
 
-DAAS retains its existing five event types. All other machine types send only
-`spin`, scoped by their project slug, on the production GitHub Pages origin.
+All instrumented machine types record detailed events, scoped by project slug,
+on the production GitHub Pages origin. Historical DAAS event names are retained.
 Local previews never send events. No machine mechanics change. Football counts
 spins for the whole machine, not separately per club. Slugs are project identities
 and must remain unique across the root and `crispy-bits` publication namespaces.
@@ -13,6 +13,35 @@ and must remain unique across the root and `crispy-bits` publication namespaces.
 - `play_click`: enabled Play button pressed, not proof of successful playback.
 - `share_click`: enabled Share button pressed, not proof sharing completed.
 - `spotify_click`: enabled primary Spotify CTA pressed, not proof of a listen.
+- `cta_click`: another enabled primary CTA pressed; not a sale, booking or enquiry.
+- `cta2_click`: the separate optional CTA 2 pressed.
+- `contact_click`: configured Contact Us link pressed; not a completed enquiry.
+- `membership_click`: Football membership link pressed; not a membership sale.
+
+Primary CTA total is `cta_click + spotify_click`, not either one alone. One
+primary click records exactly one of these events. Spotify classification uses
+the public machine.json destination (including the selected Football club),
+with generic CTA fallback if configuration cannot be read. No destination URL
+or club identifier is transmitted. Trivia records its Watch Video control as
+a Play click, but has no invented Share or outbound CTA if those are absent.
+Delegation supports dynamic controls without duplicate listeners. Disabled and
+hidden controls are ignored. Existing tab-session keys are preserved.
+
+Expanded coverage begins at deployment of migration 0006, the collector and
+the Pages-injected script, not at the beginning of historical spin tracking.
+Earlier unrecorded page views/clicks cannot be reconstructed. The Arcade gallery
+records its own page_view under comedy-arcade, separately from machine visits;
+it never creates a fake machine spin or a counter. Gallery searches, FASTER
+presses and lever clicks are not additional measured events in this milestone.
+Theatre-mode machines keep their original canonical slug and tracking.
+
+Arcade reporting must filter to comedy-arcade plus the active machine slugs in
+the public gallery manifest, not every unrelated player in the GitHub repository.
+Report landing-page views, individual-machine views, and their combined page-view
+total separately. Roll up spins/Play/Share/CTA counts across those machines, but
+never sum their tab-session counts as unique site visitors. Cross-machine unique
+people, dwell time, video completion, Spotify listens, sales and completed
+enquiries are not measured. Existing per-machine tab-session keys are retained.
 
 Events store a random event UUID, tab-session UUID, machine slug, event name,
 optional video ID, and a server UTC timestamp. No IP, email, full URL, referrer,
@@ -48,9 +77,9 @@ pages at `public/<slug>/` and `public/crispy-bits/<slug>/`, including standalone
 Trivia, but skips non-player pages and nested review directories. Injection is
 idempotent. No new EXE is needed for the published counter.
 
-## Local-only counter implementation / future deployment order
+## Historical counter rollout order
 
-Nothing in this implementation deploys automatically. On separate approval:
+Deployment requires explicit operator approval; the original counter rollout used:
 
 1. Back up D1 and verify the existing schema/migration ledger. Migration 0004 was
    originally applied manually; do not replay unrelated migrations blindly.
@@ -64,3 +93,18 @@ Nothing in this implementation deploys automatically. On separate approval:
 
 DAAS history starts 18 October 2026. Other machines start only when enabled;
 historical spins cannot be recovered. No customer project or EXE changes required.
+
+For detailed coverage, export only machine_statistics with Wrangler's --table
+option, apply 0006 alone (never replay earlier delivery/security migrations),
+verify historical rows byte-for-byte, deploy the statistics Worker only, then
+publish static/machine-statistics.js through the existing Pages workflow. That
+workflow refreshes every top-level player asset and retains future old-EXE
+republish protection. No new EXE is required for already-published machines.
+
+`tools/report_machine_statistics.py --hours 36 --wrangler <installed-wrangler.js>`
+reads authenticated aggregates and the current public Arcade manifest. It reports
+landing/machine/combined page views, per-machine metrics and Arcade rollups.
+`recorded_action_clicks` sums Play, Share and the four CTA/contact/membership
+categories plus Spotify; spins and gallery lever clicks are not included in this
+click total. Primary CTA totals combine generic and Spotify clicks. The output
+contains only aggregate per-metric tab-session counts, never raw session IDs.
