@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en-AU">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Crispy Bits — Comedy Arcade</title>
+  <link rel="preload" as="image" href="assets/cabinet-shell.webp">
+  <link rel="preload" as="font" href="assets/oswald-latin.woff2" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="arcade.css">
+  <link rel="stylesheet" href="interaction.css">
+  <link rel="stylesheet" href="registry.css">
+  <link rel="stylesheet" href="marquee.css">
+  <script type="module" src="arcade.js"></script>
+</head>
+<body>
+  <header class="arcade-header" aria-describedby="prototype-note">
+    <span class="round-icon menu-icon" role="img" aria-label="Menu decoration"><i></i><i></i><i></i></span>
+    <img class="brand" src="assets/crispy-bits-logo.webp" width="2172" height="724" alt="Crispy Bits">
+    <span class="round-icon search-icon" role="img" aria-label="Search decoration"><i></i></span>
+    <div class="marquee"><h1>COMEDY ARCADE</h1></div>
+    <p class="strapline"><span>WATCH</span><b>•</b><span>GET TICKETS</span><b>•</b><span>BOOK</span></p>
+    <label class="search-field"><span class="magnifier" aria-hidden="true"></span><input id="search" type="search" placeholder="Search comedians..." aria-label="Search comedians" autocomplete="off"></label>
+  </header>
+  <main class="machine-stack" aria-label="Comedy Arcade machines"></main>
+  <p id="status" class="sr-only" role="status"></p>
+  <footer id="prototype-note">LOCAL ARCADE PREVIEW · NOTHING PUBLISHED<br>Registry-driven gallery. Public listing approval is required.</footer>
+  <nav class="control-dock" aria-label="Gallery controls">
+    <button id="pause" type="button" aria-pressed="false">PAUSE</button>
+    <button id="sound" type="button" aria-pressed="false">SOUND ON</button>
+    <button id="next" type="button" aria-label="Browse next machine without holding Faster">NEXT</button>
+    <button id="faster" type="button" aria-label="Hold to move the comedy machines faster" aria-describedby="faster-help" aria-pressed="false">FASTER</button>
+    <span id="faster-help" class="sr-only">Hold Space or Enter for twice the normal speed. Release to return to normal. Alternatively use Next to browse one machine at a time. Fewer than three listings are stationary to avoid duplicate cabinets.</span>
+  </nav>
+</body>
+</html>

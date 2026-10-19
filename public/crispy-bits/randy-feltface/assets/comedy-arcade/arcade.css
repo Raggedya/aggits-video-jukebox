@@ -1,0 +1,58 @@
+:root{color-scheme:dark;--ivory:#ffefba;--gold:#e5b04b;--display:Impact,'Arial Narrow',sans-serif}
+@font-face{font-family:Oswald;src:url('assets/oswald-latin.woff2') format('woff2');font-style:normal;font-weight:200 700;font-display:swap}
+*{box-sizing:border-box}
+html{background:#080303}
+body{margin:0;min-height:100vh;color:var(--ivory);background:#080303 url('assets/theatre.webp') center top/100% auto no-repeat;font-family:Arial,sans-serif}
+.arcade-header{position:relative;width:min(100%,820px);margin:auto;padding-top:1px}
+.brand{position:relative;display:block;width:34%;height:auto;margin:0 auto -1%;z-index:2;filter:drop-shadow(0 3px 2px #000)}
+.round-icon{position:absolute;top:3%;width:10%;aspect-ratio:1;border-radius:50%;border:1px solid #ffda79;background:linear-gradient(135deg,#28251b,#020708 45%);box-shadow:0 0 0 1px #93600e,inset 0 1px 2px #ffe7a4,0 3px 7px #0009;display:flex;align-items:center;justify-content:center}
+.menu-icon{left:5%;flex-direction:column;gap:4px}.menu-icon i{width:38%;height:2px;border-radius:2px;background:#fff2bc}
+.search-icon{right:5%}.search-icon i,.magnifier{display:block;width:34%;aspect-ratio:1;border:2px solid #ffefba;border-radius:50%;position:relative}
+.search-icon i:after,.magnifier:after{content:'';position:absolute;width:45%;height:2px;background:#ffefba;right:-35%;bottom:-14%;transform:rotate(47deg);transform-origin:left center}
+.marquee{position:relative;width:68%;margin:auto;border-radius:10px;border:2px solid #ffbf48;padding:2% 1.8%;background:linear-gradient(160deg,#10110c,#060403 50%,#1c0801);box-shadow:0 0 0 1px #65400a,inset 0 0 0 2px #5c2c02,inset 0 0 13px #cc48074d,0 0 9px #ff82035c}
+.marquee:after{content:'';position:absolute;inset:2px;border-radius:7px;pointer-events:none;background:radial-gradient(circle,#fff6a8 0 .65px,#ff7400 1px,transparent 2px) top left/6px 3px repeat-x,radial-gradient(circle,#fff6a8 0 .65px,#ff7400 1px,transparent 2px) bottom left/6px 3px repeat-x,radial-gradient(circle,#ffcd68 0 .65px,#ff7400 1px,transparent 2px) top left/3px 6px repeat-y,radial-gradient(circle,#ffcd68 0 .65px,#ff7400 1px,transparent 2px) top right/3px 6px repeat-y}
+h1{margin:0;text-align:center;font-family:var(--display);font-size:clamp(32px,8.6vw,70px);line-height:.95;font-weight:400;letter-spacing:.025em;color:#ffe8a6;text-shadow:1px 1px #6d350c,2px 2px #873a08,0 0 3px #f49d3966;white-space:nowrap}
+.strapline{display:flex;align-items:center;justify-content:center;gap:5%;width:68%;margin:1.5% auto 2%;font:400 clamp(8px,2.45vw,20px)/1.2 var(--display);letter-spacing:.13em;white-space:nowrap}
+.strapline:before,.strapline:after{content:'';height:1px;background:#ac8a32;flex:1}.strapline b{font-size:1em}
+.search-field{display:flex;align-items:center;gap:14px;width:58%;margin:0 auto 0.5%;height:clamp(28px,7vw,58px);padding:0 4%;border:1px solid #ffd57c;border-radius:40px;background:linear-gradient(#0d151a,#03090d);box-shadow:0 0 0 1px #6f3b0c,inset 0 1px 4px #000;color:#b2aba0;font:clamp(12px,3vw,24px)/1 'Arial Narrow',Arial,sans-serif;white-space:nowrap}
+.search-field .magnifier{width:12px;flex:none}
+.machine-stack{position:relative;width:min(82%,672px);margin:0 auto;padding:0;isolation:isolate}
+.machine-stack:before,.machine-stack:after{content:'';position:absolute;top:4px;bottom:28px;width:5px;background:url('assets/chain.svg') center top/5px auto repeat-y;filter:drop-shadow(1px 0 1px #000);z-index:-1}
+.machine-stack:before{left:14%}.machine-stack:after{left:73%}
+.mini-machine{position:relative;width:100%;aspect-ratio:1881/836;margin:0 0 -4%;container-type:inline-size}
+.shell{position:absolute;inset:0;display:block;width:100%;height:100%;filter:drop-shadow(0 4px 4px #0009)}
+h2{position:absolute;left:11%;right:19%;top:16.1%;height:15%;display:flex;align-items:center;justify-content:center;text-align:center;margin:0;font:400 5.1cqw/.95 var(--display);color:#fff0ba;text-shadow:0 1px #221507,0 0 3px #ffcf8c33;white-space:normal;text-wrap:balance;letter-spacing:-.015em}
+.reel-labels{position:absolute;left:19.5%;right:27%;top:37.5%;bottom:14%;display:grid;grid-template-rows:repeat(3,1fr);text-align:center;font:400 3.4cqw/1 var(--display);color:#44311f}
+.reel-labels>*{display:flex;align-items:center;justify-content:center;white-space:nowrap;margin:0}
+.reel-labels span{opacity:.69;font-size:2.75cqw;text-shadow:0 1px #ffecc291}
+.reel-labels strong{font:400 3.8cqw/1 var(--display);color:#11100c;text-shadow:0 1px #fff5ce}
+.coming-soon .shell{filter:grayscale(1) brightness(.76) contrast(1.07) drop-shadow(0 4px 4px #0009)}
+.coming-soon h2{color:#d7d7d4;text-shadow:0 1px #111}
+.coming-plaque{position:absolute;left:27%;right:34.5%;top:52%;height:21%;border:1px solid #eee5d8;border-radius:5px;background:linear-gradient(135deg,#c6c2b8,#787873 40%,#b1afa6 74%,#595b58);box-shadow:0 0 0 1px #131717,0 0 0 2px #8c8e87,inset 0 1px 2px #fff8,0 3px 4px #000c;display:flex;align-items:center;justify-content:center;transform:none}
+.coming-plaque strong{font:400 4.1cqw/1 var(--display);color:#0b1114;text-shadow:0 1px #e3e0d2;white-space:nowrap}
+.coming-plaque i{position:absolute;width:3px;height:3px;border-radius:50%;background:linear-gradient(135deg,#fff 15%,#303532 48%,#ccc 65%,#161b1c);box-shadow:0 0 0 1px #373c38}
+.coming-plaque i:nth-child(1){left:4%;top:12%}.coming-plaque i:nth-child(2){right:4%;top:12%}.coming-plaque i:nth-child(4){left:4%;bottom:12%}.coming-plaque i:nth-child(5){right:4%;bottom:12%}
+footer{padding:24px 16px 32px;text-align:center;font-size:10px;line-height:1.7;letter-spacing:.06em;color:#cab58e;background:linear-gradient(transparent,#070403)}
+@media(min-width:821px){body{background-size:100% auto}.arcade-header{padding-top:14px}.machine-stack{margin-top:0}}
+
+/* Final 2A polish: retain the complete frame at its original aspect ratio.
+   The right lever is isolated and uniformly scaled around its mounting hub. */
+.machine-stack{width:min(76%,624px);left:3.8%}
+.machine-stack:before,.machine-stack:after{display:block;top:0;bottom:25px;width:2.1%;background-size:100% auto}
+.mini-machine{aspect-ratio:1881/836;margin-bottom:-3.4%}
+.shell-assembly{position:absolute;inset:0;z-index:1;pointer-events:none}
+.shell{width:100%;height:auto;aspect-ratio:1881/836;filter:drop-shadow(0 3px 3px #0009)}
+.shell-crown{clip-path:inset(0 10.3% 0 0)}
+.shell-lever{clip-path:polygon(90% 18%,100% 18%,100% 91%,87% 91%,87% 65%,90% 55%);transform:translateX(-.8cqw) scale(.92);transform-origin:92% 78%}
+h2{z-index:2;top:16.1%;height:15%;font:500 5.4cqw/1 Oswald,'Roboto Condensed','Arial Narrow',sans-serif;letter-spacing:.005em;text-shadow:0 1px #1a1005}
+h2.nameplate--long{font-size:4.5cqw}
+.reel-labels{z-index:2;top:37.5%;height:auto;bottom:14%;font-family:Oswald,'Roboto Condensed','Arial Narrow',sans-serif;font-weight:500}
+.reel-labels span{font-size:3.15cqw;opacity:.64;text-shadow:0 1px #ffecc270}
+.reel-labels strong{font:600 4.1cqw/1 Oswald,'Roboto Condensed','Arial Narrow',sans-serif;text-shadow:0 1px #fff5ce}
+.coming-plaque{z-index:2;top:52%;height:21%}
+.coming-plaque strong{font:600 4.5cqw/1 Oswald,'Roboto Condensed','Arial Narrow',sans-serif;letter-spacing:.015em;text-shadow:0 1px #deddd5}
+.strapline{font-family:Oswald,'Roboto Condensed','Arial Narrow',sans-serif;font-weight:500;letter-spacing:.18em}
+.brand{margin-bottom:-1.5%}
+.strapline{margin-bottom:1.5%}
+.search-field{margin-bottom:0}
+footer{position:relative;margin-top:34px;padding-top:20px;border-top:1px solid #66563855;background:#100d0c;color:#b7aa94;font:11px/1.7 Arial,sans-serif;letter-spacing:.015em}
