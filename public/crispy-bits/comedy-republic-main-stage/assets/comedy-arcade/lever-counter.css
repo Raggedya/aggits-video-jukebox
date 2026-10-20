@@ -1,0 +1,13 @@
+/* Only the existing footer's content changes. Existing gallery/control boxes stay put. */
+#prototype-note.has-lever-counter{background:#0b0b0b;border-color:#302a20;position:relative;}
+.counter-layout-reserve{visibility:hidden;}
+.lever-total{--counter-width:clamp(128px,35.4vw,156px);width:var(--counter-width);position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);line-height:1;}
+.lever-total[hidden]{display:none;}
+.lever-counter-frame{aspect-ratio:4.5;display:flex;align-items:center;justify-content:center;background:url('assets/lever-counter-housing-v1.png') center 47%/113% auto no-repeat;padding:0 18%;filter:drop-shadow(0 1px 1px #000);}
+[data-lever-digits]{width:100%;display:flex;justify-content:center;gap:1px;font-family:Oswald,'Arial Narrow',sans-serif;font-weight:500;font-variant-numeric:tabular-nums;font-size:min(clamp(14px,3.7vw,18px),calc(var(--counter-width)*.9/var(--counter-digits,6)));line-height:1;color:#f5d993;}
+.lever-number-window{height:1em;overflow:hidden;display:block;flex:1;min-width:0;text-align:center;border:0;border-radius:1px;background:linear-gradient(#070706,#1e1910 46%,#080807 55%,#15130e);box-shadow:inset 0 0 0 .5px #58401f,inset 0 1px 2px #000,0 0 1px #ad793d55;text-shadow:0 1px #000,0 0 2px #e1b55b55;position:relative;}
+.lever-number-window:after{content:'';position:absolute;inset:0;pointer-events:none;background:linear-gradient(#ffffff0d,transparent 40%,#0004 51%,transparent 63%);}
+.lever-number-strip{display:block;line-height:1em;will-change:transform;}
+.lever-number-strip>span{display:block;height:1em;}
+.lever-total-label{display:block;text-align:center;margin-top:-1px;color:#e5d7a7;font:500 clamp(7px,1.9vw,8px)/1 Oswald,'Arial Narrow',sans-serif;letter-spacing:.22em;text-indent:.22em;white-space:nowrap;}
+.lever-total[data-connection=unavailable]:not([hidden]){opacity:.82;}

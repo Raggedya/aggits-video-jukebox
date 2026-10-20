@@ -1,0 +1,39 @@
+/* Non-destructive light overlay. The approved ::after bulbs stay untouched.
+   These masks exactly match their 6x3 / 3x6 tiles and 2px inset. */
+@property --arcade-marquee-phase {
+  syntax: '<angle>';
+  inherits: false;
+  initial-value: 0deg;
+}
+html.marquee-chase .marquee::before {
+  content: '';
+  position: absolute;
+  inset: 2px;
+  border-radius: 7px;
+  z-index: 1;
+  pointer-events: none;
+  background: conic-gradient(from var(--arcade-marquee-phase),
+    transparent 0deg 260deg,
+    #e69a2220 275deg, #f5b83c66 295deg, #ffcf6faa 320deg,
+    #ffe4a6ee 340deg, #fff0c9 350deg, transparent 360deg);
+  -webkit-mask:
+    radial-gradient(circle, #fff 0 .65px, #fff 1px, transparent 2px) top left/6px 3px repeat-x,
+    radial-gradient(circle, #fff 0 .65px, #fff 1px, transparent 2px) bottom left/6px 3px repeat-x,
+    radial-gradient(circle, #fff 0 .65px, #fff 1px, transparent 2px) top left/3px 6px repeat-y,
+    radial-gradient(circle, #fff 0 .65px, #fff 1px, transparent 2px) top right/3px 6px repeat-y;
+  mask:
+    radial-gradient(circle, #fff 0 .65px, #fff 1px, transparent 2px) top left/6px 3px repeat-x,
+    radial-gradient(circle, #fff 0 .65px, #fff 1px, transparent 2px) bottom left/6px 3px repeat-x,
+    radial-gradient(circle, #fff 0 .65px, #fff 1px, transparent 2px) top left/3px 6px repeat-y,
+    radial-gradient(circle, #fff 0 .65px, #fff 1px, transparent 2px) top right/3px 6px repeat-y;
+  animation: arcadeMarqueeClockwise 3s linear infinite;
+}
+/* Increasing CSS angles move clockwise. Only light intensity travels: there
+   is no transformed sign, text, trim, layout or animation JavaScript loop. */
+@keyframes arcadeMarqueeClockwise {
+  from { --arcade-marquee-phase: 0deg; }
+  to { --arcade-marquee-phase: 360deg; }
+}
+@media (prefers-reduced-motion: reduce) {
+  html.marquee-chase .marquee::before { content: none; animation: none; }
+}
