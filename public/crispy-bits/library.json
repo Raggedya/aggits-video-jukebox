@@ -510,6 +510,17 @@
     "socialImage": "social-card-v1-d424ce9cb7b0.jpg"
   },
   {
+    "slug": "the-big-gig-abc",
+    "title": "THE BIG GIG (ABC)",
+    "projectType": "channel_master",
+    "channelId": "",
+    "channelTitle": "Custom video selection",
+    "videoCount": 13,
+    "publishedAt": "2026-10-20T04:48:16Z",
+    "url": "https://raggedya.github.io/aggits-video-jukebox/crispy-bits/the-big-gig-abc/",
+    "socialImage": "channel-master-url-preview-d7bdc5e21a05adda.png"
+  },
+  {
     "slug": "the-brian-jonestown-massacre",
     "title": "THE BRIAN JONESTOWN MASSACRE",
     "projectType": "music",
