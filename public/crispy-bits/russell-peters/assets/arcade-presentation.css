@@ -1,0 +1,98 @@
+/* All rules are opt-in; standalone machines retain their original presentation.
+   Exact approved 2A rear artwork, proportional and unmodified. All scene
+   artwork retains its aspect ratio as the live cabinet changes height. */
+html[data-arcade-presentation="theatre"] { background: #080303; }
+html[data-arcade-presentation="theatre"] body { background: #080303; }
+html[data-arcade-presentation="theatre"] .music-machine[data-project-type="channel_master"] {
+  --stage-gutter: clamp(24px, 7vw, 64px);
+  --stage-top: clamp(56px, 14vw, 146px);
+  background: transparent;
+  padding: max(var(--stage-top), env(safe-area-inset-top)) max(var(--stage-gutter), env(safe-area-inset-right)) max(clamp(48px, 10vw, 104px), env(safe-area-inset-bottom)) max(var(--stage-gutter), env(safe-area-inset-left));
+}
+html[data-arcade-presentation="theatre"] .music-machine[data-project-type="channel_master"] .customer-backdrop {
+  /* Rear scene follows the page, including an opened video chamber. The
+     overscan crops the original audience seats, retaining the timber stage. */
+  position: absolute;
+  inset: 0 0 -18%;
+  background: #080303 url('comedy-arcade/assets/theatre.webp') center bottom / cover no-repeat;
+}
+html[data-arcade-presentation="theatre"] .music-machine[data-project-type="channel_master"] .customer-backdrop::before {
+  display: block;
+  inset: 0;
+  background: url('arcade-stage/assets/amber-spotlights-v1.webp') center top / min(72%, 760px) auto no-repeat;
+  filter: none;
+  transform: none;
+  opacity: .84;
+}
+html[data-arcade-presentation="theatre"] .music-machine[data-project-type="channel_master"] .customer-backdrop::after {
+  display: none;
+}
+html[data-arcade-presentation="theatre"] .music-machine[data-project-type="channel_master"]::before {
+  /* Transparent foreground cutout, not a screenshot of a machine. Its native
+     2:3 aspect ratio is preserved; the central aperture has true alpha. */
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: 100%;
+  aspect-ratio: 2 / 3;
+  transform: translateX(-50%);
+  z-index: 15;
+  background: url('arcade-stage/assets/foreground-curtains-v1.webp') center top / 100% auto no-repeat;
+  pointer-events: none;
+  user-select: none;
+}
+html[data-arcade-presentation="theatre"] .music-machine[data-project-type="channel_master"] .experience-frame {
+  z-index: 1;
+  overflow: visible;
+  box-shadow: 0 18px 22px -10px rgba(0,0,0,.94), 0 4px 7px rgba(0,0,0,.8), inset 0 0 0 2px #010201, inset 0 0 0 4px rgba(191,133,52,.12);
+}
+html[data-arcade-presentation="theatre"] .music-machine[data-project-type="channel_master"] .channel-master-maker-mark {
+  top: clamp(-38px, -3.4vw, -14px);
+  width: clamp(74px, 19vw, 180px);
+}
+html[data-arcade-presentation="theatre"] .music-machine[data-project-type="channel_master"] .customer-identity {
+  margin-top: clamp(14px, 2.8vw, 28px);
+}
+/* No scene animation or layout-dependent JavaScript. Native machine controls,
+   reel masks, lever geometry, video and motion preferences remain untouched. */
+
+/* Lower side-curtain refinement only. The original 1024x1536 foreground
+   remains authoritative above source row 450, including every upper ornament.
+   Its central aperture/glow is retained too. Only the side columns below the
+   tassels are replaced, with a 22-source-pixel blend to avoid a fabric seam.
+   Nine-slice coordinates describe the artwork, not one screenshot's layout. */
+@supports (mask-image: linear-gradient(#000, transparent)) {
+  html[data-arcade-presentation="theatre"] .music-machine[data-project-type="channel_master"]::before {
+    height: 100%;
+    aspect-ratio: auto;
+    /* Retain the original upper, central and floor pixels without a raster
+       mask (which can resample the outermost column at fractional widths). */
+    clip-path: polygon(-1px -1px, calc(100% + 1px) -1px,
+      calc(100% + 1px) 46.09375vw, 87.5% 46.09375vw,
+      87.5% calc(100% - max(clamp(48px, 10vw, 104px), env(safe-area-inset-bottom))),
+      calc(100% + 1px) calc(100% - max(clamp(48px, 10vw, 104px), env(safe-area-inset-bottom))),
+      calc(100% + 1px) calc(100% + 1px), -1px calc(100% + 1px),
+      -1px calc(100% - max(clamp(48px, 10vw, 104px), env(safe-area-inset-bottom))),
+      12.5% calc(100% - max(clamp(48px, 10vw, 104px), env(safe-area-inset-bottom))),
+      12.5% 46.09375vw, -1px 46.09375vw);
+  }
+  html[data-arcade-presentation="theatre"] .music-machine[data-project-type="channel_master"]::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: max(clamp(48px, 10vw, 104px), env(safe-area-inset-bottom));
+    z-index: 15;
+    border-style: solid;
+    border-color: transparent;
+    border-width: 43.9453125vw 12.5vw 0;
+    border-image-source: url('arcade-stage/assets/lower-hanging-curtains-v2.webp');
+    border-image-slice: 450 128 0 128;
+    border-image-repeat: stretch;
+    mask-image: linear-gradient(to bottom, transparent 0 43.9453125vw, #000 46.09375vw);
+    pointer-events: none;
+    user-select: none;
+  }
+}
