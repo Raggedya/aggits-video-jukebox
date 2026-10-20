@@ -70,10 +70,8 @@ def inject(root: Path):
             for name in ('arcade-navigation.css','arcade-navigation.js'):
                 writes[assets/name]=(root/'static'/name).read_bytes()
     for path,payload in writes.items():path.write_bytes(payload)
-    # Remove only our explicitly marked aliases for records no longer listed.
-    # Do not touch standalone pages, catalogues, assets or unrelated HTML.
-    for page in public.glob('*/theatre.html'):
-        if page.parent.name not in eligible and 'data-arcade-share-page="true"' in page.read_text(encoding='utf-8'):
-            page.unlink()
+    # Arcade visibility is independent of machine publication. Removing/hiding a
+    # listing must not delete an existing theatrical or standalone machine URL.
+    # Deliberate machine unpublishing remains the Channel Master responsibility.
 
 if __name__=='__main__':inject(ROOT)
