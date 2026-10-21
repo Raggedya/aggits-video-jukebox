@@ -22,8 +22,8 @@
     "primaryCTA": "VIEW ON YOUTUBE",
     "primaryAction": {
       "type": "custom",
-      "displayLabel": "WORKING DOG YOUTUBE",
-      "destinationURL": "https://www.youtube.com/@workingdogproductions",
+      "displayLabel": "WORKING DOG PRODUCTIONS - BUY STUFF !",
+      "destinationURL": "https://store.workingdog.com/collections/all-products",
       "enabled": true
     }
   },
@@ -869,10 +869,10 @@
     },
     "primaryAction": {
       "type": "custom",
-      "displayLabel": "WORKING DOG YOUTUBE",
-      "destinationURL": "https://www.youtube.com/@workingdogproductions",
+      "displayLabel": "WORKING DOG PRODUCTIONS - BUY STUFF !",
+      "destinationURL": "https://store.workingdog.com/collections/all-products",
       "enabled": true,
-      "customLabel": "WORKING DOG YOUTUBE"
+      "customLabel": "WORKING DOG PRODUCTIONS - BUY STUFF !"
     },
     "contact": {
       "url": "",
@@ -886,7 +886,7 @@
     }
   },
   "cta2": {
-    "url": "https://store.workingdog.com/collections/all-products",
-    "label": "WORKING DOG STORE"
+    "url": "https://www.youtube.com/workingdogchannel/join?utm_source=chatgpt.com",
+    "label": "WORKING DOG - BECOME A MEMBER TODAY $1.99/Month"
   }
 }
