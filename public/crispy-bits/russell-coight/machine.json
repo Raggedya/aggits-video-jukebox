@@ -22,7 +22,7 @@
     "primaryCTA": "VIEW ON YOUTUBE",
     "primaryAction": {
       "type": "custom",
-      "displayLabel": "WORKING DOG PRODUCTIONS - BUY STUFF !",
+      "displayLabel": "BUY WORKING DOG STUFF !",
       "destinationURL": "https://store.workingdog.com/collections/all-products",
       "enabled": true
     }
@@ -869,10 +869,10 @@
     },
     "primaryAction": {
       "type": "custom",
-      "displayLabel": "WORKING DOG PRODUCTIONS - BUY STUFF !",
+      "displayLabel": "BUY WORKING DOG STUFF !",
       "destinationURL": "https://store.workingdog.com/collections/all-products",
       "enabled": true,
-      "customLabel": "WORKING DOG PRODUCTIONS - BUY STUFF !"
+      "customLabel": "BUY WORKING DOG STUFF !"
     },
     "contact": {
       "url": "",
