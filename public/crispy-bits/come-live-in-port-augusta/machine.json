@@ -239,12 +239,12 @@
   "channelMasterConfig": {
     "tickerText": "PORT AUGUSTA IS WHERE OPPORTUNITY MEETS ADVENTURE. POSITIONED AT THE TOP OF THE SPENCER GULF AND ON THE DOORSTEP OF THE ICONIC FLINDERS RANGES, OUR CITY OFFERS A LIFESTYLE THAT’S AS INSPIRING AS IT IS ACCESSIBLE. WITH STRONG TRANSPORT LINKS, GROWING INDUSTRIES, AND A WELCOMING, CONNECTED COMMUNITY, PORT AUGUSTA IS A PLACE TO LIVE, WORK, AND GROW. FROM BREATHTAKING NATURAL LANDSCAPES TO A VIBRANT CULTURAL SCENE AND RELAXED, SPACIOUS LIVING, EVERY DAY HERE IS AN INVITATION TO EXPLORE, ENJOY, AND BELONG.",
     "palette": {
-      "name": "CUSTOM",
-      "customPrimary": "#FF8000",
-      "customAccent": "#6D80AF",
-      "resolvedPrimary": "#8F4800",
-      "resolvedSecondary": "#3C1E00",
-      "resolvedAccent": "#6D80AF"
+      "name": "CHARCOAL",
+      "customPrimary": null,
+      "customAccent": null,
+      "resolvedPrimary": "#30343B",
+      "resolvedSecondary": "#0E1013",
+      "resolvedAccent": "#777E89"
     },
     "primaryAction": {
       "type": "custom",
