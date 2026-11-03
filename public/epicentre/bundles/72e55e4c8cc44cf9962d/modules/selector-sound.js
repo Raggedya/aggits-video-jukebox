@@ -1,0 +1,5 @@
+export function createSelectorSound(enabled=true){
+ let context,buffer,source,played=0,requests=0;const bytes=fetch(new URL('../assets/selector-click.wav',import.meta.url)).then(r=>r.ok?r.arrayBuffer():null).catch(()=>null);
+ function permitted(){try{return enabled&&localStorage.getItem('splatters-video:sound')!=='off';}catch{return enabled;}}
+ return{async play(){requests++;if(!permitted())return false;try{const Audio=window.AudioContext||window.webkitAudioContext;if(!Audio)return false;context??=new Audio();await context.resume();const raw=await bytes;if(!raw)return false;buffer??=await context.decodeAudioData(raw.slice(0));try{source?.stop();}catch{}source=context.createBufferSource();source.buffer=buffer;const gain=context.createGain();gain.gain.value=.18;source.connect(gain).connect(context.destination);const playing=source;playing.onended=()=>{playing.disconnect();gain.disconnect();if(source===playing)source=null;};source.start();played++;return true;}catch{return false;}},snapshot:()=>({enabled:permitted(),requests,played,overlappingInstances:source?1:0}),destroy(){try{source?.stop();context?.close();}catch{}}};
+}
